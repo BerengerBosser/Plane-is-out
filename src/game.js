@@ -39,7 +39,7 @@ import { createFun, buildDuck, duckSpots1 } from './fun.js';
 import { drawRadar } from './radar.js';
 import { createMap } from './map.js';
 import { clamp, lerp } from './noise.js';
-import { STAIRS, WHEEL_DROP, PLANE_TOPS, WING_LADDERS } from './planeModel.js';
+import { STAIRS, WHEEL_DROP, PLANE_TOPS } from './planeModel.js';
 import { ITEMS, PART_ORDER, WRECK_ROT, SAVE_KEY, SETTINGS_KEY, FUSE_SLOTS, store, unstore } from './defs.js';
 import { WorldMixin } from './world.js';
 import { InteractMixin } from './interact.js';
@@ -553,7 +553,7 @@ export class Game {
       height(x, z, y) { const g = self.groundAt(x, z, y); return g < CFG.player.maxWadeDepth ? CFG.swim.level : g; },
       // échelles : zone de 0,9 m devant l'échelle, pieds entre le bas (moins 1,45 m) et le haut
       ladder(x, z, y) {
-        for (const l of (self.ladders || []).concat(self.planeLadders || [])) if (Math.hypot(x - l.x, z - l.z) < 0.9 && y >= l.y0 - 1.45 && y <= l.y1 + 0.3) return l; return null; },
+        for (const l of self.ladders || []) if (Math.hypot(x - l.x, z - l.z) < 0.9 && y >= l.y0 - 1.45 && y <= l.y1 + 0.3) return l; return null; },
       canGo(x, z, y) {
         for (const p of self.platforms || []) {
           if (p.contain && y > p.top - 1 && self.onPlatform(p, self.player.pos.x, self.player.pos.z)) {
@@ -619,17 +619,12 @@ export class Game {
   // on peut toujours monter à bord, même dans une épave ou un avion pas encore réparé
   stairsActive() { return !this.flight.airborne; }
   updatePlaneStairs() {
-    if (!this.stairsActive()) { this.planeStairPlats = []; this.planeTopPlats = []; this.planeLadders = []; return; }
+    if (!this.stairsActive()) { this.planeStairPlats = []; this.planeTopPlats = []; return; }
     const r = this.plane.root, v = new THREE.Vector3();
     r.updateMatrixWorld(true);
-    // on peut grimper sur l'avion : flotteurs, toit, ailes (échelles des flotteurs vers les ailes)
+    // on peut grimper sur l'avion : flotteurs (depuis l'eau ou d'un saut), toit, ailes
     const has = (k) => !k || this.installed.has(k);
     this.planeTopPlats = PLANE_TOPS.filter((p) => has(p.need)).map((p) => ({ obb: true, x: r.position.x, z: r.position.z, r: r.rotation.y, minX: p.minX, maxX: p.maxX, minZ: p.minZ, maxZ: p.maxZ, top: r.localToWorld(v.set((p.minX + p.maxX) / 2, p.top, (p.minZ + p.maxZ) / 2)).y }));
-    const dir = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), r.rotation.y);
-    this.planeLadders = WING_LADDERS.filter((l) => has(l.need) && this.installed.has('floats')).map((l) => {
-      const b = r.localToWorld(new THREE.Vector3(l.x, l.y0, l.z));
-      return { x: b.x, z: b.z, y0: b.y, y1: r.localToWorld(v.set(l.x, l.y1, l.z)).y, dir: dir.clone(), top: r.localToWorld(new THREE.Vector3(l.x, l.y1, l.topZ)) };
-    });
     // hauteur réelle de chaque marche (l'avion peut pencher ou tanguer)
     this.planeStairPlats = STAIRS.steps.map((s) => ({ obb: true, x: r.position.x, z: r.position.z, r: r.rotation.y, minX: s.x0, maxX: s.x1, minZ: STAIRS.z0, maxZ: STAIRS.z1, top: r.localToWorld(v.set((s.x0 + s.x1) / 2, s.top, (STAIRS.z0 + STAIRS.z1) / 2)).y, stair: true }));
   }
@@ -1644,19 +1639,21 @@ export class Game {
   planeColliders() {
     const root = this.plane.root;
     const cs = [];
+    const y0 = root.position.y;
     // la porte cargo reste ouverte au passage quand l'escalier est là (on entre sans téléportation)
     const doorGap = this.stairsActive() && !this.flags.doorJam;
-    for (const z of [-5.8, -4.2, -2.6, -1.0, 0.6, 2.2, 3.8, 5.4, 7.0, 8.6]) {
-      if (z === 2.2 && doorGap) continue;
-      const w = root.localToWorld(new THREE.Vector3(0, 0, z));
-      // on peut marcher sur le toit (au-dessus de 3,5 m, le fuselage ne repousse plus)
-      cs.push({ type: 'circle', x: w.x, z: w.z, r: z > 5 ? 1.35 - (z - 5) * 0.2 : z < -4 ? 1.1 : 1.55, minY: root.position.y - 2.5, maxY: root.position.y + (z >= -3.4 && z <= 5 ? 3.5 : 4) });
+    const ring = (x, z, r, maxY) => { const w = root.localToWorld(new THREE.Vector3(x, 0, z)); cs.push({ type: 'circle', x: w.x, z: w.z, r, minY: y0 - 2.5, maxY: y0 + maxY }); };
+    // fuselage : cercles serrés qui suivent la silhouette (nez étroit, cabine, queue effilée)
+    for (let z = -6.0; z <= 9.21; z += 0.8) {
+      if (doorGap && z > 0.5 && z < 3.5) continue;
+      const r = z < -4 ? 1.1 : z <= 5 ? 1.5 : Math.max(0.45, 1.4 - (z - 5) * 0.22);
+      // on peut marcher sur le toit de la cabine (au-dessus de 3,5 m, le fuselage ne repousse plus)
+      ring(0, z, r, z >= -3.4 && z <= 5 ? 3.5 : 4);
     }
+    // trou de la porte : le flanc gauche reste fermé
+    if (doorGap) { ring(-0.75, 1.3, 0.75, 3.5); ring(-0.75, 2.1, 0.75, 3.5); ring(-0.75, 2.9, 0.75, 3.5); }
     if (this.installed.has('floats')) {
-      for (const sx of [-2.3, 2.3]) for (const z of [-3.6, -1.8, 0, 1.8, 3.6]) {
-        const w = root.localToWorld(new THREE.Vector3(sx, 0, z));
-        cs.push({ type: 'circle', x: w.x, z: w.z, r: 0.6, minY: root.position.y - 2.5, maxY: root.position.y + 0.7 });
-      }
+      for (const sx of [-2.3, 2.3]) for (let z = -4.4; z <= 4.9; z += 0.75) ring(sx, z, z < -3.4 || z > 4.4 ? 0.35 : 0.55, 0.7);
     }
     return cs;
   }

@@ -17,6 +17,7 @@ const LO = 50, HI = 90;       // zone verte de la jauge de chaleur
 // coque : chaque bosse, pièce manquante ou trou ouvert retire des points (le pire crash laisse ~10 à 20 %)
 const HP = { dent: 5, part: 8, hole: 6 };
 const PLATES = ['plateA', 'plateB', 'plateC', 'plateD'];
+const SIDE_DENTS = DENTS.map((D, i) => (Math.abs(D.n[0]) > 0.5 && !D.part ? i : -1)).filter((i) => i >= 0);
 
 // points de soudure (repère local de la carlingue) : un seul par pièce ou par tôle, au centre des fixations
 function weldPoints(k) {
@@ -128,8 +129,7 @@ export const WreckMixin = {
     const sev = sp / 7;
     this._bumpT = this.t;
     const n = 1;
-    const free = DENTS.map((_, i) => i).filter((i) => !this.wreck.dents.includes(i));
-    const add = free.sort(() => Math.random() - 0.5).slice(0, n);
+    const add = this.freeDents().slice(0, n);
     if (add.length) this.act('dent', { add });
     if (this.planeHp() <= 0) this.wreckPlane('usure', 0.5);
   },
@@ -141,10 +141,10 @@ export const WreckMixin = {
     const yaw = f.yaw;
     if (heightAt(x, z) < -1.4) { const s = this.nearestShore(x, z); x = s.x; z = s.z; }
     sev = Math.max(0, Math.min(1, sev));
-    // réparation courte : au pire 2 pièces, 2 trous et 3 bosses
-    const nParts = sev < 0.5 ? 0 : sev < 0.85 ? 1 : 2;
-    const nHoles = sev < 0.3 ? 0 : sev < 0.75 ? 1 : 2;
-    const nDents = Math.round(1 + sev * 2);
+    // réparation courte : au pire 1 pièce, 1 trou et 2 bosses
+    const nParts = sev < 0.7 ? 0 : 1;
+    const nHoles = sev < 0.4 ? 0 : 1;
+    const nDents = sev < 0.6 ? 1 : 2;
     const cand = ['engineL', 'engineR', 'wingL', 'prop'].filter((k) => this.installed.has(k)).sort(() => Math.random() - 0.5);
     const spot = (dmin, dmax) => {
       for (let t = 0; t < 30; t++) {
@@ -157,11 +157,15 @@ export const WreckMixin = {
     };
     const parts = cand.slice(0, nParts).map((k) => ({ k, ...spot(8, 20) }));
     // une épave a toujours au moins une chose à réparer avant de repartir
-    const holeIdx = [0, 1, 2, 3].sort(() => Math.random() - 0.5).slice(0, Math.max(nHoles, parts.length ? 0 : 1));
+    const holeIdx = [0, 1, 2, 3].sort(() => Math.random() - 0.5).slice(0, parts.length ? nHoles : Math.max(nHoles, 1));
     const plates = holeIdx.map((_, i) => ({ id: PLATES[i], ...spot(5, 14) }));
-    const free = DENTS.map((_, i) => i).filter((i) => !this.wreck.dents.includes(i)).sort(() => Math.random() - 0.5);
+    const free = this.freeDents();
     const dents = [...this.wreck.dents, ...free.slice(0, nDents)];
     this.act('wreck', { x: +x.toFixed(2), z: +z.toFixed(2), yaw: +yaw.toFixed(3), parts, plates, holes: holeIdx, dents, sev: +sev.toFixed(2), reason });
+  },
+  // bosses possibles (dans le désordre) : seulement sur les flancs, jamais sur le toit, les ailes ou les flotteurs
+  freeDents() {
+    return SIDE_DENTS.filter((i) => !this.wreck.dents.includes(i)).sort(() => Math.random() - 0.5);
   },
   // violence d'un impact (0 = effleurement, 1 = crash à pleine vitesse)
   impactSeverity() {
@@ -176,8 +180,7 @@ export const WreckMixin = {
     f.speed = 0; f.pitch = 0; f.roll = 0; f.vy = 0; f.autopilot = false;
     if (g > -0.6 && this.flags.wheels) { f.surface = 'ground'; f.pos.y = heightAt(f.pos.x, f.pos.z) + WHEEL_DROP; } else { f.surface = 'water'; f.pos.y = 0; }
     f.apply();
-    const free = DENTS.map((_, i) => i).filter((i) => !this.wreck.dents.includes(i)).sort(() => Math.random() - 0.5);
-    this.act('dent', { add: free.slice(0, 1 + Math.round(sev)) });
+    this.act('dent', { add: this.freeDents().slice(0, 1) });
     this.audio.clank(); this.audio.splash?.();
     this.player.shake = 1;
     this.ui.toast('Atterrissage brutal', `Coque ${Math.round(this.planeHp())} %`, 'bad', 2600);
@@ -228,7 +231,7 @@ export const WreckMixin = {
     for (const p of d.plates) this.launch(p.id, from, p, 1.1, 4);
     const holes = [0, 0, 0, 0];
     for (const i of d.holes || []) holes[i] = 1;
-    this.wreck = { placed: {}, holes, dents: d.dents || [], pos: { x: d.x, z: d.z, yaw: d.yaw }, stranded: false };
+    this.wreck = { placed: {}, holes, dents: (d.dents || []).filter((i) => SIDE_DENTS.includes(i)), pos: { x: d.x, z: d.z, yaw: d.yaw }, stranded: false };
     holes.forEach((h, i) => this.plane.setHole(i, h));
     this.refreshWelds();
     this.refreshDamage();
@@ -261,6 +264,9 @@ export const WreckMixin = {
     this.plane.root.rotation.set(onLand ? (wheels ? 0.03 : 0.06) : 0.04, yaw, onLand ? (wheels ? 0.06 : 0.14) : 0.1, 'YXZ');
     this.flight.pos.set(x, this.plane.root.position.y, z);
     this.flight.yaw = yaw;
+    // un crash en vol laissait l'avion « en l'air » : le poste à souder et l'escalier restaient introuvables
+    this.flight.surface = onLand ? 'ground' : 'water';
+    this.flight.vy = 0;
     if (this.wreck) this.wreck.pos = { x, z, yaw };
   },
 
