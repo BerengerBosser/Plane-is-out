@@ -286,6 +286,8 @@ export const WorldMixin = {
         if (vr !== null && vr !== undefined) return vr;
         const r3 = this.applyChapter3Act?.(type, d, by, auth);
         if (r3 !== null && r3 !== undefined) return r3;
+        const r4 = this.applyChapter4Act?.(type, d, by, auth);
+        if (r4 !== null && r4 !== undefined) return r4;
         const r = this.applyWreckAct?.(type, d, by, auth);
         return r === null || r === undefined ? true : r;
       }
@@ -327,6 +329,7 @@ export const WorldMixin = {
     } else if (k === 'ended') this.showEnd();
     else if (k === 'refueled') { this.audio.success(); this.ui.toast('Plein fait !', 'Réservoir à 100 %.', 'good'); }
     this.onFlag3?.(k, me, by);
+    this.onFlag4?.(k, me, by);
   },
 
   // ── instantané complet (sauvegarde, synchro réseau) ──
@@ -345,7 +348,7 @@ export const WorldMixin = {
       ducks: [...this.ducks], fuses: [...this.fuses], fslots: this.fuseSlots.map((s) => s.fuse), valves: this.valves,
       sym: [...this.symbols], music: this.music ? 1 : 0, siege: [this.siege.active ? 1 : 0, Math.round(this.siege.genHp), this.siege.wave],
       stats: [this.stats.crabs, this.stats.voiles, this.stats.days], live: this.planeLive ? 1 : 0, pilot: this.pilotId || 0,
-      nozzle: this.nozzle || 0, iron: this.iron || 0, wr: this.wreck, wi: this.winch, scrap: this.scrap, ...this.invWorldState(), sp: (this.scrapPiles || []).filter((q) => q.taken && !q.dyn).map((q) => q.id), ups: [...this.upgrades], pz: this.puzzles, intro: this.mode === 'intro' ? 1 : 0, vh: this.vehicleState(), c3: this.chapter3State?.(),
+      nozzle: this.nozzle || 0, iron: this.iron || 0, wr: this.wreck, wi: this.winch, scrap: this.scrap, ...this.invWorldState(), sp: (this.scrapPiles || []).filter((q) => q.taken && !q.dyn).map((q) => q.id), ups: [...this.upgrades], pz: this.puzzles, intro: this.mode === 'intro' ? 1 : 0, vh: this.vehicleState(), c3: this.chapter3State?.(), c4: this.c4State?.(),
     };
   },
 
@@ -438,7 +441,8 @@ export const WorldMixin = {
     this.upgrades = new Set(w.ups || []);
     this.puzzles = { ...(w.pz || {}) };
     this.applyVehicleState(w.vh, full);
-    if (w.c3) this.applyChapter3State?.(w.c3, full);
+    if (w.c3) this.applyChapter3State?.(w.c3, full, !!opts.load);
+    if (w.c4) this.applyC4State?.(w.c4);
     this.applyUpgrades();
     // avion
     if (w.live && !this.planeLive) {

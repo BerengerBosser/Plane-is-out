@@ -236,7 +236,7 @@ export function buildBoeing() {
   const ckRings = [1.2].concat(zs.filter((z) => z >= -3.6)).map((z) => ring(z, 0.965));
   const ckLining = loft(ckRings, 32, (th, z, y) => {
     if (WIN_FRONT(th, z) || WIN_SIDE(th, z) || y < FLOOR_B - 0.05) return 'skip';
-    return Math.abs(th) < 40 ? '#5d6470' : '#3d434d';
+    return Math.abs(th) < 40 ? '#9aa1ac' : '#747b87';
   }).opaque;
   const inner = new THREE.Mesh(mergeGeometries([lining, ckLining]), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }));
   inner.receiveShadow = true;
@@ -280,7 +280,8 @@ export function buildBoeing() {
   }
   parts.push(B(1.5, 0.12, 1.3, '#2b2f36', 0, 7.35, -2.3, 0.2));                 // panneau plafond
   parts.push(B(0.5, 1.0, 0.5, '#3a3f48', 1.9, FLOOR_B + 0.5, 0.5));             // strapontin et coffre
-  // voyants du poste
+  // plafonnier du poste et du vestibule, voyants
+  glow.push(B(0.7, 0.03, 0.4, '#fff1c8', 0, 7.78, -0.9), B(0.7, 0.03, 0.4, '#fff1c8', 0, 7.9, 0.6));
   for (let i = 0; i < 14; i++) glow.push(B(0.05, 0.03, 0.05, ['#5ef2c2', '#ffd166', '#ff6b5b', '#6fb7ff'][i % 4], -0.6 + (i % 7) * 0.2, 7.29 - Math.floor(i / 7) * 0.02, -2.6 + Math.floor(i / 7) * 0.5));
   for (let i = 0; i < 6; i++) glow.push(B(0.04, 0.04, 0.04, i % 2 ? '#5ef2c2' : '#ffd166', -0.1 + (i % 3) * 0.1, FLOOR_C + 0.65, -2.8 + Math.floor(i / 3) * 0.3));
 

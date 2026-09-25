@@ -44,7 +44,7 @@ export function createMap() {
     g.drawImage(base, ox, oy, S, S);
     const P = (x, z) => [ox + ((x - view.cx) / view.size + 0.5) * S, oy + ((z - view.cz) / view.size + 0.5) * S];
     // brouillard sur les îles inconnues
-    for (const hid of [data.hideIsland2 && data.i2, data.hideIsland3 && data.i3].filter(Boolean)) {
+    for (const hid of [data.hideIsland2 && data.i2, data.hideIsland3 && data.i3, data.hideIsland4 && data.i4].filter(Boolean)) {
       const [x, y] = P(hid.x, hid.z);
       const rr = (380 / view.size) * S;
       const grd = g.createRadialGradient(x, y, rr * 0.2, x, y, rr);
@@ -60,6 +60,7 @@ export function createMap() {
     label('Plage du Crash', 0, 0, (-200 / view.size) * S);
     if (!data.hideIsland2) label('Saint-Escale', data.i2.x, data.i2.z, (-190 / view.size) * S);
     if (data.i3 && !data.hideIsland3) label('Port-Cendre', data.i3.x, data.i3.z, (-300 / view.size) * S);
+    if (data.i4 && !data.hideIsland4) label('Hélios', data.i4.x, data.i4.z, (-380 / view.size) * S);
     // boutiques : drapeau bien visible
     for (const s of data.shops || []) {
       const [x, y] = P(s.x, s.z);
@@ -88,6 +89,14 @@ export function createMap() {
       const [x, y] = P(data.plane.x, data.plane.z);
       g.save(); g.translate(x, y); g.rotate(-data.plane.yaw);
       g.fillStyle = '#fff4e0'; g.strokeStyle = '#10162b'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(0, -12); g.lineTo(3, -2); g.lineTo(12, 2); g.lineTo(3, 3); g.lineTo(2, 9); g.lineTo(5, 12); g.lineTo(-5, 12); g.lineTo(-2, 9); g.lineTo(-3, 3); g.lineTo(-12, 2); g.lineTo(-3, -2); g.closePath();
+      g.fill(); g.stroke(); g.restore();
+    }
+    // Boeing (plus grand, turquoise)
+    if (data.boeing) {
+      const [x, y] = P(data.boeing.x, data.boeing.z);
+      g.save(); g.translate(x, y); g.rotate(-data.boeing.yaw); g.scale(1.5, 1.5);
+      g.fillStyle = '#5ef2c2'; g.strokeStyle = '#10162b'; g.lineWidth = 1.5;
       g.beginPath(); g.moveTo(0, -12); g.lineTo(3, -2); g.lineTo(12, 2); g.lineTo(3, 3); g.lineTo(2, 9); g.lineTo(5, 12); g.lineTo(-5, 12); g.lineTo(-2, 9); g.lineTo(-3, 3); g.lineTo(-12, 2); g.lineTo(-3, -2); g.closePath();
       g.fill(); g.stroke(); g.restore();
     }

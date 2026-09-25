@@ -373,7 +373,7 @@ export function createIsland4(scene, seed, i3) {
       strip(x0, x1, 47, 60, 2, 8, 14, 'x', 0);
       // entre le canal et le boulevard (la gare routière occupe l'îlot ouest de l'avenue)
       if (!(s < 0 && a === 12)) {
-        if (s > 0 && a === 12) building(x0 + 2, x1 - 2, -9, 29, 24);          // Hôtel du Canal
+        if (s > 0 && a === 12) building(x0 + 2, x1 - 2, 0, 29, 24);           // Hôtel du Canal
         else strip(x0, x1, -13, 33, 2, 12, 30, 'z');
       }
       // au nord du boulevard
@@ -399,13 +399,13 @@ export function createIsland4(scene, seed, i3) {
   // enseignes (néons la nuit)
   const neon = (lines, bg, fg, w, h, x, y, z, ry) => { const s = sign(lines, bg, fg, w, h, 512, 160, true); s.position.set(x, y, z); s.rotation.y = ry; group.add(s); };
   neon(['HÔTEL DU CANAL'], '#10162b', '#ff8fab', 12, 1.6, 38, Y + 20, 29.2, 0);
-  neon(['CAFÉ DU CANAL'], '#1f8a8a', '#fff4e0', 6, 1.0, 26, Y + 5, 60.2, 0);
-  neon(['PHARMACIE ✚'], '#10162b', '#3dff7a', 5, 1.0, -26, Y + 5, 60.2, 0);
-  neon(['CINÉMA LUMIÈRE'], '#10162b', '#ffd166', 8, 1.3, 68.2, Y + 9, -60, Math.PI / 2);
-  neon(['MAIRIE'], '#233b5c', '#fff4e0', 6, 1.0, -51.8, Y + 8, -60, -Math.PI / 2);
-  neon(['BOULANGERIE'], '#c8553d', '#fff4e0', 6, 1.0, 97, Y + 4, 33.2, 0);
-  neon(['PRESSE · TABAC'], '#10162b', '#6fb7ff', 6, 1.0, -97, Y + 4, 33.2, 0);
-  neon(['BANQUE DU SOLEIL'], '#10162b', '#ffd166', 8, 1.2, 51.8, Y + 7, -130, -Math.PI / 2);
+  neon(['CAFÉ DU CANAL'], '#1f8a8a', '#fff4e0', 6, 1.0, 26, Y + 5, 58.6, 0);
+  neon(['PHARMACIE ✚'], '#10162b', '#3dff7a', 5, 1.0, -26, Y + 5, 58.6, 0);
+  neon(['CINÉMA LUMIÈRE'], '#10162b', '#ffd166', 8, 1.3, 53.4, Y + 9, -60, -Math.PI / 2);
+  neon(['MAIRIE'], '#233b5c', '#fff4e0', 6, 1.0, -53.4, Y + 8, -60, Math.PI / 2);
+  neon(['BOULANGERIE'], '#c8553d', '#fff4e0', 6, 1.0, 97, Y + 4, 31.6, 0);
+  neon(['PRESSE · TABAC'], '#10162b', '#6fb7ff', 6, 1.0, -97, Y + 4, 31.6, 0);
+  neon(['BANQUE DU SOLEIL'], '#10162b', '#ffd166', 8, 1.2, 53.4, Y + 7, -130, -Math.PI / 2);
   const welcome = signBoard(['Bienvenue à HÉLIOS', 'la ville-lumière'], { bg: '#ffd166', fg: '#10162b', w: 5, h: 1.4, cw: 1024, ch: 280, y: 2.6, wood: '#3a3f48' });
   welcome.position.set(-14, Y, 58); group.add(welcome);
 
@@ -546,7 +546,7 @@ export function createIsland4(scene, seed, i3) {
   const crateIn = new THREE.Group(); crateIn.position.set(0, Y + 0.54, -134); crateIn.visible = false; dyn(crateIn);
   crateIn.add(boxM(1.4, 1.0, 1.0, '#e9e4d8', 0, 0.5, 0)); crateIn.add(boxM(1.42, 0.14, 1.02, '#ffd166', 0, 0.75, 0));
   const csig = sign(['HÉLIOS'], '#e9e4d8', '#c8553d', 1.0, 0.3, 256, 80); csig.position.set(0, 0.45, 0.51); crateIn.add(csig);
-  const consoles = [{ k: 'A', x: -8, z: -131, name: 'Séquenceur ARN' }, { k: 'B', x: 8, z: -131, name: 'Refroidissement' }, { k: 'C', x: 0, z: -122.5, name: 'Centrifugeuse' }];
+  const consoles = [{ k: 'A', x: -8, z: -131, name: 'Séquenceur ARN' }, { k: 'B', x: 9, z: -132, name: 'Refroidissement' }, { k: 'C', x: 7, z: -123.5, name: 'Centrifugeuse' }];
   const consoleLamps = {};
   for (const cs of consoles) {
     group.add(boxM(1.6, 1.0, 0.8, '#3a3f48', cs.x, Y + 0.5, cs.z)); group.add(boxM(1.6, 0.6, 0.1, '#1b1e23', cs.x, Y + 1.35, cs.z + 0.35));
@@ -621,7 +621,7 @@ export function createIsland4(scene, seed, i3) {
     cBox(-112, -78, -21.4, -18.6); }
 
   // ── collisions automatiques (petit mobilier), fusion des maillages statiques ──
-  autoColliders(group, colliders, { ground: (x, z) => heightAt(x, z) });
+  autoColliders(group, colliders, { ground: (x, z) => height4(x - cx, z - cz) });
   mergeStatic(group, flatMat, (o) => o.userData.dynamic);
   group.add(new THREE.Mesh(mergeGeometries(winGeos), winMat));
   group.add(new THREE.Mesh(mergeGeometries(glassGeos), glassBMat));
@@ -639,7 +639,7 @@ export function createIsland4(scene, seed, i3) {
     pad: wp(PD.x, Y, PD.z),
     padConsole: wp(PD.x + 8, Y + 1.0, PD.z + 0.6),
     labDoor: wp(0, Y + 1.5, L.z1 + 1.5),
-    labIn: wp(0, Y, -121),
+    labIn: wp(-5, Y, -121),
     synth: wp(SY.x, Y, SY.z),
     consoles: consoles.map((cs) => ({ k: cs.k, name: cs.name, p: wp(cs.x, Y + 1.1, cs.z + 0.9) })),
     marthe: wp(0, Y, -151),

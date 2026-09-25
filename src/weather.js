@@ -245,7 +245,7 @@ export const WeatherMixin = {
         }
       } else if (this.hostWx !== undefined && WX_KINDS[this.hostWx] && WX_KINDS[this.hostWx] !== W.kind) this.setWeather(WX_KINDS[this.hostWx]);
     }
-    const indoor = (this.mode === 'explore' && this.aboard) || (this.mode === 'flight' && this.flight.cockpitView);
+    const indoor = (this.mode === 'explore' && this.aboard) || (this.mode === 'flight' && this.flight.cockpitView) || (this.bseat && (this.bseat.view === 'seat' || this.bf?.cockpitView));
     const res = W.update(dt, this.camera.position, indoor);
     this.flight.turb = this.mode === 'flight' && this.flight.airborne ? res.storm : 0;
     // la foudre qui tombe près du joueur fait trembler l'écran

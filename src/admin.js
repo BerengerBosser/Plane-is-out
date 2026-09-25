@@ -49,6 +49,7 @@ export const AdminMixin = {
         ${B('repair', '🔧', 'Réparer le Coucou', this.wreckActive() ? 'épave remise à flot' : `coque ${Math.round(this.planeHp())} %`)}
         ${B('ch2', '🛬', 'Chapitre 2', 'posé à Saint-Escale', ch >= 2 ? ' off' : '')}
         ${B('ch3', '🔥', 'Chapitre 3', 'posé à Port-Cendre', ch >= 3 ? ' off' : '')}
+        ${B('ch4', '✈', 'Chapitre 4', 'Boeing posé à Hélios', ch >= 4 ? ' off' : '')}
       </div>
       <h3>Joueur</h3>
       <div class="admGrid">
@@ -76,6 +77,7 @@ export const AdminMixin = {
       case 'repair': this.debugRepairAll(); break;
       case 'ch2': this.adminChapter(2); break;
       case 'ch3': this.adminChapter(3); break;
+      case 'ch4': if (this.chapter() < 4 && !this.c3?.fly) this.adminChapter4(); break;
       case 'arms': {
         // équipement militaire complet (grands sacs pour tout ranger), armes et munitions
         const wearKit = { hat: 'c_helmet', top: 'c_miljacket', vest: 'c_tacvest', back: 'c_milpack', bottom: 'c_milpants' };

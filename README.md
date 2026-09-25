@@ -1,4 +1,4 @@
-# Plane is out — v7 (trois îles, 1 à 4 joueurs)
+# Plane is out — v8 (quatre îles, 1 à 4 joueurs)
 
 Jeu d'aventure coopératif low poly en HTML, CSS et JavaScript (Three.js). C'est un mélange de trois choses :
 - **Esprit RV There Yet :** un véhicule que l'on répare, remorque et bichonne.
@@ -11,6 +11,7 @@ Rien ne se passe comme prévu, et chaque étape en découle :
 1. **L'orage** abat le Coucou sur un îlot perdu. Marthe capte la balise de détresse et vous guide par la radio de secours : il faut réparer.
 2. **Le réservoir a été percé** dans le crash. Hélios est hors de portée : Marthe vous envoie faire le plein à Saint-Escale, l'aéroport évacué le plus proche. Sans courant, pas de pompe ; une tempête arrive, il faudra décoller de la piste.
 3. **Le moteur remonté sur la plage lâche** en route vers Hélios. Atterrissage forcé à Port-Cendre, l'île au volcan : le Coucou est perdu, mais un Boeing abandonné peut finir le voyage.
+4. **Hélios, la ville-lumière, est tombée.** Vous pilotez le Boeing jusqu'à l'aéroport Soleil-Levant. L'Institut Hélios s'est verrouillé en quarantaine avec Marthe à l'intérieur… et Marthe a été mordue. Il faut traverser la ville avec la caisse jusqu'au laboratoire.
 
 Quatre personnages au choix dans le menu principal : Gaston le pilote, Nina la mécano, Mamie Lou la pêcheuse et Bako l'aventurier. La couleur du joueur teinte leur pièce signature (écharpe, salopette, bob, bandeau).
 
@@ -78,9 +79,11 @@ En équipe :
 
 Aux commandes : Z / S gaz · Q / D palonnier · Souris ou flèches : manche · P : pilote automatique · C : vue cockpit · E : quitter le siège.
 
+Aux commandes du Boeing : E au poste de pilotage (tout l'équipage doit être à bord ; les coéquipiers sont assis pendant le vol) · Z / S gaz · Q / D palonnier au roulage · souris : manche, tirer à 115 km/h pour décoller · Espace : freins · C : vue poursuite ou poste vitré · E à l'arrêt : couper les réacteurs. Passagers : souris pour regarder, C pour passer du siège au poste de pilotage puis à l'extérieur. Un crash n'est pas fatal : l'avion est replacé en approche (« remise des gaz »).
+
 En véhicule : E conduire ou monter en passager (le passager peut tirer) · Z accélérer · S freiner puis reculer · Q / D tourner · Espace : frein à main (dérapage) · C : vue. On voit son personnage au volant en vue extérieure. Camions spéciaux : Espace pomper, saisir/poser, atteler · R / F fourches · clic maintenu : lance à eau.
 
-**Admin de la partie** (Pause → Admin, réservé à l'hôte en multijoueur) : passer la nuit, +1 heure, tombée de la nuit, temps ×10, réparer le Coucou, sauter au chapitre 2 ou 3, toutes les armes, +50 coquillages, soigner, invincible, horde, tuer tous les zombies, tir ami, infos de débogage. Il remplace les anciennes touches F1 à F4.
+**Admin de la partie** (Pause → Admin, réservé à l'hôte en multijoueur) : passer la nuit, +1 heure, tombée de la nuit, temps ×10, réparer le Coucou, sauter au chapitre 2, 3 ou 4, toutes les armes, +50 coquillages, soigner, invincible, horde, tuer tous les zombies, tir ami, infos de débogage. Il remplace les anciennes touches F1 à F4.
 
 ## Règles du monde
 
@@ -166,8 +169,20 @@ Bonus : coffre du canot (3 symboles à retrouver sur l'île), Crabe-Roi dans sa 
    - kérosène : remplir le camion-citerne sous le portique du dépôt, puis le Boeing sous l'aile droite ;
    - caisse Hélios dans la soute avec le chariot élévateur (fourches levées) ;
    - repoussage jusqu'au taxiway avec le tracteur (atteler la roue avant) ;
-   - camion-escalier contre la porte avant, puis le cockpit : décollage vers Hélios. C'est la fin de la démo.
-   On peut dormir dans la cabine du Boeing.
+   - camion-escalier contre la porte avant, tout l'équipage à bord, puis le poste de pilotage : **vous pilotez** le décollage (plus de cinématique).
+   On peut dormir dans la cabine du Boeing ; les morts ne peuvent pas y monter.
+
+**Chapitre 4 · Hélios** (la ville-lumière, au-delà de Port-Cendre)
+1. Piloter le HX-404 jusqu'à Hélios et se poser sur la piste est-ouest de l'aéroport Soleil-Levant (moins de 190 km/h, ailes à plat, freiner avec Espace).
+2. Déclencher le toboggan d'évacuation (porte avant gauche, dedans) : on glisse jusqu'au sol, on remonte en marchant face à l'avion.
+3. Sortir la caisse de la soute (E maintenu à la porte de soute, plus rapide à plusieurs), puis la prendre au chariot élévateur du hangar de fret.
+4. **Le pont-levis du canal** : deux manivelles, A et B, à tourner ensemble. Seul, on les tourne à tour de rôle : si l'une a trop d'avance, le tablier se met de travers. Le grincement réveille les morts du hangar voisin : un joueur tourne, un autre couvre.
+5. **Le barrage sanitaire** : la guérite affiche quatre symboles ; le code, ce sont les quais de ces lignes de bus sur le panneau de la gare routière, à 60 m de là. À plusieurs, l'un lit, l'autre tape.
+6. Remonter l'avenue du Zénith jusqu'à la place du Soleil et poser la caisse sur le sas de l'Institut Hélios.
+7. **Décontamination** : 75 secondes, cinq vagues de morts attirées par la sirène (jusqu'à un cogneur). Le cycle se met en pause s'il n'y a personne près du sas.
+8. **Le synthétiseur** : trois consoles (séquenceur ARN, circuit de refroidissement, centrifugeuse) à régler dans le temps imparti, 100 s à plusieurs (une console chacun), 170 s seul. Ensuite, Marthe prend la première dose : fin de l'aventure.
+
+Bonus : deux canards (fontaine, gare routière), Relais Soleil-Levant (comptoir), valises et caisses à fouiller, kart à bagages.
 
 ## Sauvegardes
 
@@ -200,13 +215,14 @@ Sources principales dans `src/` :
   - `interact.js` : interactions et énigmes
   - `puzzles3d.js` : énigmes physiques (échelle, caisses, laser, plaques de pression)
   - `vehicles.js` : kart, camions, chariot élévateur, tracteur
-  - `chapter3.js` : incendie, Boeing, cinématique finale
+  - `chapter3.js` : incendie, remise en état du Boeing
+  - `chapter4.js` : vol piloté du Boeing (pilote et passagers), Hélios : toboggan, soute, pont-levis, barrage, décontamination, synthétiseur
   - `saves.js` : sauvegardes
 - **Réseau :**
   - `mp.js` : salon, avatars, synchronisation, chat de proximité
   - `net.js` : transports (serveur de salles ou salon de page)
   - `voice.js` : voix
-- **Monde :** `terrain.js` (dont les collisions automatiques et les panneaux), `decor.js`, `island2.js`, `island3.js`, `boeing.js`, `planeModel.js`, `enemies.js`, `props.js`, `textures.js`, `trail.js`
+- **Monde :** `terrain.js` (dont les collisions automatiques et les panneaux), `decor.js`, `island2.js`, `island3.js`, `island4.js` (Hélios : aéroport, canal, ville, Institut), `boeing.js` (cabine, poste vitré, toboggan), `planeModel.js`, `enemies.js`, `props.js`, `textures.js`, `trail.js`
 - **Personnages :** `avatars.js` (les quatre personnages, portraits du menu)
 
 ## Performances

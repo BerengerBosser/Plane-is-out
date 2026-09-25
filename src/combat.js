@@ -73,8 +73,10 @@ export const CombatMixin = {
 
   // cibles pour l'IA ennemie (hôte)
   enemyTargets() {
-    const L = [{ id: this.myId(), pos: this.playerWorld(), active: this.mode === 'explore' && !this.aboard && !this.downed }];
-    for (const m of this.mateList()) L.push({ id: m.id, pos: m.pos, active: m.mode === 'explore' && !m.aboard && !m.downed });
+    // dans la cabine du Boeing (garé ou en vol), les morts ne peuvent pas vous atteindre
+    const me = this.playerWorld();
+    const L = [{ id: this.myId(), pos: me, active: this.mode === 'explore' && !this.aboard && !this.downed && !this.bseat && !this.inBoeing?.(me) }];
+    for (const m of this.mateList()) L.push({ id: m.id, pos: m.pos, active: m.mode === 'explore' && !m.aboard && !m.downed && !m.bseat && !this.inBoeing?.(m.pos) });
     return L;
   },
   onEnemyHitPlayer(dmg, e, pid, dir) {
@@ -216,7 +218,7 @@ export const CombatMixin = {
         this.radioOnce('stormover', 'La tempête s\'éloigne ! Tout le monde à bord, et décollez depuis la piste. Cap sur Hélios : cette fois, le réservoir est plein.');
         break;
       case 'ended': break;
-      default: this.applyNightFx?.(type, data); this.applyWreckFx?.(type, data); break;
+      default: if (!this.applyFx4?.(type, data)) { this.applyNightFx?.(type, data); this.applyWreckFx?.(type, data); } break;
     }
   },
   bossNear(type, r) { return this.enemies.list.some((e) => e.type === type && !e.dead && e.pos.distanceTo(this.playerWorld()) < r); },
@@ -259,7 +261,11 @@ export const CombatMixin = {
     const me = this.playerWorld();
     const b = this.enemies.list.find((e) => e.T.boss && !e.dead && e.state !== 'sleep' && e.pos.distanceTo(me) < 90);
     this.ui.boss(b ? { name: b.T.boss, hp: b.hp / b.maxHp, hint: BOSS_HINT[b.type] } : null);
-    if (this.siege.active) this.ui.gen({ hp: this.siege.genHp, info: `Tenez jusqu'à 21:00 · il est ${this.clock()} · vague ${this.siege.wave}/3` });
+    const lbl = document.querySelector('#genBar span');
+    const c4 = this.c4, near4 = this.island4 && this.nearIsland(me) === 4;
+    if (this.siege.active) { lbl.textContent = 'Générateur'; this.ui.gen({ hp: this.siege.genHp, info: `Tenez jusqu'à 21:00 · il est ${this.clock()} · vague ${this.siege.wave}/3` }); }
+    else if (c4?.deconOn && near4) { lbl.textContent = 'Décontamination'; this.ui.gen({ hp: c4.decon / 75 * 100, info: 'Restez près du sas : sans personne, le cycle se met en pause' }); }
+    else if (c4?.synthLeft > 0 && near4) { lbl.textContent = 'Synthèse'; this.ui.gen({ hp: c4.synthLeft / (this.playerCount() > 1 ? 100 : 170) * 100, info: `${['A', 'B', 'C'].filter((k) => this.flags[`synth${k}`]).length}/3 consoles · ${Math.ceil(c4.synthLeft)} s` }); }
     else this.ui.gen(null);
   },
 };

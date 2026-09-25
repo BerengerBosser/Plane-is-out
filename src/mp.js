@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { CFG } from './config.js';
 import { heightAt } from './terrain.js';
 import { FLOOR, buildDiable } from './planeModel.js';
+import { BSEATS } from './boeing.js';
 import { openTransport, Session, makeCode } from './net.js';
 import { buildAvatar, CHARACTERS, renderPortraits } from './avatars.js';
 import { createVoice } from './voice.js';
@@ -188,7 +189,7 @@ export const MPMixin = {
     const lbl = $('mpResume').closest('label');
     lbl.classList.toggle('hidden', !s.isHost || !save || playing);
     if (save) {
-      const ch = save.flags?.tookOff2 ? 3 : save.flags?.tookOff ? 2 : 1;
+      const ch = save.flags?.bAir ? 4 : save.flags?.tookOff2 ? 3 : save.flags?.tookOff ? 2 : 1;
       $('mpResumeLabel').textContent = `Reprendre ${this.serverSave ? 'la partie du serveur' : 'ma sauvegarde'} · chap. ${ch}, jour ${save.stats?.[2] ?? 1}`;
       if (!this._resumeInit) { this._resumeInit = true; $('mpResume').checked = true; }
     }
@@ -235,6 +236,7 @@ export const MPMixin = {
         for (const it of Object.values(this.items)) if (it.carrier === id) { const pos = m ? m.pos : it.pos; this.applyAct('drop', { id: it.id, x: pos.x, z: pos.z, y: pos.y, r: 0 }, id, false); }
         if (this.pilotId === id) this.pilotId = null;
         if (this.nozzle === id) this.nozzle = null;
+        this.bPilotLost?.(id);
         this.dirtyWorld = true;
       }
     });
@@ -308,9 +310,12 @@ export const MPMixin = {
   mpPublish() {
     const s = this.session;
     const p = this.player;
+    const wp = this.bseat ? this.playerWorld() : p.pos;
     const st = {
       m: MODES.indexOf(this.mode),
-      p: [p.pos.x, p.pos.y, p.pos.z].map((v) => +v.toFixed(2)),
+      p: [wp.x, wp.y, wp.z].map((v) => +v.toFixed(2)),
+      bs: this.bseat ? this.bseat.i : -1,
+      bf: this.bPresence?.() || 0,
       ab: this.aboard ? 1 : 0,
       y: +p.yaw.toFixed(2),
       st: this.seat?.id || (this.mode === 'flight' ? 'pilot' : this.driving ? 'veh' : 0),
@@ -421,6 +426,14 @@ export const MPMixin = {
       m.av.root.position.copy(m.pos);
       if (mode === 'flight') { const sp = this.plane.root.localToWorld(new THREE.Vector3(-0.62, FLOOR, -3.45)); m.av.root.position.copy(sp); m.seat = 'pilot'; }
       m.av.root.rotation.set(0, m.yaw, 0);
+      // assis dans le Boeing : sur son siège, dans le repère de l'avion
+      m.bseat = st.bs >= 0 && this.boeing ? st.bs : null;
+      if (m.bseat !== null && BSEATS[m.bseat]) {
+        const s = BSEATS[m.bseat];
+        m.av.root.position.copy(this.boeingLocal(new THREE.Vector3(s.x, s.cush - 0.36, s.z)));
+        m.av.root.quaternion.copy(this.boeing.root.quaternion);
+        m.seat = 'boeing';
+      }
       if (m.driving) {
         const v = this.vehicles[st.vh[0]];
         if (v) { const sp = this.vehicleWorld(v, new THREE.Vector3(...v.def.seat)); m.av.root.position.copy(sp).setY(sp.y - 0.36); m.av.root.rotation.set(0, v.yaw + (v.def.reverseSeat ? Math.PI : 0), 0); m.seat = 'veh'; }
@@ -465,6 +478,8 @@ export const MPMixin = {
       const pl = s.players.get(own)?.s?.pl;
       if (pl) this.applyPlane(pl, dt);
     }
+    // Boeing piloté par un coéquipier
+    this.updateBoeingMirror?.(dt);
     // voix : oreille = caméra
     this.voice.listener(this.camera);
     const talk = this.inGame() && !this.chatting && this.input.down('KeyB');

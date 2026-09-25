@@ -359,8 +359,8 @@ export function createUI() {
 
   // ── circuit hydraulique : tuyaux à faire pivoter (source à gauche, pompe à droite) ──
   // cells : tableau H×W de masques (N=1, E=2, S=4, W=8) ; src/dst : rangées d'entrée/sortie
-  api.pipePuzzle = (pz, onSolve, closeCb) => {
-    const body = api.openModal('Circuit de la cuve', 'Cliquez les tuyaux pour les faire pivoter · reliez la cuve à la pompe', closeCb);
+  api.pipePuzzle = (pz, onSolve, closeCb, opts = {}) => {
+    const body = api.openModal(opts.title || 'Circuit de la cuve', opts.hint || 'Cliquez les tuyaux pour les faire pivoter · reliez la cuve à la pompe', closeCb);
     const { W, H, src, dst } = pz;
     const wrap = document.createElement('div');
     wrap.className = 'pipeWrap';
@@ -368,8 +368,8 @@ export function createUI() {
     grid.className = 'pipeGrid';
     grid.style.gridTemplateColumns = `repeat(${W}, 1fr)`;
     const lab = (t, cls) => { const d = document.createElement('div'); d.className = `pipeEnd ${cls}`; d.innerHTML = t; return d; };
-    const inL = lab('CUVE<b>⛽</b>', 'l'); inL.style.gridRow = `${src + 1}`;
-    const outR = lab('POMPE<b>⚙</b>', 'r'); outR.style.gridRow = `${dst + 1}`;
+    const inL = lab(opts.src || 'CUVE<b>⛽</b>', 'l'); inL.style.gridRow = `${src + 1}`;
+    const outR = lab(opts.dst || 'POMPE<b>⚙</b>', 'r'); outR.style.gridRow = `${dst + 1}`;
     const left = document.createElement('div'); left.className = 'pipeSide'; left.style.gridTemplateRows = `repeat(${H}, 1fr)`; left.appendChild(inL);
     const right = document.createElement('div'); right.className = 'pipeSide'; right.style.gridTemplateRows = `repeat(${H}, 1fr)`; right.appendChild(outR);
     wrap.append(left, grid, right);
@@ -423,8 +423,8 @@ export function createUI() {
   };
 
   // ── pompe : garder l'aiguille de pression dans la zone verte ──
-  api.pumpPanel = ({ getFuel, max, onFlow, onBurst, onFull }, closeCb) => {
-    const body = api.openModal('Pompe à carburant', 'Maintenez « Pomper » (ou Espace) · gardez l\'aiguille dans le vert · le rouge fait sauter la sécurité', closeCb);
+  api.pumpPanel = ({ getFuel, max, onFlow, onBurst, onFull, title, label, fullText }, closeCb) => {
+    const body = api.openModal(title || 'Pompe à carburant', 'Maintenez « Pomper » (ou Espace) · gardez l\'aiguille dans le vert · le rouge fait sauter la sécurité', closeCb);
     const cv = document.createElement('canvas');
     cv.width = 520; cv.height = 250;
     cv.className = 'gauge';
@@ -433,7 +433,7 @@ export function createUI() {
     bar.className = 'fuelBar';
     bar.innerHTML = '<i></i><span></span>';
     body.appendChild(bar);
-    const b = btn('Pomper', 'go big');
+    const b = btn(label ? 'Accélérer' : 'Pomper', 'go big');
     body.appendChild(b);
     let hold = false, p = 10, lock = 0, t = 0, last = performance.now(), full = false;
     const down = () => { hold = true; }, up = () => { hold = false; };
@@ -476,9 +476,9 @@ export function createUI() {
       g.strokeStyle = lock > 0 ? '#ff6b5b' : '#ffd166'; g.lineWidth = 7; g.lineCap = 'round'; g.stroke();
       g.beginPath(); g.arc(cx, cy, 14, 0, Math.PI * 2); g.fillStyle = '#10162b'; g.fill();
       g.font = '700 22px "Bricolage Grotesque", sans-serif'; g.textAlign = 'center'; g.fillStyle = lock > 0 ? '#ff6b5b' : inG ? '#5ef2c2' : '#fff4e0';
-      g.fillText(lock > 0 ? 'SÉCURITÉ ! ATTENDEZ' : full ? 'RÉSERVOIR PLEIN' : inG ? 'ÇA COULE' : p < gLo ? 'PRESSION TROP BASSE' : 'TROP HAUT, RELÂCHEZ', cx, cy - 60);
+      g.fillText(lock > 0 ? 'SÉCURITÉ ! ATTENDEZ' : full ? (fullText || 'RÉSERVOIR PLEIN') : inG ? (label ? 'ÇA TOURNE' : 'ÇA COULE') : p < gLo ? 'PRESSION TROP BASSE' : 'TROP HAUT, RELÂCHEZ', cx, cy - 60);
       bar.firstChild.style.width = `${Math.min(100, (fuel / max) * 100)}%`;
-      bar.lastChild.textContent = `Réservoir ${Math.round(fuel)} / ${max} %`;
+      bar.lastChild.textContent = `${label || 'Réservoir'} ${Math.round(fuel)} / ${max} %`;
       requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);

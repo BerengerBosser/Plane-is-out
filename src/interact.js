@@ -294,6 +294,7 @@ export const InteractMixin = {
     this.vehicleInteractions(add, me);
     this.lootInteractions(add, me);
     this.c3Interactions(add, me);
+    this.c4Interactions(add, me);
     // ── île 1 ──
     const cab = this.island.cabin;
     if (!this.flags.doorOpen) {
@@ -690,14 +691,15 @@ export const InteractMixin = {
   },
   openShop(where) {
     this.openModalCommon();
-    const items = () => SHOP.filter((s) => (where >= 2 || !['tank', 'engine'].includes(s.id)) && (!s.min || where >= s.min)).map((s) => ({
+    // à Port-Cendre et à Hélios, le Coucou ne vole plus : pas d'améliorations pour lui
+    const items = () => SHOP.filter((s) => (where >= 2 || !['tank', 'engine'].includes(s.id)) && (!s.min || where >= s.min) && !(where >= 3 && s.up)).map((s) => ({
       ...s,
       owned: s.up ? this.upgrades.has(s.id) : false,
     }));
     const withSell = () => [{ id: 'sell', icon: '🐟', name: 'Vendre ma pêche', desc: this.fishCount() ? `${this.fishCount()} poissons dans la bourriche` : 'Bourriche vide', gain: this.fishValue(), sell: true }, ...items()];
     this.ui.shop({
-      title: where === 1 ? 'Caisse de troc de Jo' : 'Bar de l\'Escale · comptoir',
-      sub: where === 1 ? '« Laisse de la ferraille, prends ce qu\'il te faut. » — Jo' : 'Le patron est parti, mais le troc continue.',
+      title: ['', 'Caisse de troc de Jo', 'Bar de l\'Escale · comptoir', 'Boutique hors taxes · Port-Cendre', 'Relais Soleil-Levant · Hélios'][where] || 'Comptoir',
+      sub: ['', '« Laisse de la ferraille, prends ce qu\'il te faut. » — Jo', 'Le patron est parti, mais le troc continue.', 'Évacuée en une nuit. Les étagères, elles, sont restées.', '« Servez-vous, laissez des coquillages. Bon courage. » — le gérant'][where] || '',
       items: withSell,
       getScrap: () => this.scrap,
       onBuy: (id) => {

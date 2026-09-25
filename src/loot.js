@@ -95,6 +95,21 @@ export const LootMixin = {
     { const p = w3(T.x + 21, FLAT3, T.z - 3); box3('i3_case2', 'case', p.x, p.y, p.z, -0.3, { name: 'Valise', table: 'suitcase', rolls: [2, 3] }); }
     { const p = w3(D.x + 6, FLAT3, D.z + 4); box3('i3_depot', 'crate', p.x, p.y, p.z, 0.1, { name: 'Caisse de fret', table: 'crate', rolls: [2, 3] }); }
     { const p = w3(30, FLAT3, 139); box3('i3_crew', 'case', p.x, p.y, p.z, 0.9, { name: 'Bagage de l\'équipage', table: 'cockpit', rolls: [2, 3], guaranteed: ['parachute'] }); }
+    // ── île 4 (Hélios) ──
+    const I4g = this.island4;
+    if (I4g) {
+      const w4 = (x, z) => new THREE.Vector3(I4g.cx + x, FLAT4, I4g.cz + z);
+      const T4 = I4.terminal, F4 = I4.fret;
+      { const p = w4(T4.x - 16, T4.z + 4); add('med4', 'medkit', p.x, p.y + 0.02, p.z, 0, { bandage: 3 }); }
+      { const p = w4(T4.x - 8, T4.z + 4.5); add('ammo4', 'ammo', p.x, p.y, p.z, 0, { ammo: true }); }
+      { const p = w4(T4.x + 4, T4.z + 4); box3('i4_case1', 'case', p.x, p.y, p.z, 0.5, { name: 'Valise abandonnée', table: 'suitcase', rolls: [2, 3] }); }
+      { const p = w4(T4.x - 20, T4.z - 4.5); box3('i4_lost', 'locker', p.x, p.y, p.z, 0, { name: 'Objets trouvés', table: 'suitcase', rolls: [2, 3], grid: [5, 4] }); }
+      { const p = w4(F4.x + 9, F4.z - 4); box3('i4_fret', 'crate', p.x, p.y, p.z, 0.2, { name: 'Caisse de fret', table: 'crate', rolls: [2, 3], guaranteed: ['stake'] }); }
+      { const p = w4(26, -9); box3('i4_police', 'military', p.x, p.y, p.z, 0, { name: 'Caisse du barrage', table: 'military', rolls: [2, 3], guaranteed: [['c_tacvest', 'c_milpack']], grid: [6, 4] }); }
+      { const p = w4(28.8, -4); add('med4b', 'medkit', p.x, p.y + 0.02, p.z, 0, { bandage: 3 }); }
+      { const p = w4(-8, -44); add('ammo4b', 'ammo', p.x, p.y, p.z, 0, { ammo: true }); }
+      { const p = w4(-47, 19); box3('i4_bus', 'bag', p.x, p.y, p.z, 0.4, { name: 'Sac oublié', table: 'suitcase', rolls: [1, 3] }); }
+    }
     // bureau de la police aux frontières (panneau)
     const sg = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.6), new THREE.MeshLambertMaterial({ map: textTexture(['POLICE AUX FRONTIÈRES'], '#1d3a6a', '#fff4e0', 512, 100) }));
     sg.position.copy(w3(T.x - T.w / 2 + 4, FLAT3 + 3, T.z + 6)).add(new THREE.Vector3(0.8, 0, 0)); sg.rotation.y = Math.PI / 2; this.scene.add(sg);
@@ -164,7 +179,9 @@ export const LootMixin = {
     this._indoorKey = key;
     const ch = this.chapter();
     if (this.enemies.list.filter((e) => e.indoor && !e.dead).length > 10) return;
-    const boxes = this.interiors.filter((b) => b.minY === undefined && b.kind === 'hall' && (ch === 2 ? Math.hypot((b.minX + b.maxX) / 2 - this.island2.cx, (b.minZ + b.maxZ) / 2 - this.island2.cz) < 400 : Math.hypot((b.minX + b.maxX) / 2 - this.island3.cx, (b.minZ + b.maxZ) / 2 - this.island3.cz) < 500));
+    const isl = ch === 2 ? this.island2 : ch === 3 ? this.island3 : this.island4;
+    if (!isl) return;
+    const boxes = this.interiors.filter((b) => b.minY === undefined && b.kind === 'hall' && Math.hypot((b.minX + b.maxX) / 2 - isl.cx, (b.minZ + b.maxZ) / 2 - isl.cz) < 500);
     const pool = ['voile', 'voile', 'crawler', 'voile', 'bloater', 'runner'];
     let n = 0;
     for (const b of boxes) {
@@ -182,3 +199,4 @@ export const LootMixin = {
   },
 };
 import { I2 } from './island2.js';
+import { FLAT4, I4 } from './island4.js';

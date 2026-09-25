@@ -29,6 +29,8 @@ export const Chapter3Mixin = {
     this.c3 = this.defaultC3();
     this.poseBoeing();
     this.c3Smokes();
+    // île 4 : sa position dépend de celle de Port-Cendre
+    this.buildIsland4();
   },
   // fumerolles et panache du volcan
   c3Smokes() {
@@ -38,7 +40,7 @@ export const Chapter3Mixin = {
   },
   defaultC3() {
     const I = this.island3;
-    return { fire: 100, truckFuel: 0, bfuel: 0, bp: { x: I.cx + I3.boeing.x, z: I.cz + I3.boeing.z, yaw: I3.boeing.yaw }, hitched: 0, cine: 0 };
+    return { fire: 100, truckFuel: 0, bfuel: 0, bp: { x: I.cx + I3.boeing.x, z: I.cz + I3.boeing.z, yaw: I3.boeing.yaw, y: FLAT3 }, hitched: 0, fly: 0 };
   },
   ensureC3Items() {
     const I = this.island3;
@@ -50,14 +52,19 @@ export const Chapter3Mixin = {
   },
 
   // ── état partagé ──
-  chapter3State() { const c = this.c3; return c ? { f: +c.fire.toFixed(1), tf: Math.round(c.truckFuel), bf: Math.round(c.bfuel), bp: [+c.bp.x.toFixed(2), +c.bp.z.toFixed(2), +c.bp.yaw.toFixed(3)], h: c.hitched || 0 } : null; },
-  applyChapter3State(s, full) {
+  chapter3State() { const c = this.c3; return c ? { f: +c.fire.toFixed(1), tf: Math.round(c.truckFuel), bf: Math.round(c.bfuel), bp: [+c.bp.x.toFixed(2), +c.bp.z.toFixed(2), +c.bp.yaw.toFixed(3), +(c.bp.y ?? FLAT3).toFixed(2)], h: c.hitched || 0, fly: c.fly || 0 } : null; },
+  // load : reprise d'une sauvegarde (personne n'est aux commandes)
+  applyChapter3State(s, full, load) {
     const c = this.c3; if (!c || !s) return;
     c.fire = s.f; c.truckFuel = s.tf; c.bfuel = s.bf; c.hitched = s.h || 0;
     if (this.flags.baysOpen && !this.island3.baysOpen) this.island3.openBays(full);
+    const wasFly = c.fly;
+    c.fly = load ? 0 : s.fly || 0;
+    if (load && this.flags.ended && !this.flags.cured) this.flags.ended = false;   // fin de l'ancienne démo : l'aventure continue
     const towing = this.driving && this.driving.def.tug && c.hitched === this.myId();
-    if (!towing && s.bp) { c.bp = { x: s.bp[0], z: s.bp[1], yaw: s.bp[2] }; this.poseBoeing(); }
-    void full;
+    const piloting = c.fly && c.fly === this.myId();
+    if (!towing && !piloting && s.bp) { c.bp = { x: s.bp[0], z: s.bp[1], yaw: s.bp[2], y: s.bp[3] ?? FLAT3 }; if (!c.fly) this.poseBoeing(); }
+    if (wasFly && !c.fly) this.poseBoeing();
   },
   applyChapter3Act(type, d, by, auth) {
     const c = this.c3; if (!c) return null;
@@ -67,17 +74,17 @@ export const Chapter3Mixin = {
       case 'bfuel': { c.bfuel = clamp(d.v, 0, 100); c.truckFuel = clamp(d.t ?? c.truckFuel, 0, 100); if (c.bfuel >= 100 && !this.flags.boeingFuel && this.isAuthority()) this.act('flag', { boeingFuel: true }); this.dirtyWorld = true; return true; }
       case 'hitch': {
         if (d.on) { if (auth && c.hitched && c.hitched !== by) return false; c.hitched = by; }
-        else { c.hitched = 0; if (d.bp) { c.bp = { x: d.bp[0], z: d.bp[1], yaw: d.bp[2] }; this.poseBoeing(); } }
+        else { c.hitched = 0; if (d.bp) { c.bp = { x: d.bp[0], z: d.bp[1], yaw: d.bp[2], y: FLAT3 }; this.poseBoeing(); } }
         this.dirtyWorld = true; return true;
       }
-      case 'bpos': { if (by !== this.myId()) { c.bp = { x: d.bp[0], z: d.bp[1], yaw: d.bp[2] }; this.poseBoeing(); } if (this.isAuthority() && !this.flags.boeingOut && this.boeingOutZone()) this.act('flag', { boeingOut: true }); this.dirtyWorld = true; return true; }
+      case 'bpos': { if (by !== this.myId()) { c.bp = { x: d.bp[0], z: d.bp[1], yaw: d.bp[2], y: FLAT3 }; this.poseBoeing(); } if (this.isAuthority() && !this.flags.boeingOut && this.boeingOutZone()) this.act('flag', { boeingOut: true }); this.dirtyWorld = true; return true; }
       case 'unloadCrate': {
         if (!this.crateLoaded) return auth ? false : true;
         this.crateLoaded = false; this.plane.crateAboard.visible = false;
         this.placeItem(this.items.crate, d.x, d.z, d.r || 0);
         this.afterChange(); return true;
       }
-      case 'boeingCrate': { const it = this.items.crate; it.state = 'installed'; it.onVehicle = null; it.mesh.visible = false; for (const v of Object.values(this.vehicles)) if (v.cargo === 'crate') v.cargo = null; if (this.isAuthority()) this.act('flag', { boeingCrate: true }); return true; }
+      case 'boeingCrate': { const it = this.items.crate; it.state = 'installed'; it.onVehicle = null; it.mesh.visible = false; for (const v of Object.values(this.vehicles)) if (v.cargo === 'crate') v.cargo = null; this.flags.crateOut = false; this.flags.crateAtLab = false; if (this.isAuthority()) this.act('flag', { boeingCrate: true }); this.afterChange(); return true; }
       case 'battery': { const it = this.items.battery; it.state = 'installed'; it.mesh.visible = false; if (this.carrying === it) this.carrying = null; if (this.isAuthority()) this.act('flag', { boeingBattery: true }); return true; }
       default: return null;
     }
@@ -85,9 +92,8 @@ export const Chapter3Mixin = {
 
   // ── avion de ligne : pose, colliders, porte ──
   poseBoeing() {
-    const b = this.boeing, c = this.c3; if (!b || !c) return;
-    const y = FLAT3;
-    b.root.position.set(c.bp.x, y, c.bp.z);
+    const b = this.boeing, c = this.c3; if (!b || !c || c.fly) return;
+    b.root.position.set(c.bp.x, c.bp.y ?? FLAT3, c.bp.z);
     b.root.rotation.set(0, c.bp.yaw, 0);
     b.root.updateMatrixWorld(true);
     this.boeingDirty = true;
@@ -95,15 +101,16 @@ export const Chapter3Mixin = {
   boeingLocal(v) { this.boeing.root.updateMatrixWorld(true); return this.boeing.root.localToWorld(v.clone()); },
   boeingOutZone() { const I = this.island3; return this.c3.bp.z - I.cz < 101; },
   stairsDocked() {
-    const v = this.vehicles.stairs3; if (!v || !this.boeing) return false;
+    const v = this.vehicles.stairs3; if (!v || !this.boeing || this.c3?.fly) return false;
     const land = this.vehicleWorld(v, new THREE.Vector3(0.25, 4.4, -3.2)), door = this.boeingLocal(BOEING.door);
-    return Math.hypot(land.x - door.x, land.z - door.z) < 1.9 && Math.abs(v.speed) < 0.5;
+    return Math.hypot(land.x - door.x, land.z - door.z) < 1.9 && Math.abs(v.speed) < 0.5 && Math.abs(land.y - door.y) < 1.5;
   },
+  // dans la cabine (repère de l'avion, qu'il soit garé ou en vol)
   inBoeing(p = this.playerWorld()) {
     if (!this.boeing) return false;
-    const c = this.c3, dx = p.x - c.bp.x, dz = p.z - c.bp.z, cs = Math.cos(c.bp.yaw), sn = Math.sin(c.bp.yaw);
-    const lx = dx * cs - dz * sn, lz = dx * sn + dz * cs, B = BOEING.cabin;
-    return p.y > FLAT3 + FLOOR_B - 0.6 && lx > B.minX - 0.4 && lx < B.maxX + 0.4 && lz > B.minZ && lz < B.maxZ;
+    this.boeing.root.updateMatrixWorld(true);
+    const l = this.boeing.root.worldToLocal(p.clone()), B = BOEING.cabin;
+    return l.y > FLOOR_B - 0.6 && l.y < FLOOR_B + 4 && l.x > B.minX - 0.4 && l.x < B.maxX + 0.4 && l.z > B.minZ && l.z < B.maxZ;
   },
 
   // ouverture du hangar 2 : klaxon, poussière, sol qui tremble
@@ -128,21 +135,11 @@ export const Chapter3Mixin = {
     const me = this.playerWorld();
     const near = Math.hypot(me.x - I.cx, me.z - I.cz) < 700 || this.mode === 'flight' && Math.hypot(this.flight.pos.x - I.cx, this.flight.pos.z - I.cz) < 900;
     I.group.visible = near || this.chapter() === 3;
-    b.root.visible = I.group.visible;
-    I.setNight(this.brumeNow || 0);
-    I.update(this.t, dt);
-    // porte avant : ouverte quand l'escalier est accosté
-    const docked = this.stairsDocked();
-    b.doorPivot.rotation.y += ((docked ? -1.7 : 0) - b.doorPivot.rotation.y) * Math.min(1, dt * 3);
-    b.cargoPivot.rotation.z += ((f.boeingFuel || this.vehicles.fork3?.cargo === 'crate' ? 0.9 : 0) - b.cargoPivot.rotation.z) * Math.min(1, dt * 2);
-    b.strobe.visible = f.boeingBattery && Math.sin(this.t * 6) > 0.6;
-    b.cabinLight.intensity = f.boeingBattery ? 8 : 2;
-    if (docked !== this._docked || this.boeingDirty) {
-      this._docked = docked; this.boeingDirty = false;
-      this.boeingCols = boeingColliders({ x: c.bp.x, z: c.bp.z, y: FLAT3, yaw: c.bp.yaw }, { door: docked });
-      const plat = boeingPlatform({ x: c.bp.x, z: c.bp.z, y: FLAT3, yaw: c.bp.yaw });
-      this.platforms = this.platforms.filter((p) => !p.boeing).concat([plat]);
-    }
+    // le Boeing voyage : visible dès qu'il est à portée de vue
+    b.root.visible = this.chapter() >= 3 ? b.root.position.distanceTo(this.camera.position) < 2200 : I.group.visible;
+    if (I.group.visible) { I.setNight(this.brumeNow || 0); I.update(this.t, dt); }
+    // porte, toboggan, soute, colliders (garé) ou rien (en vol)
+    this.updateBoeingState(dt);
     // incendie du Coucou
     this.updateCoucouFire(dt);
     // extincteur porté : clic maintenu
@@ -154,7 +151,7 @@ export const Chapter3Mixin = {
     }
     // repoussage : l'avion suit le tracteur comme une remorque
     const tug = this.driving;
-    if (tug && tug.def.tug && c.hitched === this.myId()) {
+    if (tug && tug.def.tug && c.hitched === this.myId() && !c.fly) {
       const H = this.vehicleWorld(tug, tug.model.hitch);
       const yaw = c.bp.yaw, WB = BOEING.wheelbase;
       const M = new THREE.Vector3(c.bp.x + Math.sin(yaw) * WB, 0, c.bp.z + Math.cos(yaw) * WB);   // train principal (derrière le nez)
@@ -296,10 +293,10 @@ export const Chapter3Mixin = {
     const hatch = this.boeingLocal(BOEING.hatch);
     if (!f.boeingBattery && !this.inBoeing(me)) add(hatch, 2.8, this.carrying?.id === 'battery' ? { prio: 4, prompt: '<kbd>E</kbd> installer la batterie dans la trappe avionique', press: () => { this.act('battery', {}); this.audio.success(); } } : { prompt: 'Trappe avionique : <span class="warn">batterie de démarrage manquante</span> (tour de contrôle)' });
     // cockpit et cabine
-    if (this.inBoeing(me)) {
-      const ck = this.boeingLocal(BOEING.cockpit).add(new THREE.Vector3(0, 0.8, 0));
-      const missing = [!f.boeingBattery && 'batterie', !f.boeingFuel && 'kérosène', !f.boeingCrate && 'caisse en soute', !f.boeingOut && 'repoussage'].filter(Boolean);
-      add(ck, 2.2, missing.length ? { prompt: `<span class="warn">Pas prêt : ${missing.join(', ')}</span>` } : { prio: 5, prompt: '<kbd>E</kbd> démarrer les réacteurs et décoller vers Hélios', press: () => this.requestBoeingGo() });
+    if (this.inBoeing(me) && !this.c3.fly) {
+      const ck = this.boeingLocal(BOEING.cockpit).add(new THREE.Vector3(0, 1.2, 0));
+      const missing = [!f.boeingBattery && 'batterie', !f.boeingFuel && 'kérosène', !f.boeingCrate && !f.bAir && 'caisse en soute', !f.boeingOut && 'repoussage'].filter(Boolean);
+      add(ck, 2.4, missing.length ? { prompt: `<span class="warn">Pas prêt : ${missing.join(', ')}</span>` } : { prio: 5, prompt: `<kbd>E</kbd> prendre les commandes${f.bAir ? '' : ' et décoller vers Hélios'}`, press: () => this.requestBoeingFly() });
       if (this.isNightish()) add(this.boeingLocal(new THREE.Vector3(0, FLOOR_B + 0.8, 14)), 20, { prompt: '<kbd>E</kbd> s\'installer dans un siège et dormir jusqu\'au matin', press: () => this.requestBoeingSleep() });
     }
   },
@@ -310,8 +307,13 @@ export const Chapter3Mixin = {
     this.doSleep();
     this.session?.send('sleep', {});
   },
-  requestBoeingGo() {
-    this.act('flag', { boeingGo: true });
+  // prendre les commandes : tout l'équipage doit être à bord (il sera assis pour le vol)
+  requestBoeingFly() {
+    if (this.c3.fly) return;
+    const out = this.mateList().filter((m) => !m.downed && !this.inBoeing(m.pos));
+    if (out.length) { this.audio.error(); this.ui.toast('Pas tout le monde à bord', `Il manque : ${out.map((m) => m.name).join(', ')}. On ne laisse personne derrière.`, 'bad', 4000); return; }
+    if (this.act('bfly', { on: 1 }) === false) { this.ui.toast('Siège occupé', 'Quelqu\'un pilote déjà.', 'bad', 1800); return; }
+    if (!this.said.has('bpilotTip')) { this.said.add('bpilotTip'); this.ui.toast('Aux commandes du HX-404', 'Roulez jusqu\'à la piste (<kbd>Z</kbd> gaz, <kbd>Q</kbd>/<kbd>D</kbd> palonnier), puis plein gaz et tirez sur le manche à 115 km/h.', 'good', 8000); }
   },
 
   // effets des drapeaux du chapitre 3 (sur toutes les machines)
@@ -326,69 +328,8 @@ export const Chapter3Mixin = {
     else if (k === 'boeingFuel') { this.audio.success(); ui.toast('Plein du Boeing', 'Réservoirs à 100 %.', 'good'); }
     else if (k === 'boeingCrate') ui.toast('Caisse Hélios en soute', me ? 'Délicatement… parfait.' : `${this.nameOf(by)} a chargé la caisse.`, 'good');
     else if (k === 'boeingOut') { ui.toast('Repoussage terminé', 'L\'avion est sur le taxiway.', 'good'); }
-    else if (k === 'boeingGo') this.startCine3();
+    else if (k === 'boeingGo') { /* ancienne cinématique de fin : on pilote désormais le Boeing */ }
     else if (k === 'hangarOpen') this.hangarFxT = 5.2;
-  },
-
-  // ── décollage du Boeing (cinématique) ──
-  startCine3() {
-    if (this.cine3) return;
-    if (this.driving) this.exitVehicle(true);
-    this.input.unlock();
-    const I = this.island3, c = this.c3, Y = FLAT3;
-    const N = new THREE.Vector3(c.bp.x, Y, c.bp.z);
-    const L = (x, z) => new THREE.Vector3(I.cx + x, Y, I.cz + z);
-    const tz = I3.taxi.z, rz = I3.runway.z, rx0 = I3.runway.x0 + 20;
-    const taxi = new THREE.CatmullRomCurve3([N, L(N.x - I.cx + 12, Math.max(tz + 14, N.z - I.cz - 18)), L(N.x - I.cx - 10, tz), L(rx0 + 40, tz), L(rx0 + 5, (tz + rz) / 2), L(rx0 + 20, rz), L(rx0 + 60, rz)]);
-    this.cine3 = { t: 0, taxi, taxiLen: taxi.getLength(), roll0: L(rx0 + 60, rz), phase: 0, cam: 0 };
-    this.cinematic = true;
-    this.ui.show('hud', false);
-    this.ui.letterbox?.(true);
-    this.audio.setEngine(0.5, 0.2);
-    this.ui.radio('Ici Marthe… Je vous vois sur le radar de Port-Cendre. Plein gaz, et ne me faites pas peur.', () => this.audio.radio());
-  },
-  updateCine3(dt) {
-    const s = this.cine3, b = this.boeing, cam = this.camera;
-    s.t += dt;
-    let pos, tan, pitch = 0;
-    const TAXI = 16, ROLL = 10, CLIMB = 12;
-    if (s.t < TAXI) {
-      const u = s.t / TAXI, e = u * u * (3 - 2 * u);
-      pos = s.taxi.getPointAt(e); tan = s.taxi.getTangentAt(e);
-      this.audio.setEngine(0.45, 0.25);
-    } else if (s.t < TAXI + ROLL) {
-      const u = (s.t - TAXI) / ROLL;
-      pos = s.roll0.clone().add(new THREE.Vector3(1, 0, 0).multiplyScalar(260 * u * u));
-      tan = new THREE.Vector3(1, 0, 0);
-      pitch = u > 0.85 ? (u - 0.85) * 1.2 : 0;
-      this.audio.setEngine(1, 0.9);
-    } else {
-      const u = Math.min(1, (s.t - TAXI - ROLL) / CLIMB);
-      pos = s.roll0.clone().add(new THREE.Vector3(260 + 520 * u, 160 * u * u + 30 * u, 0));
-      tan = new THREE.Vector3(1, 0.3, 0);
-      pitch = 0.18;
-      this.audio.setEngine(1, 1);
-    }
-    b.root.position.copy(pos);
-    b.root.rotation.set(0, Math.atan2(-tan.x, -tan.z), 0, 'YXZ');
-    b.root.rotateX(pitch);
-    b.engines.forEach((e) => { e.material.opacity = s.t > TAXI ? 0.8 : 0.3; });
-    b.strobe.visible = Math.sin(this.t * 8) > 0.5;
-    this.trailsB.update(dt, b.root, { active: s.t > TAXI + ROLL * 0.9 });
-    // caméra de cinéma : trois plans
-    const shot = s.t < TAXI ? 0 : s.t < TAXI + ROLL ? 1 : 2;
-    const fw = new THREE.Vector3(-Math.sin(b.root.rotation.y), 0, -Math.cos(b.root.rotation.y));
-    if (shot === 0) cam.position.copy(pos).add(new THREE.Vector3(-fw.z * 45 + fw.x * 20, 14, fw.x * 45 + fw.z * 20));
-    else if (shot === 1) cam.position.set(s.roll0.x + 170, FLAT3 + 3, s.roll0.z + 60);
-    else cam.position.copy(pos).add(new THREE.Vector3(-110, 25, 70));
-    cam.lookAt(pos.clone().add(new THREE.Vector3(0, 4, 0)));
-    if (s.t > TAXI + ROLL + CLIMB && !s.done) {
-      s.done = true;
-      this.cinematic = false;
-      this.ui.letterbox?.(false);
-      if (this.isAuthority()) this.act('flag', { ended: true });
-      else this.showEnd();
-    }
   },
 
   // ── objectifs du chapitre 3 ──
@@ -404,7 +345,7 @@ export const Chapter3Mixin = {
       { id: 'bfuel', text: `Faire le plein du Boeing (${Math.round(this.c3?.bfuel || 0)} %)`, hint: 'Camion-citerne : remplissez-le sous le portique du dépôt de kérosène, puis garez-vous sous l\'aile droite', done: f.boeingFuel },
       { id: 'bcrate', text: 'Charger la caisse Hélios en soute', hint: 'Chariot élévateur : déposer la palette à l\'écart (Espace), saisir la caisse fourches nues (Espace), fourches à ~2,5 m, porte de soute arrière', done: f.boeingCrate },
       { id: 'push', text: 'Repousser le Boeing jusqu\'au taxiway', hint: 'Tracteur de repoussage près du terminal : atteler la roue avant (face à l\'avion), puis avancer jusqu\'aux hachures rouges', done: f.boeingOut },
-      { id: 'board', text: 'Monter à bord et décoller vers Hélios', hint: 'Camion-escalier contre la porte avant gauche, puis le cockpit', done: f.ended },
+      { id: 'board', text: 'Embarquer tout l\'équipage et décoller : vous pilotez !', hint: 'Camion-escalier contre la porte avant gauche, puis le poste de pilotage (tout le monde à bord)', done: f.bAir },
     ];
   },
   objectivePoint3(id) {

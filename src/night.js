@@ -23,7 +23,7 @@ export const NightMixin = {
   // appelé à chaque image (remplace l'ancienne toxicité) : renvoie vrai si l'on est dehors en pleine nuit
   updateNightExposure() {
     this.tox = 0;
-    const out = this.isNight() && !this.aboard && this.mode !== 'flight';
+    const out = this.isNight() && !this.aboard && !this.bseat && this.mode !== 'flight';
     // vignette sombre discrète la nuit, dehors
     this.ui.veil(out ? 0.18 : 0);
     if (this.canvas.style.filter) this.canvas.style.filter = '';
