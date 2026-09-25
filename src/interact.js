@@ -378,8 +378,8 @@ export const InteractMixin = {
     const dist = Math.hypot(slot.x - me.x, slot.z - me.z);
     if (dist > CFG.carry.installDistance && !(k === 'dashboard' && this.aboard)) return;
     if (k === 'prop' && !this.installed.has('engineL')) { add(slot, 99, { prompt: '<span class="warn">Moteur gauche d\'abord</span>', kind: 'install' }); return; }
-    if (this.wreckActive()) {
-      // après un crash : on positionne la pièce, puis on la soude point par point
+    if (this.wreckActive() && k !== 'wheels') {
+      // après un crash : on positionne la pièce, puis on la soude point par point (les roues se montent normalement)
       add(slot.clone().setY(me.y + 1), 99, {
         kind: 'install',
         prompt: `<kbd>E</kbd> Positionner : ${this.carrying.def.name}`,

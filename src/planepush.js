@@ -15,7 +15,47 @@ function buildStake() {
   return g;
 }
 
+// bouée d'amarrage : poteau planté dans l'eau, flotteur rouge et blanc, anneau pour le crochet du treuil
+function buildMooring() {
+  const g = new THREE.Group();
+  const m = (geo, col, y) => { const o = new THREE.Mesh(prep(geo, col), flatMat); o.position.y = y; o.castShadow = true; g.add(o); return o; };
+  m(new THREE.CylinderGeometry(0.1, 0.12, 3.6, 6), '#6f5038', -0.5);
+  m(new THREE.CylinderGeometry(0.42, 0.42, 0.35, 10), '#e8483b', 0.05);
+  m(new THREE.CylinderGeometry(0.43, 0.43, 0.2, 10), '#f3efe6', 0.32);
+  m(new THREE.CylinderGeometry(0.42, 0.3, 0.25, 10), '#e8483b', 0.54);
+  const ring = new THREE.Mesh(prep(new THREE.TorusGeometry(0.16, 0.035, 5, 12), '#ffd166'), flatMat);
+  ring.position.y = 1.2; ring.rotation.x = Math.PI / 2; g.add(ring);
+  return g;
+}
+
 export const PlanePushMixin = {
+  // bouées d'amarrage dans l'eau autour des ports (points d'ancrage du treuil), bien espacées pour ne pas gêner l'avion
+  // ports : [{ x, z }] en coordonnées monde ; key : île (reconstruite avec la graine)
+  placeMoorings(key, ports) {
+    this.moorings = this.moorings || {};
+    const old = this.moorings[key];
+    if (old) { this.scene.remove(old.group); old.cols.forEach((c) => { const i = this.colliders.indexOf(c); if (i >= 0) this.colliders.splice(i, 1); }); }
+    const group = new THREE.Group(), cols = [], spots = [];
+    const all = Object.values(this.moorings).filter((q) => q !== old).flatMap((q) => q.spots);
+    const deep = (x, z) => heightAt(x, z) < -2.2 && [[6, 0], [-6, 0], [0, 6], [0, -6]].every(([a, b]) => heightAt(x + a, z + b) < -1.6);
+    for (const P of ports) {
+      let n = 0;
+      for (const r of [24, 32, 40, 50, 60]) {
+        for (let k = 0; k < 24 && n < 5; k++) {
+          const a = k / 24 * Math.PI * 2 + r * 0.1;
+          const x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r;
+          if (!deep(x, z)) continue;
+          if (spots.concat(all).some((s) => Math.hypot(s.x - x, s.z - z) < 22)) continue;
+          if (ports.some((q) => Math.hypot(q.x - x, q.z - z) < 18)) continue;
+          const b = buildMooring(); b.position.set(x, 0, z); group.add(b);
+          const c = { type: 'circle', x, z, r: 0.45, mooring: true };
+          cols.push(c); this.colliders.push(c); spots.push({ x, z }); n++;
+        }
+      }
+    }
+    this.scene.add(group);
+    this.moorings[key] = { group, cols, spots };
+  },
   // l'avion est-il accessible à la poussée (au sol ou à l'eau, personne ne le fait rouler vite) ?
   canPushPlane() {
     return this.planeLive && !this.flight.airborne && !this.wreckActive() && !(this.pilotId && this.flight.speed > 1.2);
