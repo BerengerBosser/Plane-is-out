@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { fbm, rng, smoothstep } from './noise.js';
 import { prep, flatMat, textTexture, setIsland2, mergeStatic, signBoard, autoColliders, heightAt } from './terrain.js';
 import { CFG } from './config.js';
+import { texBox, TEX } from './textures.js';
 
 export const FLAT = 3.2;
 export const I2 = {
@@ -160,7 +161,7 @@ export function createIsland2(scene, seed) {
 
   // ── terminal (on peut y entrer) ──
   const T = I2.terminal, TH = T.h;
-  const tw = (w, d, x, z, col = '#f3ead8') => group.add(boxM(w, TH, d, col, x, FLAT + TH / 2, z));
+  const tw = (w, d, x, z, col = '#f3ead8') => { const m = texBox(w, TH, d, col, 'panel', 3); m.position.set(x, FLAT + TH / 2, z); group.add(m); };
   tw(T.w, 0.4, T.x, T.z + T.d / 2);                                 // fond
   tw(0.4, T.d, T.x - T.w / 2, T.z); tw(0.4, T.d, T.x + T.w / 2, T.z);  // côtés
   // façade vitrée avec deux portes
@@ -200,7 +201,7 @@ export function createIsland2(scene, seed) {
   group.add(boxM(1.3, 2.2, 0.9, '#ff6b5b', v.x, FLAT + 1.1, v.z));
   group.add(glassBox(0.9, 1.3, 0.05, v.x - 0.1, FLAT + 1.35, v.z - 0.47));
   cBox(v.x - 0.65, v.x + 0.65, v.z - 0.45, v.z + 0.45);
-  const poster = sign(['CONSIGNES ÉLECTRIQUES', '☀ Éclairage : fusible ROUGE', '⚓ Ponton : fusible BLEU', '✈ Balisage : fusible JAUNE'], '#fff4e0', '#10162b', 2.6, 2.0, 512, 400);
+  const poster = sign(['CONSIGNES ÉLECTRIQUES', '☀ Éclairage : fusible ROUGE (toit du terminal)', '⚓ Ponton : fusible BLEU (coffre du poste de sécurité)', '✈ Balisage : fusible JAUNE (local de bout de piste)'], '#fff4e0', '#10162b', 2.8, 2.0, 640, 400);
   poster.position.set(I2.poster.x, FLAT + 2.0, I2.poster.z);
   poster.rotation.y = Math.PI;
   group.add(poster);
@@ -209,28 +210,114 @@ export function createIsland2(scene, seed) {
   termLight.position.set(T.x, FLAT + TH - 1, T.z);
   group.add(termLight);
 
-  // ── tour de contrôle (ascenseur, cabine vitrée praticable) ──
+  // ── tour de contrôle : fût carré, escalier métallique extérieur en colimaçon, ascenseur, vigie vitrée ──
   const To = I2.tower;
-  group.add(m(new THREE.CylinderGeometry(2.2, 2.6, To.h, 10), '#f3ead8', To.x, FLAT + To.h / 2, To.z));
-  group.add(m(new THREE.CylinderGeometry(2.25, 2.25, 1.2, 10), '#ff6b5b', To.x, FLAT + To.h - 3, To.z));
-  const lift = boxM(1.6, 2.4, 0.3, '#33373f', To.x, FLAT + 1.2, To.z - 2.45);
-  group.add(lift);
-  const liftLamp = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff6b5b', toneMapped: false }));
-  liftLamp.position.set(To.x + 1.1, FLAT + 2.2, To.z - 2.55);
-  group.add(liftLamp);
-  cCircle(To.x, To.z, 2.7).maxY = FLAT + To.h - 2;
   const cabY = FLAT + To.h;
-  group.add(boxM(9, 0.4, 9, '#33373f', To.x, cabY - 0.2, To.z));
+  const SH = 2.3;                        // demi-côté du fût
+  const shaftH = To.h - 0.4;
+  { const sh = texBox(SH * 2, shaftH, SH * 2, '#f3ead8', 'panel', 2.3); sh.position.set(To.x, FLAT + shaftH / 2, To.z); group.add(sh); }
+  // bandeaux rouges : légèrement plus larges que le fût (aucune face confondue)
+  for (const by of [FLAT + 5.6, FLAT + 11.2]) group.add(boxM(SH * 2 + 0.16, 0.7, SH * 2 + 0.16, '#ff6b5b', To.x, by, To.z));
+  group.add(boxM(SH * 2 + 0.3, 0.3, SH * 2 + 0.3, '#8d9299', To.x, FLAT + 0.15, To.z));   // socle
+  // fenêtres étroites du fût (en saillie de quelques centimètres)
+  for (let y = FLAT + 2.8; y < cabY - 2; y += 2.8) {
+    if (Math.abs(y - FLAT - 5.6) < 0.8 || Math.abs(y - FLAT - 11.2) < 0.8) continue;
+    group.add(boxM(0.5, 1.1, 0.08, '#2a3040', To.x - 1.1, y, To.z + SH + 0.04));
+    group.add(boxM(0.08, 1.1, 0.5, '#2a3040', To.x - SH - 0.04, y, To.z + 1.1));
+    group.add(boxM(0.08, 1.1, 0.5, '#2a3040', To.x + SH + 0.04, y, To.z - 1.1));
+  }
+  const lift = boxM(1.6, 2.4, 0.12, '#33373f', To.x, FLAT + 1.2, To.z - SH - 0.06);
+  group.add(lift);
+  group.add(boxM(2.0, 0.25, 0.2, '#10162b', To.x, FLAT + 2.55, To.z - SH - 0.1));
+  const liftLamp = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshBasicMaterial({ color: '#ff6b5b', toneMapped: false }));
+  liftLamp.position.set(To.x + 1.1, FLAT + 2.2, To.z - SH - 0.15);
+  group.add(liftLamp);
+  colliders.push({ type: 'box', minX: cx + To.x - SH, maxX: cx + To.x + SH, minZ: cz + To.z - SH, maxZ: cz + To.z + SH, maxY: cabY - 0.6 });
+  // escalier : 4 volées de 11 marches (une par face), paliers aux angles ; on arrive par une trémie dans la vigie
+  const LANE = 3.25, LW = 1.5, NST = 11, RUN = 5 / NST, RISE = 4 / NST;
+  const steel = '#5d6470', yellow = '#ffd166';
+  // volée k : départ, direction (le long de la face), normale extérieure
+  const FL = [
+    { sx: 2.5, sz: LANE, dx: -1, dz: 0, nx: 0, nz: 1 },     // nord, vers l'ouest
+    { sx: -LANE, sz: 2.5, dx: 0, dz: -1, nx: -1, nz: 0 },   // ouest, vers le sud
+    { sx: -2.5, sz: -LANE, dx: 1, dz: 0, nx: 0, nz: -1 },   // sud, vers l'est
+    { sx: LANE, sz: -2.5, dx: 0, dz: 1, nx: 1, nz: 0 },     // est, vers le nord
+  ];
+  const pf = (x0, x1, z0, z1, top) => platforms.push({ minX: cx + To.x + Math.min(x0, x1), maxX: cx + To.x + Math.max(x0, x1), minZ: cz + To.z + Math.min(z0, z1), maxZ: cz + To.z + Math.max(z0, z1), top });
+  const rail = (x0, x1, z0, z1, y0, y1) => colliders.push({ type: 'box', minX: cx + To.x + Math.min(x0, x1), maxX: cx + To.x + Math.max(x0, x1), minZ: cz + To.z + Math.min(z0, z1), maxZ: cz + To.z + Math.max(z0, z1), minY: y0, maxY: y1 });
+  FL.forEach((f, k) => {
+    const y0 = FLAT + k * 4;
+    const alongX = f.dx !== 0;
+    for (let i = 0; i < NST; i++) {
+      const u = (i + 0.5) * RUN;
+      const px = f.sx + f.dx * u, pz = f.sz + f.dz * u, top = y0 + (i + 1) * RISE;
+      group.add(boxM(alongX ? RUN - 0.04 : LW, 0.08, alongX ? LW : RUN - 0.04, steel, To.x + px, top - 0.04, To.z + pz));
+      group.add(boxM(alongX ? 0.06 : LW, 0.03, alongX ? LW : 0.06, yellow, To.x + px + f.dx * (RUN / 2 - 0.05), top + 0.002, To.z + pz + f.dz * (RUN / 2 - 0.05)));
+      pf(px - (alongX ? RUN / 2 : LW / 2), px + (alongX ? RUN / 2 : LW / 2), pz - (alongX ? LW / 2 : RUN / 2), pz + (alongX ? LW / 2 : RUN / 2), top);
+    }
+    // limons inclinés + main courante extérieure
+    const len = Math.hypot(5, 4), ang = Math.atan2(4, 5);
+    const mx = f.sx + f.dx * 2.5, mz = f.sz + f.dz * 2.5;
+    for (const side of [-1, 1]) {
+      const off = side * (LW / 2 + 0.05);
+      const st = boxM(alongX ? len : 0.1, 0.3, alongX ? 0.1 : len, '#3d434d', To.x + mx + f.nx * off, y0 + 2 - 0.2, To.z + mz + f.nz * off);
+      if (alongX) st.rotation.z = f.dx * ang; else st.rotation.x = -f.dz * ang;
+      group.add(st);
+    }
+    const hr = boxM(alongX ? len : 0.07, 0.07, alongX ? 0.07 : len, yellow, To.x + mx + f.nx * (LW / 2 + 0.05), y0 + 3.05, To.z + mz + f.nz * (LW / 2 + 0.05));
+    if (alongX) hr.rotation.z = f.dx * ang; else hr.rotation.x = -f.dz * ang;
+    group.add(hr);
+    for (let i = 0; i <= NST; i += 2) {
+      const u = i * RUN, py = y0 + i * RISE;
+      group.add(boxM(0.06, 1.05, 0.06, '#3d434d', To.x + f.sx + f.dx * u + f.nx * (LW / 2 + 0.05), py + 0.52, To.z + f.sz + f.dz * u + f.nz * (LW / 2 + 0.05)));
+    }
+    // garde-corps (collision) côté extérieur de la volée
+    const ox = f.sx + f.nx * (LW / 2 + 0.1), oz = f.sz + f.nz * (LW / 2 + 0.1);
+    rail(ox, ox + f.dx * 5 + f.nx * 0.12, oz, oz + f.dz * 5 + f.nz * 0.12, y0 - 0.6, y0 + 4.6);
+    // palier d'angle en fin de volée (sauf la dernière, qui débouche dans la vigie)
+    if (k < 3) {
+      const ex = f.sx + f.dx * 5, ez = f.sz + f.dz * 5, ly = y0 + 4;
+      const cxL = Math.sign(ex || f.nx) * LANE, czL = Math.sign(ez || f.nz) * LANE;
+      group.add(boxM(LW, 0.1, LW, steel, To.x + cxL, ly - 0.05, To.z + czL));
+      pf(cxL - LW / 2, cxL + LW / 2, czL - LW / 2, czL + LW / 2, ly);
+      const sgx = Math.sign(cxL), sgz = Math.sign(czL);
+      rail(cxL + sgx * (LW / 2 + 0.05), cxL + sgx * (LW / 2 + 0.17), czL - LW / 2, czL + LW / 2, ly - 0.6, ly + 1.4);
+      rail(cxL - LW / 2, cxL + LW / 2, czL + sgz * (LW / 2 + 0.05), czL + sgz * (LW / 2 + 0.17), ly - 0.6, ly + 1.4);
+      group.add(boxM(0.06, 1.0, LW, yellow, To.x + cxL + sgx * (LW / 2 + 0.05), ly + 0.5, To.z + czL));
+      group.add(boxM(LW, 1.0, 0.06, yellow, To.x + cxL, ly + 0.5, To.z + czL + sgz * (LW / 2 + 0.05)));
+    }
+  });
+  // premier palier au sol (départ nord-est)
+  group.add(boxM(LW, 0.1, LW, steel, To.x + LANE, FLAT + 0.05, To.z + LANE));
+  const stairSign = sign(['ESCALIER ↑ VIGIE'], '#10162b', '#ffd166', 1.8, 0.4, 512, 110);
+  stairSign.position.set(To.x + SH + 0.06, FLAT + 2.2, To.z + 2.2);
+  stairSign.rotation.y = Math.PI / 2;
+  group.add(stairSign);
+  // vigie : plancher en trois parties autour de la trémie (côté est), vitres, toit
+  const floorParts = [[-4.5, 2.3, -4.5, 4.5], [2.3, 4.5, -4.5, -1.0], [2.3, 4.5, 2.5, 4.5]];
+  for (const [x0, x1, z0, z1] of floorParts) {
+    group.add(boxM(x1 - x0, 0.4, z1 - z0, '#33373f', To.x + (x0 + x1) / 2, cabY - 0.2, To.z + (z0 + z1) / 2));
+    pf(Math.max(x0, -4.1), Math.min(x1, 4.1), Math.max(z0, -4.1), Math.min(z1, 4.1), cabY);
+  }
+  // garde-corps autour de la trémie
+  rail(2.25, 2.4, -1.0, 2.4, cabY - 0.5, cabY + 2);
+  rail(2.3, 4.5, -1.1, -0.95, cabY - 0.5, cabY + 2);
+  group.add(boxM(0.06, 1.0, 3.4, yellow, To.x + 2.33, cabY + 0.5, To.z + 0.7));
+  group.add(boxM(2.2, 1.0, 0.06, yellow, To.x + 3.4, cabY + 0.5, To.z - 1.0));
   group.add(boxM(9.6, 0.5, 9.6, '#10162b', To.x, cabY + 3.3, To.z));
-  group.add(glassBox(8.6, 3.0, 8.6, To.x, cabY + 1.55, To.z));
+  for (const [w, d, dx, dz] of [[8.6, 0.06, 0, -4.3], [8.6, 0.06, 0, 4.3], [0.06, 8.6, -4.3, 0], [0.06, 8.6, 4.3, 0]]) {
+    group.add(glassBox(w, 3.0, d, To.x + dx, cabY + 1.55, To.z + dz));
+    rail(dx - w / 2, dx + w / 2, dz - d / 2 - 0.1, dz + d / 2 + 0.1, cabY - 0.5, cabY + 3);
+  }
   for (const [dx, dz] of [[-4.3, -4.3], [4.3, -4.3], [-4.3, 4.3], [4.3, 4.3]]) group.add(boxM(0.3, 3.1, 0.3, '#10162b', To.x + dx, cabY + 1.55, To.z + dz));
-  group.add(boxM(8.4, 1.0, 0.4, '#f3ead8', To.x, cabY + 0.5, To.z + 4.05));
+  group.add(boxM(8.4, 1.0, 0.3, '#f3ead8', To.x, cabY + 0.5, To.z + 4.05));
   group.add(boxM(4, 1.0, 1.2, '#33373f', To.x, cabY + 0.5, To.z - 3.2));   // console radio
+  group.add(boxM(1.2, 0.8, 0.9, '#1f8a8a', To.x - 3.2, cabY + 0.4, To.z + 2.8));  // armoire
+  group.add(boxM(0.7, 0.5, 0.7, '#6d4b37', To.x - 1.2, cabY + 0.25, To.z - 1.6)); // tabouret
   const radioScreen = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.6), new THREE.MeshBasicMaterial({ color: '#10162b', toneMapped: false }));
   radioScreen.position.set(To.x, cabY + 1.2, To.z - 3.0);
   radioScreen.rotation.x = -0.6;
   group.add(radioScreen);
-  platforms.push({ minX: cx + To.x - 4.1, maxX: cx + To.x + 4.1, minZ: cz + To.z - 4.1, maxZ: cz + To.z + 4.1, top: cabY, contain: true });
   colliders.push({ type: 'box', minX: cx + To.x - 2, maxX: cx + To.x + 2, minZ: cz + To.z - 3.8, maxZ: cz + To.z - 2.6, minY: cabY - 1 });
   // radar tournant
   const radar = new THREE.Group();
@@ -251,7 +338,9 @@ export function createIsland2(scene, seed) {
   const H = I2.hangar;
   const arch = new THREE.CylinderGeometry(H.w / 2, H.w / 2, H.d, 12, 1, true, -Math.PI / 2, Math.PI);
   arch.rotateX(-Math.PI / 2);   // voûte au-dessus du sol (et non dessous)
-  const archMesh = new THREE.Mesh(prep(arch, '#8fa3b0'), new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }));
+  const archTex = TEX.metal().clone(); archTex.repeat.set(Math.PI * H.w / 2 / 2.5, H.d / 6); archTex.needsUpdate = true;
+  const archMesh = new THREE.Mesh(arch, new THREE.MeshLambertMaterial({ color: '#8fa3b0', map: archTex, side: THREE.DoubleSide }));
+  archMesh.userData.dynamic = true;
   archMesh.position.set(H.x, FLAT, H.z);
   archMesh.scale.y = 0.62;
   archMesh.castShadow = archMesh.receiveShadow = true;
@@ -269,10 +358,29 @@ export function createIsland2(scene, seed) {
     group.add(d);
     hDoors.push(d);
   }
+  for (let k = 0; k <= 6; k++) {
+    const a = -Math.PI / 2 + k * Math.PI / 6;
+    const rib = boxM(0.35, 0.35, H.d + 0.4, '#6b7d88', H.x + Math.sin(a) * (H.w / 2 + 0.1), FLAT + Math.cos(a) * (H.w / 2 + 0.1) * 0.62, H.z);
+    rib.rotation.z = -a; group.add(rib);
+  }
+  for (let k = 0; k < 12; k++) group.add(boxM(1.2, 0.5, 0.06, k % 2 ? '#10162b' : '#ffd166', H.x - H.w / 2 + 1.3 + k * 2.5, FLAT + 0.25, H.z - H.d / 2 - 0.25));
   const hsign = sign(['HANGAR 2'], '#10162b', '#fff4e0', 6, 1.2, 512, 110);
   hsign.position.set(H.x, FLAT + 7.4, H.z - H.d / 2 - 0.25);
   hsign.rotation.y = Math.PI;
   group.add(hsign);
+  // gyrophares au-dessus des portes (tournent pendant l'ouverture)
+  const hBeacons = [];
+  for (const sx of [-1, 1]) {
+    const bg = new THREE.Group(); bg.position.set(H.x + sx * (H.w / 2 - 1.5), FLAT + 9.3, H.z - H.d / 2 - 0.4); bg.userData.dynamic = true;
+    bg.add(boxM(0.5, 0.25, 0.5, '#33373f', 0, -0.2, 0));
+    const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.25, 0.4, 8), new THREE.MeshBasicMaterial({ color: '#ff9a2a', toneMapped: false }));
+    bg.add(lamp);
+    const beam = new THREE.Mesh(new THREE.ConeGeometry(0.9, 3.5, 8, 1, true), new THREE.MeshBasicMaterial({ color: '#ffb34a', transparent: true, opacity: 0.25, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
+    beam.rotation.z = Math.PI / 2; beam.position.x = 1.8; beam.visible = false;
+    const rot = new THREE.Group(); rot.add(beam); bg.add(rot);
+    group.add(bg);
+    hBeacons.push({ lamp, beam, rot });
+  }
   const keypadBox = boxM(0.5, 0.7, 0.2, '#33373f', H.x + H.w / 2 + 1.2, FLAT + 1.5, H.z - H.d / 2 - 0.1);
   group.add(keypadBox);
   // verrous manuels : deux leviers aux deux extrémités de la façade (à tirer presque ensemble)
@@ -314,7 +422,9 @@ export function createIsland2(scene, seed) {
 
   // ── centrale électrique + tableau à fusibles ──
   const P = I2.power;
-  group.add(boxM(7, 4, 5, '#f3ead8', P.x, FLAT + 2, P.z));
+  { const ps = texBox(7, 4, 5, '#f3ead8', 'panel', 2.5); ps.position.set(P.x, FLAT + 2, P.z); group.add(ps); }
+  for (const dx of [-2.2, 0, 2.2]) group.add(boxM(1.2, 0.5, 0.2, '#8d9299', P.x + dx, FLAT + 3.4, P.z + 2.6));     // grilles d'aération
+  for (const dz of [-1.5, 1.5]) group.add(m(new THREE.CylinderGeometry(0.2, 0.2, 5.5, 8), '#8d9299', P.x + 3.8, FLAT + 2.2, P.z + dz));
   group.add(boxM(7.4, 0.4, 5.4, '#1f8a8a', P.x, FLAT + 4.2, P.z));
   const warn = sign(['⚡ DANGER ⚡'], '#ffd166', '#10162b', 2.2, 0.6, 512, 130);
   warn.position.set(P.x - 2, FLAT + 3, P.z - 2.52);
@@ -718,7 +828,7 @@ export function createIsland2(scene, seed) {
     center: wp(0, FLAT, 0),
     park: wp(I2.park.x, 0, I2.park.z),
     lift: wp(To.x, FLAT + 1.2, To.z - 2.8),
-    liftTop: wp(To.x + 2.9, cabY, To.z + 2.9),
+    liftTop: wp(To.x - 2.6, cabY, To.z + 0.6),
     console: wp(To.x, cabY + 1.0, To.z - 2.6),
     fusePanel: wp(P.x + 1.2, FLAT + 1.6, P.z - 2.8),
     hangarPad: wp(H.x + H.w / 2 + 1.2, FLAT + 1.5, H.z - H.d / 2 - 0.4),
@@ -777,6 +887,8 @@ export function createIsland2(scene, seed) {
     setFuse(i, color) { fuseSlots[i].material = color ? new THREE.MeshLambertMaterial({ color: { red: '#ff4d4d', blue: '#3d7bff', yellow: '#ffd166' }[color] }) : flatMat; },
     setValve(k, open) { valves[k].open = open; },
     openHangar() { hangarTarget = 1; hangarDoorCol.disabled = true; },
+    get hangarMoving() { return hangarOpen < hangarTarget; },
+    hangarDoorPts: [wp(H.x - H.w / 4, FLAT + 0.4, H.z - H.d / 2 - 0.6), wp(H.x + H.w / 4, FLAT + 0.4, H.z - H.d / 2 - 0.6)],
     setHangarOpen() { hangarOpen = hangarTarget = 1; hangarDoorCol.disabled = true; },
     update(t, dt) {
       if (power) radar.rotation.y += dt * 1.2;
@@ -785,9 +897,9 @@ export function createIsland2(scene, seed) {
       sockCloth.rotation.z = -0.15 + Math.sin(t * 2.1) * 0.05;
       for (const f of flamingos) f.children[3].position.y = 1.9 + Math.sin(t * 1.5 + f.userData.ph) * 0.03;
       for (const [, vv] of Object.entries(valves)) vv.wheel.rotation.z += ((vv.open ? Math.PI * 1.5 : 0) - vv.wheel.rotation.z) * Math.min(1, dt * 4);
-      if (hangarOpen < hangarTarget) {
-        hangarOpen = Math.min(1, hangarOpen + dt * 0.25);
-      }
+      const moving = hangarOpen < hangarTarget;
+      if (moving) hangarOpen = Math.min(1, hangarOpen + dt * 0.2);
+      hBeacons.forEach((b) => { b.beam.visible = moving; b.rot.rotation.y += dt * 7; b.lamp.material.color.set(moving && Math.sin(t * 14) > 0 ? '#ffd166' : '#8a5a2a'); });
       hDoors.forEach((d) => { d.position.x = d.userData.closedX + d.userData.sx * hangarOpen * (H.w / 2 - 1); });
       for (const L of Object.values(levers)) L.handle.rotation.x += ((L.down ? 0.9 : -0.5) - L.handle.rotation.x) * Math.min(1, dt * 10);
     },

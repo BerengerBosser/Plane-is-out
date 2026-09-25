@@ -14,7 +14,7 @@ export function createUI() {
   const api = {
     el,
     show(id, on) { (el[id] || (el[id] = $(id))).classList.toggle('hidden', !on); },
-    visible(id) { return !(el[id] || (el[id] = $(id))).classList.contains('hidden'); },
+    visible(id) { const e = el[id] || (el[id] = $(id)); return !!e && !e.classList.contains('hidden'); },
     prompt(html) { if (html !== lastPrompt) { el.prompt.innerHTML = html; lastPrompt = html; } el.crosshair.classList.toggle('active', !!html); },
     hold(p) { el.hold.style.display = p > 0 ? 'block' : 'none'; el.hold.firstChild.style.width = `${Math.min(1, p) * 100}%`; },
     carry(title, sub) { el.carry.innerHTML = title ? `${title}${sub ? `<small>${sub}</small>` : ''}` : ''; },
@@ -30,6 +30,17 @@ export function createUI() {
     tox(v) { $('tox').classList.toggle('on', v > 0.5); $('toxBar').style.width = `${v}%`; },
     keys(html) { if (el.keys.innerHTML !== html) el.keys.innerHTML = html; },
     subtitle(html) { el.subtitle.innerHTML = html; },
+    // bandes de cinéma + texte tapé à la machine
+    letterbox(on) { $('cine').classList.toggle('on', !!on); if (!on) this.cineText(''); },
+    cineText(text, cps = 38) {
+      const p = $('cineText');
+      clearInterval(this._typeT);
+      p.textContent = '';
+      p.classList.toggle('on', !!text);
+      if (!text) return;
+      let i = 0;
+      this._typeT = setInterval(() => { i += 1; p.textContent = text.slice(0, i); if (i >= text.length) clearInterval(this._typeT); }, 1000 / cps);
+    },
     fade(v, color = '#000', ms = 800) { el.fade.style.transition = `opacity ${ms}ms`; el.fade.style.background = color; el.fade.style.opacity = v; },
     flight(on, d) {
       el.flight.style.display = on ? 'block' : 'none';
@@ -41,6 +52,28 @@ export function createUI() {
       $('fFuelTxt').textContent = `${Math.round(d.fuel)} %`;
       $('fFuel').parentElement.classList.toggle('low', d.fuel < 15);
       $('fState').textContent = d.state;
+      if (d.hull !== undefined) { $('fHull').style.width = `${Math.round(d.hull)}%`; $('fHullTxt').textContent = `${Math.round(d.hull)} %`; $('fHull').parentElement.classList.toggle('low', d.hull < 35); }
+    },
+    // jauge de coque du Coucou (null : masquée)
+    planeHp(v) {
+      const el = $('planeHp');
+      el.classList.toggle('hidden', v === null || v === undefined);
+      if (v === null || v === undefined) return;
+      const r = Math.round(v);
+      if (el._v === r) return;
+      el._v = r;
+      $('phBar').style.width = `${r}%`;
+      $('phTxt').textContent = `${r} %`;
+      el.classList.toggle('low', r < 35);
+      el.classList.toggle('mid', r >= 35 && r < 70);
+    },
+    // gain de coque après une soudure : « +7 % » qui s'envole près du réticule
+    hpGain(n, total) {
+      const d = document.createElement('div');
+      d.className = 'hpGain';
+      d.innerHTML = `+${n} %<small>coque ${Math.round(total)} %</small>`;
+      el.hud.appendChild(d);
+      setTimeout(() => d.remove(), 1400);
     },
     carnet(sub, objectives, notes) {
       $('carnetSub').textContent = sub;
@@ -122,6 +155,7 @@ export function createUI() {
       setTimeout(() => p.remove(), 14000);
     },
     downed(on, text) { $('downed').classList.toggle('hidden', !on); if (text) $('downedText').textContent = text; },
+    hitmark(kill) { const h = $('hitmark'); h.classList.add('on'); h.classList.toggle('kill', !!kill); clearTimeout(this._hm); this._hm = setTimeout(() => h.classList.remove('on'), 90); },
     veil(v) { $('veil').style.opacity = v; },
     deadTitle(t) { $('deadTitle').textContent = t; },
   };

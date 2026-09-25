@@ -66,19 +66,19 @@ export const NightMixin = {
   // réparation du verrou (maintenir E à la porte, clé à molette)
   lockSpec() {
     const f = this.flags;
-    if (f.jamStorm) return { prompt: '<span class="warn">Verrou grillé par la foudre : impossible avant la fin de la tempête (21 h)</span>' };
-    if (!this.own.wrench) return { prompt: '<span class="warn">Porte bloquée : il faut une clé à molette pour dégripper le verrou</span>' };
+    if (f.jamStorm) return { prompt: '<span class="warn">Verrou grillé · jusqu\'à 21 h</span>' };
+    if (!this.hasItem('wrench')) return { prompt: '<span class="warn">Porte bloquée · clé à molette</span>' };
     const pct = Math.round((this.lockProg || 0) / LOCK_REPAIR_SECONDS * 100);
     return {
       prio: 4,
-      prompt: `<kbd>E</kbd> maintenir : dégripper le verrou (${pct} %)${this.session ? ' · faites-vous couvrir !' : ''}`,
+      prompt: `<kbd>E</kbd> Dégripper le verrou (${pct} %)`,
       hold: {
         tick: (dt, before) => {
           if (Math.floor(before / 0.35) !== Math.floor(this.holdT / 0.35)) { this.audio.ratchet(); if (Math.random() < 0.4) this.audio.clank(); }
           this.lockProg = Math.min(LOCK_REPAIR_SECONDS, (this.lockProg || 0) + dt * (1 + 0.5 * this.mateList().filter((m) => m.pos.distanceTo(this.playerWorld()) < 3).length));
           this._lockSend = (this._lockSend || 0) + dt;
           if (this._lockSend > 0.5) { this._lockSend = 0; this.act('lockProg', { v: this.lockProg }); }
-          if (this.lockProg >= LOCK_REPAIR_SECONDS) { this.lockProg = 0; this.act('flag', { doorJam: false }); this.act('lockProg', { v: 0 }); this.audio.success(); this.ui.toast('Verrou réparé', 'La porte cargo s\'ouvre à nouveau.', 'good'); }
+          if (this.lockProg >= LOCK_REPAIR_SECONDS) { this.lockProg = 0; this.act('flag', { doorJam: false }); this.act('lockProg', { v: 0 }); this.audio.success(); this.ui.toast('Verrou réparé', '', 'good', 1600); }
         },
       },
     };
@@ -91,13 +91,13 @@ export const NightMixin = {
       this.audio.error(); this.audio.clank();
       if (data.storm) {
         if (this.aboard && !this.flight.airborne) { this.seat = null; this.lying = false; this.leavePlane(true); }
-        this.ui.toast('La foudre a grillé le verrou !', 'Impossible de se réfugier dans l\'avion avant 21 h. Tenez la centrale.', 'bad', 8000);
+        this.ui.toast('Verrou grillé par la foudre', 'Pas d\'abri avant 21 h.', 'bad', 5000);
         this.radioOnce('jamstorm', 'La foudre est tombée sur l\'avion ! Le verrou de la porte cargo est grillé : pas d\'abri cette nuit. Défendez la centrale, ses projecteurs vous protègent.');
       } else {
-        this.ui.toast('Le verrou de la porte est grippé !', 'Pas d\'abri tant qu\'il n\'est pas dégrippé à la clé (maintenir E à la porte). Il se débloque au matin.', 'bad', 8000);
+        this.ui.toast('Verrou grippé', 'Dégrippez-le à la clé (E).', 'bad', 5000);
         this.radioOnce(`jam${this.stats.days}`, 'Ce vieux verrou… Il s\'est grippé avec l\'humidité. Dégrippez-le à la clé avant la nuit, ou préparez-vous à vous battre jusqu\'à l\'aube.');
       }
-    } else if (type === 'doorFree') this.ui.toast('Porte cargo débloquée', 'On peut à nouveau se réfugier dans l\'avion.', 'good');
+    } else if (type === 'doorFree') this.ui.toast('Porte débloquée', '', 'good', 1600);
   },
 };
 

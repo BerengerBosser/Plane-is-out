@@ -29,6 +29,7 @@
     <div id="compass" class="hidden"><div id="compassStrip"></div><i></i></div>
 
     <div id="keys"></div>
+    <div id="hudWatch"><i id="hwIcon">☀</i><b id="hwTime">--:--</b><span id="hwNext"></span><em id="hwDay">J1</em></div>
 
     <div id="vitals">
       <div class="pill hp"><svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9.3-9A5.3 5.3 0 0 1 12 6.4 5.3 5.3 0 0 1 21.3 12C19 16.5 12 21 12 21z"/></svg><div class="bar"><div id="hpBar"></div></div></div>
@@ -38,15 +39,10 @@
 
     <div id="radio"><div class="avatar">M</div><div class="rbody"><b>Marthe · labo Hélios</b><p id="radioText"></p></div><div class="wave"><i></i><i></i><i></i><i></i></div></div>
 
-    <div id="hotbar">
-      <div class="slot" data-slot="0"><i>1</i><svg viewBox="0 0 32 32"><path d="M9 14h12a3 3 0 0 1 3 3v4a6 6 0 0 1-6 6h-5a6 6 0 0 1-6-6v-5a2 2 0 0 1 2-2zM9 14V9a2 2 0 0 1 4 0v5M13 14V8a2 2 0 0 1 4 0v6M17 14V9a2 2 0 0 1 4 0v5"/></svg><span>Poings</span></div>
-      <div class="slot" data-slot="1"><i>2</i><svg viewBox="0 0 32 32"><path d="M20 5a6 6 0 0 0-5 8L5 23a2.5 2.5 0 0 0 4 4l10-10a6 6 0 0 0 8-5l-4 2-3-3 2-4z"/></svg><span>Clé</span></div>
-      <div class="slot" data-slot="2"><i>3</i><svg viewBox="0 0 32 32"><path d="M11 4v18h14M11 22l-3 3M14 10h8v12M9 26a3 3 0 1 0 6 0 3 3 0 1 0-6 0"/></svg><span>Diable</span></div>
-      <div class="slot" data-slot="3"><i>4</i><svg viewBox="0 0 32 32"><path d="M12 7h8M16 3v4M11 9h10v14H11zM10 23h12v3H10zM16 13v6"/></svg><span>Lanterne</span><em><b id="oilBar"></b></em></div>
-      <div class="slot" data-slot="4"><i>5</i><svg viewBox="0 0 32 32"><path d="M5 12h16l3-3h3v7h-3l-3-2h-5l-2 9H8l1-9H5z"/></svg><span>Fusées</span><u id="ammoFlare">0</u></div>
-      <div class="slot" data-slot="5"><i>6</i><svg viewBox="0 0 32 32"><path d="M3 18h19M22 15l7 3-7 3zM6 18v5h5l2-5M9 18l-2-4"/></svg><span>Harpon</span><u id="ammoHarp">0</u></div>
-      <div class="slot" data-slot="6"><i>7</i><svg viewBox="0 0 32 32"><path d="M5 27L25 5M25 5v14M22 19a3 3 0 1 0 6 0 3 3 0 1 0-6 0M8 24a2 2 0 1 0 0.1 0"/></svg><span>Canne</span><u id="fishCount">0</u></div>
-    </div>
+    <div id="planeHp" class="hidden"><svg viewBox="0 0 32 32"><path d="M16 3l2 9 11 5v3l-11-2-1 7 4 3v2l-5-1-5 1v-2l4-3-1-7-11 2v-3l11-5z"/></svg><div class="bar"><div id="phBar"></div></div><b id="phTxt">100 %</b></div>
+    <div id="hotbar"></div>
+    <div id="gunHud"></div>
+    <div id="hitmark"></div>
     <div id="bossBar" class="hidden"><b id="bossName">Boss</b><div class="bb"><div id="bossHp"></div></div><small id="bossHint"></small></div>
     <div id="genBar" class="hidden"><span>Générateur</span><div class="bb"><div id="genHp"></div></div><small id="genInfo"></small></div>
     <div id="crew" class="hidden"></div>
@@ -62,6 +58,7 @@
       </div>
       <div class="lbl">Gaz</div><div class="meter"><div id="fThrottle"></div></div>
       <div class="lbl">Carburant <span id="fFuelTxt">42 %</span></div><div class="meter fuel"><div id="fFuel"></div></div>
+      <div class="lbl">Coque <span id="fHullTxt">100 %</span></div><div class="meter hull"><div id="fHull"></div></div>
       <div id="fState">Sur l'eau</div>
     </div>
     <div id="radarBox"><canvas id="radar" width="220" height="220"></canvas><span>Radar</span></div>
@@ -118,6 +115,8 @@
         <ul id="mpPlayers"></ul>
         <label class="row check" for="mpResume"><span id="mpResumeLabel">Reprendre ma sauvegarde</span><input id="mpResume" type="checkbox"></label>
         <button id="mpStart" class="big primary"><span>Lancer la partie</span></button>
+        <button id="mpBack" class="big primary" hidden><span>Retour au jeu</span><small>la partie continue</small></button>
+        <p class="small" id="mpHint"></p>
         <p class="small" id="mpWait">En attente de l'hôte…</p>
         <button id="mpLeave" class="big"><span>Quitter le salon</span></button>
       </section>
@@ -128,7 +127,7 @@
   <div id="menu" class="screen">
     <div class="menuWrap">
       <div class="brand">
-        <span class="sticker">v5 · coop · nuits de zombies</span>
+        <span class="sticker">v6 · coop · 3 îles · nuits de zombies</span>
         <h1><span>Plane</span><span>is</span><span>out</span></h1>
         <p class="tag">Fuir la nuit, d'île en île, dans un vieil hydravion qui ne demande qu'à tomber en morceaux.</p>
       </div>
@@ -142,30 +141,55 @@
       </nav>
       <p class="small touchNote hidden">Cette démo se joue au clavier et à la souris.</p>
     </div>
+    <div class="crewPick">
+      <span class="lbl">Votre personnage</span>
+      <div id="charList" role="radiogroup" aria-label="Personnage"></div>
+      <p id="charTag"></p>
+    </div>
     <div class="menuFoot">
       <div class="duckStat" id="menuDucks"></div>
-      <span>v3 · son recommandé</span>
+      <span>v6 · son recommandé</span>
     </div>
   </div>
 
+  <div id="invScreen" class="screen hidden">
+    <div class="invWrap">
+      <header><h2>Inventaire</h2><p class="invFoot">Glisser-déposer · <kbd>R</kbd> tourner · double-clic : équiper / prendre · clic droit : actions · <kbd>I</kbd> fermer</p><button type="button" id="invClose" aria-label="Fermer">✕</button></header>
+      <div id="invBody"></div>
+    </div>
+  </div>
+
+  <div id="clickResume" class="hidden"><b>Cliquez pour reprendre</b><small>la souris est libérée · Échap : pause</small></div>
+
   <!-- ── Pause ── -->
   <div id="pause" class="screen hidden">
-    <div class="pauseCard">
+    <div class="pauseCard pauseMenu">
       <h2>Pause</h2>
       <p id="pauseInfo"></p>
-      <button id="btnResume" class="big primary"><span>Reprendre</span></button>
-      <button id="btnSettings2" class="big"><span>Paramètres</span></button>
-      <button id="btnHelp2" class="big"><span>Commandes</span></button>
-      <div class="pauseRow">
-        <button id="btnSave" class="big"><span>Sauvegarder</span></button>
-        <button id="btnExport" class="big"><span>Télécharger</span><small>la sauvegarde</small></button>
+      <button id="btnResume" class="big primary"><span>Reprendre</span><small>Échap ou clic</small></button>
+      <div class="pauseGrid">
+        <button id="btnSettings2" class="tile"><i>⚙</i><span>Paramètres</span></button>
+        <button id="btnHelp2" class="tile"><i>⌨</i><span>Commandes</span></button>
+        <button id="btnFull" class="tile"><i>⛶</i><span>Plein écran</span></button>
+        <button id="btnSave" class="tile"><i>💾</i><span>Sauvegarder</span></button>
+        <button id="btnExport" class="tile"><i>⬇</i><span>Télécharger</span></button>
+        <button id="btnImport2" class="tile"><i>📂</i><span>Importer</span></button>
       </div>
-      <div class="pauseRow">
-        <button id="btnImport2" class="big"><span>Importer</span><small>une sauvegarde</small></button>
-        <button id="btnRestart" class="big"><span>Nouvelle partie</span><small>recommencer</small></button>
-      </div>
+      <button id="btnHost" class="tile wide admBtn"><i>👥</i><span>Inviter des amis</span><small>ouvrir cette partie au multijoueur</small></button>
+      <button id="btnAdmin" class="tile wide admBtn"><i>🛠</i><span>Admin de la partie</span><small>temps, chapitres, armes, zombies…</small></button>
       <input id="importFile" type="file" accept=".json,application/json" hidden>
-      <button id="btnQuit" class="big"><span>Retour au menu</span></button>
+      <div class="pauseRow">
+        <button id="btnRestart" class="tile wide danger"><span>Nouvelle partie</span><small>recommencer</small></button>
+        <button id="btnQuit" class="tile wide"><span>Menu principal</span><small>sauvegarde auto</small></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Admin ── -->
+  <div id="adminSheet" class="screen hidden">
+    <div class="sheet admSheet">
+      <header><h2>Admin de la partie</h2><button type="button" id="adminClose" aria-label="Fermer">✕</button></header>
+      <div id="adminBody"></div>
     </div>
   </div>
 
@@ -190,10 +214,15 @@
         <label class="row" for="optMusic"><span>Musique</span><input id="optMusic" type="range" min="0" max="1" step="0.05" value="0.8"><output id="oMusic">80 %</output></label>
       </section>
       <section data-pane="gfx" hidden>
+        <div class="row"><span>Qualité</span><div class="qual"><button type="button" class="tab" data-quality="low">Basse</button><button type="button" class="tab" data-quality="mid">Moyenne</button><button type="button" class="tab" data-quality="high">Haute</button></div></div>
+        <label class="row check" for="optDynRes"><span>Résolution dynamique (garde la fluidité)</span><input id="optDynRes" type="checkbox" checked></label>
         <label class="row check" for="optShadows"><span>Ombres</span><input id="optShadows" type="checkbox" checked></label>
         <label class="row check" for="optBloom"><span>Halos lumineux (bloom)</span><input id="optBloom" type="checkbox" checked></label>
         <label class="row" for="optGrass"><span>Densité de végétation</span><input id="optGrass" type="range" min="0" max="1" step="0.25" value="1"><output id="oGrass">100 %</output></label>
         <label class="row" for="optRes"><span>Résolution</span><input id="optRes" type="range" min="0.5" max="1" step="0.05" value="1"><output id="oRes">100 %</output></label>
+        <label class="row" for="optView"><span>Distance d'affichage</span><input id="optView" type="range" min="0.5" max="1.3" step="0.1" value="1"><output id="oView">100 %</output></label>
+        <label class="row" for="optBright"><span>Luminosité</span><input id="optBright" type="range" min="0.7" max="1.3" step="0.05" value="1"><output id="oBright">100 %</output></label>
+        <label class="row check" for="optFull"><span>Plein écran</span><input id="optFull" type="checkbox"></label>
         <label class="row check" for="optFps"><span>Afficher les FPS</span><input id="optFps" type="checkbox"></label>
       </section>
     </div>
@@ -205,38 +234,45 @@
       <header><h2>Commandes</h2><button type="button" id="helpClose" aria-label="Fermer">✕</button></header>
       <div class="keyGrid">
         <h3>À pied</h3>
-        <p><kbd>Z Q S D</kbd><span>se déplacer (ou W A S D)</span></p>
-        <p><kbd>Maj</kbd><span>courir</span></p>
-        <p><kbd>Espace</kbd><span>sauter</span></p>
-        <p><kbd>E</kbd><span>interagir · maintenir pour réparer ou treuiller</span></p>
-        <p><kbd>G</kbd><span>lâcher ce qu'on porte</span></p>
-        <p><kbd>1</kbd>–<kbd>4</kbd><span>poings, clé, diable, lanterne</span></p>
-        <p><kbd>Clic</kbd><span>frapper</span></p>
-        <p><kbd>T</kbd><span>regarder la montre</span></p>
-        <p><kbd>Tab</kbd><span>carnet de bord</span></p>
-        <p><kbd>M</kbd><span>carte de l'archipel</span></p>
-        <p><kbd>P</kbd><span>photographier un indice (rangé dans le carnet)</span></p>
-        <p><kbd>7</kbd><span>canne à pêche : clic lancer, clic ferrer, clic maintenu mouliner, puis achever le poisson</span></p>
-        <p><kbd>2</kbd><span>après un crash : chalumeau, clic maintenu sur un point orange, relâcher dans le vert</span></p>
-        <p><kbd>5</kbd> <kbd>6</kbd><span>pistolet de détresse, fusil-harpon</span></p>
+        <p><kbd>Z Q S D</kbd><span>se déplacer (ou W A S D) · <kbd>Maj</kbd> courir · <kbd>Espace</kbd> sauter</span></p>
+        <p><kbd>C</kbd><span>maintenu : s'accroupir (passer sous les obstacles bas, tirer plus précis)</span></p>
+        <p><kbd>E</kbd><span>interagir · maintenir pour réparer ou pousser l'avion · <kbd>R</kbd> action secondaire</span></p>
+        <p><kbd>Z</kbd><span>face à une échelle : grimper (<kbd>S</kbd> descendre, <kbd>Espace</kbd> lâcher) · on entre dans l'avion à pied par la porte cargo</span></p>
+        <p><kbd>Z</kbd><span>en nageant, face à un ponton ou un quai : se hisser</span></p>
+        <p><kbd>G</kbd><span>lâcher ce qu'on porte · ranger le crochet du treuil</span></p>
+        <p><kbd>Tab</kbd> <kbd>M</kbd> <kbd>T</kbd><span>carnet de bord · carte · montre · <kbd>P</kbd> photographier un indice</span></p>
+        <p><kbd>Échap</kbd><span>pause : paramètres, sauvegardes, admin de la partie</span></p>
+        <h3>En main et sac</h3>
+        <p><kbd>1</kbd>–<kbd>6</kbd><span>1 arme principale · 2 secondaire · 3 à 6 équipements rapides · <kbd>0</kbd> mains nues · molette</span></p>
+        <p><kbd>I</kbd><span>inventaire : glisser-déposer, <kbd>R</kbd> tourner, double-clic équiper, clic droit actions</span></p>
+        <p><kbd>E</kbd><span>en vol, à la porte : sauter · <kbd>Espace</kbd> en chute : parachute</span></p>
+        <p><kbd>Clic</kbd><span>frapper (poings, clé, machette, batte, hache) ou tirer (pistolet, fusil à pompe, carabine, fusées, harpon)</span></p>
+        <p><kbd>Clic droit</kbd><span>viser · <kbd>R</kbd> recharger · un tir dans la tête compte double · le bruit attire les morts</span></p>
+        <p><kbd>H</kbd><span>utiliser un bandage (+45 santé)</span></p>
+        <p><kbd>B</kbd><span>talkie en main : il se lève devant vous et on vous entend clairement ; au fond du sac, la radio est étouffée</span></p>
+        <p><kbd>R</kbd><span>crochet du treuil en main : planter un pieu d'ancrage (achetés au comptoir)</span></p>
+        <p><kbd>Clic</kbd><span>canne à pêche : lancer, ferrer, maintenir pour mouliner · fer à souder (poste du flanc droit) : maintenir sur un point orange</span></p>
         <h3>Multijoueur</h3>
         <p><kbd>Entrée</kbd><span>écrire à l'équipage</span></p>
         <p><kbd>V</kbd><span>placer un repère « ici ! »</span></p>
         <p><kbd>B</kbd><span>parler (micro) · de près, ou partout avec un talkie</span></p>
-        <p><kbd>C</kbd><span>maintenu : roue de messages rapides (bougez la souris, relâchez)</span></p>
+        <p><kbd>X</kbd><span>maintenu : roue de messages rapides (bougez la souris, relâchez)</span></p>
         <p><kbd>E</kbd><span>maintenu près d'un coéquipier à terre : le relever</span></p>
+        <h3>Véhicules</h3>
+        <p><kbd>E</kbd><span>conduire ou monter en passager (le passager peut tirer) · <kbd>E</kbd> descendre</span></p>
+        <p><kbd>Z</kbd>/<kbd>S</kbd> <kbd>Q</kbd>/<kbd>D</kbd><span>accélérer, freiner/reculer, tourner · <kbd>Espace</kbd> frein à main (dérapage) · <kbd>C</kbd> vue</span></p>
+        <p><kbd>Espace</kbd><span>camions spéciaux : pomper, saisir/poser (fourches), atteler · <kbd>R</kbd>/<kbd>F</kbd> fourches</span></p>
+        <p><kbd>Clic</kbd><span>maintenu : lance à eau (camion de pompiers)</span></p>
         <h3>Aux commandes</h3>
         <p><kbd>Z</kbd>/<kbd>S</kbd><span>gaz</span></p>
         <p><kbd>Q</kbd>/<kbd>D</kbd><span>palonnier, diriger au sol et sur l'eau</span></p>
         <p><kbd>Souris</kbd><span>manche (ou flèches)</span></p>
+        <p><kbd>Espace</kbd><span>freiner au sol (roues amphibies)</span></p>
         <p><kbd>P</kbd><span>pilote automatique</span></p>
         <p><kbd>C</kbd><span>vue cockpit</span></p>
         <p><kbd>E</kbd><span>quitter le siège</span></p>
-        <h3>Débogage</h3>
-        <p><kbd>F1</kbd><span>panneau d'infos</span></p>
-        <p><kbd>F2</kbd><span>temps ×10</span></p>
-        <p><kbd>F3</kbd><span>passer à 18 h 30</span></p>
-        <p><kbd>F4</kbd><span>réparer l'avion (île 1)</span></p>
+        <h3>Admin</h3>
+        <p><kbd>Échap</kbd><span>Pause → Admin de la partie : passer la nuit, avancer le temps, changer de chapitre, armes, invincibilité, tir ami (réservé à l'hôte)</span></p>
       </div>
     </div>
   </div>
@@ -254,14 +290,15 @@
   <div id="endScreen" class="screen hidden">
     <div class="pauseCard end">
       <span class="sticker">fin de la démo</span>
-      <h2>Cap sur Kerloch</h2>
-      <p>Le Coucou file vers l'ouest avec la caisse Hélios dans la soute. Marthe a allumé la cafetière.</p>
+      <h2>Cap sur Hélios</h2>
+      <p>La caisse Hélios est en route. Marthe a allumé la cafetière.</p>
       <ul id="endStats"></ul>
       <button id="btnEndFly" class="big primary"><span>Continuer à voler</span></button>
       <button id="btnEndMenu" class="big"><span>Retour au menu</span></button>
     </div>
   </div>
 
+  <div id="cine"><i class="bar top"></i><i class="bar bot"></i><p id="cineText"></p></div>
   <div id="fade"></div>
   <div id="fps" class="hidden"></div>
   <div id="debug" class="hidden"></div>

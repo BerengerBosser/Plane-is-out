@@ -6,9 +6,12 @@ import { clamp } from './noise.js';
 import { WHEEL_DROP, FLOOR } from './planeModel.js';
 
 export class Flight {
-  constructor(plane, camera) {
+  // opts.cfg : réglages propres (sinon CFG.flight) ; opts.wheelDrop : hauteur des roues sous l'origine
+  constructor(plane, camera, opts = {}) {
     this.plane = plane;
     this.camera = camera;
+    this.cfg = opts.cfg || null;
+    this.wheelDrop = opts.wheelDrop ?? WHEEL_DROP;
     this.pos = new THREE.Vector3();
     this.yaw = 0; this.pitch = 0; this.roll = 0;
     this.speed = 0; this.throttle = 0; this.vy = 0;
@@ -39,7 +42,7 @@ export class Flight {
     this.autopilot = false;
     const g = heightAt(x, z);
     this.surface = this.wheels && g > -0.45 ? 'ground' : 'water';
-    if (this.surface === 'ground') this.pos.y = g + WHEEL_DROP;
+    if (this.surface === 'ground') this.pos.y = g + this.wheelDrop;
     this.stick.x = this.stick.y = 0;
     this.apply();
     this.snapCamera();
@@ -57,7 +60,7 @@ export class Flight {
 
   // controls : le joueur est aux commandes (sinon, seul le pilote automatique agit)
   update(dt, input, controls = true) {
-    const F = CFG.flight;
+    const F = this.cfg || CFG.flight;
     const prev = this.pos.clone();
     const events = [];
     let rudder = 0, sx = 0, sy = 0;
@@ -101,12 +104,15 @@ export class Flight {
       this.fuel = Math.max(0, this.fuel - (0.03 + this.throttle * F.fuelPerSecond) * dt);
       if (this.fuel <= 0) events.push('fuel_out');
     }
-    const thrust = this.fuel > 0 ? this.throttle * F.maxThrust * this.powerMul : 0;
+    // un avion cabossé tire moins fort (hpMul : 0,55 à 1 selon la coque)
+    const thrust = this.fuel > 0 ? this.throttle * F.maxThrust * this.powerMul * (this.hpMul ?? 1) : 0;
 
     if (this.surface !== 'air') {
       const onGround = this.surface === 'ground';
-      const drag = (onGround ? 0.012 : F.waterDrag) * this.speed * this.speed + (this.speed > 0.05 ? (onGround ? 0.6 : F.waterFriction) : 0);
-      this.speed = Math.max(0, this.speed + (thrust - drag) * dt);
+      const drag = (onGround ? F.groundDrag ?? 0.012 : F.waterDrag) * this.speed * this.speed + (this.speed > 0.05 ? (onGround ? 0.6 : F.waterFriction) : 0);
+      // frein des roues amphibies (Espace) : seulement au sol
+      this.braking = controls && onGround && this.wheels && input.down('Space');
+      this.speed = Math.max(0, this.speed + (thrust * (this.braking ? 0.2 : 1) - drag - (this.braking ? 9 : 0)) * dt);
       this.yaw += rudder * (0.3 + 0.4 * Math.min(this.speed / 6, 1)) * dt + (-sx) * 0.25 * dt;
       this.roll *= Math.exp(-4 * dt);
       const fw = this.forward(this.yaw, 0);
@@ -130,7 +136,7 @@ export class Flight {
         else if (s.s > 0.32) { if (this.speed > 3) events.push('rough'); this.speed = 0; }
         else { this.pos.x = nx; this.pos.z = nz; }
         if (this.surface === 'ground') {
-          this.pos.y = heightAt(this.pos.x, this.pos.z) + WHEEL_DROP;
+          this.pos.y = heightAt(this.pos.x, this.pos.z) + this.wheelDrop;
           // assiette selon la pente
           const ahead = heightAt(this.pos.x + fw.x * 2, this.pos.z + fw.z * 2);
           const back = heightAt(this.pos.x - fw.x * 2, this.pos.z - fw.z * 2);
@@ -152,10 +158,15 @@ export class Flight {
         events.push('takeoff');
       }
     } else {
-      const eff = clamp(this.speed / 22, 0.25, 1);
+      const eff = clamp(this.speed / (F.effSpeed ?? 22), 0.25, 1);
       this.pitch = clamp(this.pitch + sy * F.pitchRate * eff * dt, -F.maxPitch, F.maxPitch);
       this.roll = clamp(this.roll - sx * F.rollRate * dt, -F.maxRoll, F.maxRoll);
       if (Math.abs(sx) < 0.05) this.roll *= Math.exp(-0.9 * dt);
+      // orage : turbulences (secousses de roulis et de tangage)
+      if (this.turb > 0.05) {
+        this.roll = clamp(this.roll + (Math.random() - 0.5) * this.turb * 1.6 * dt + Math.sin(performance.now() * 0.0021) * this.turb * 0.25 * dt, -F.maxRoll, F.maxRoll);
+        this.pitch = clamp(this.pitch + (Math.random() - 0.5) * this.turb * 0.9 * dt, -F.maxPitch, F.maxPitch);
+      }
       this.yaw += Math.sin(this.roll) * F.bankTurn * Math.min(1, this.speed / 20) * dt + rudder * F.rudderRate * dt;
       if (Math.abs(sy) < 0.05 && !this.autopilot) this.pitch *= Math.exp(-0.35 * dt);
       const grav = 9.8 * Math.sin(this.pitch) * (this.pitch > 0 ? 1.25 : 0.9);
@@ -172,13 +183,13 @@ export class Flight {
       this.vy = fw.y * this.speed - sink;
 
       const g = heightAt(this.pos.x, this.pos.z);
-      const gentle = Math.abs(this.roll) < 0.4 && this.pitch > -0.25 && this.pitch < 0.4 && this.vy > -7.5 && this.speed < 42;
+      const gentle = Math.abs(this.roll) < 0.4 && this.pitch > -0.25 && this.pitch < 0.4 && this.vy > -(F.sinkMax ?? 7.5) && this.speed < (F.gentleMax ?? 42);
       if (g > -0.6) {
-        const bottom = this.wheels ? g + WHEEL_DROP : g + 0.8;
+        const bottom = this.wheels ? g + this.wheelDrop : g + 0.8;
         if (this.pos.y < bottom) {
           if (this.wheels && gentle && slopeAt(this.pos.x, this.pos.z).s < 0.12) {
             this.surface = 'ground'; this.pos.y = bottom; this.roll = 0; this.autopilot = false;
-            this.speed = Math.min(this.speed, 18);
+            this.speed = Math.min(this.speed, F.landClamp ?? 18);
             events.push('landed_ground');
           } else events.push('crash');
         }
@@ -205,6 +216,7 @@ export class Flight {
     this.plane.spinners.forEach((s) => { s.rotation.z += spin; });
     // obstacles (arbres, bâtiments, rochers) : choc léger au roulage, crash en vol ou à pleine vitesse
     if (this.hitTest && this.speed > 0.5 && this.hitTest(this.pos, this.yaw)) {
+      this.impactSpeed = this.speed;
       if (this.surface !== 'air' && this.speed < 7) { this.pos.copy(prev); this.speed = 0; events.push('bump'); }
       else events.push('crash');
     }
@@ -217,7 +229,7 @@ export class Flight {
   updateCamera(dt, snap = false) {
     const cam = this.camera;
     if (this.cockpitView) {
-      const p = new THREE.Vector3(-0.62, FLOOR + 1.3, -3.5);
+      const p = new THREE.Vector3(-0.62, FLOOR + 1.25, -3.45);
       this.plane.root.updateMatrixWorld(true);
       this.plane.root.localToWorld(p);
       cam.position.copy(p);
@@ -231,7 +243,9 @@ export class Flight {
     if (snap) this.camPos.copy(want);
     else this.camPos.lerp(want, 1 - Math.exp(-4 * dt));
     cam.position.copy(this.camPos);
-    const look = this.pos.clone().addScaledVector(this.forward(), 10).add(new THREE.Vector3(0, 3.2, 0));
+    // les murs (hangars, terminal) rapprochent la caméra au lieu d'être traversés
+    this.camClip?.(this.pos.clone().add(new THREE.Vector3(0, 3, 0)), cam.position, dt);
+    const look =this.pos.clone().addScaledVector(this.forward(), 10).add(new THREE.Vector3(0, 3.2, 0));
     cam.up.set(0, 1, 0);
     cam.lookAt(look);
   }

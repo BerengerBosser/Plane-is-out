@@ -118,7 +118,7 @@ export function createWater(scene) {
       }`,
   });
 
-  const geo = new THREE.PlaneGeometry(2600, 2600, 160, 160);
+  const geo = new THREE.PlaneGeometry(3900, 3900, 240, 240);   // maille de 16,25 m (voir le recalage ci-dessous)
   geo.rotateX(-Math.PI / 2);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.renderOrder = 2;

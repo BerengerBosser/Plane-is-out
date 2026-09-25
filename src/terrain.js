@@ -47,11 +47,23 @@ let island2 = null;
 export function setIsland2(i) { island2 = i; }
 export function getIsland2() { return island2; }
 
+let island3 = null;
+export function setIsland3(i) { island3 = i; }
+let island4 = null;
+export function setIsland4(i) { island4 = i; }
 export function heightAt(x, z) {
   const h = heightAt1(x, z);
   if (island2) {
     const dx = x - island2.cx, dz = z - island2.cz;
     if (dx * dx + dz * dz < island2.R2) return Math.max(h, island2.height(dx, dz));
+  }
+  if (island3) {
+    const dx = x - island3.cx, dz = z - island3.cz;
+    if (dx * dx + dz * dz < island3.R2) return Math.max(h, island3.height(dx, dz));
+  }
+  if (island4) {
+    const dx = x - island4.cx, dz = z - island4.cz;
+    if (dx * dx + dz * dz < island4.R2) return Math.max(h, island4.height(dx, dz));
   }
   return h;
 }
@@ -217,7 +229,7 @@ export function buildIsland(scene) {
   out.terrain = terrain;
 
   // Fond marin au large
-  const deep = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), new THREE.MeshLambertMaterial({ color: '#1f5d70' }));
+  const deep = new THREE.Mesh(new THREE.PlaneGeometry(16000, 16000), new THREE.MeshLambertMaterial({ color: '#1f5d70' }));
   deep.rotation.x = -Math.PI / 2;
   deep.position.y = -16.5;
   scene.add(deep);
@@ -530,7 +542,7 @@ export function autoColliders(root, colliders, { skip = () => false, ground = he
     const gy = Math.max(ground(cx, cz), -1.3);
     if (box.max.y - gy < 0.35 || box.min.y - gy > 1.6) return;
     if (h < 0.3 && w > 0.3 && d > 0.3) return;           // plancher : on marche dessus
-    colliders.push({ type: 'box', minX: box.min.x - 0.02, maxX: box.max.x + 0.02, minZ: box.min.z - 0.02, maxZ: box.max.z + 0.02, minY: box.min.y - 1.75, maxY: box.max.y - 0.3, top: box.max.y, auto: true });
+    colliders.push({ type: 'box', minX: box.min.x - 0.02, maxX: box.max.x + 0.02, minZ: box.min.z - 0.02, maxZ: box.max.z + 0.02, minY: box.min.y - 1.75, maxY: box.max.y - 0.3, top: box.max.y, bottom: box.min.y, auto: true });
     n++;
   });
   return n;

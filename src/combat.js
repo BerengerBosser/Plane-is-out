@@ -78,38 +78,11 @@ export const CombatMixin = {
     return L;
   },
   onEnemyHitPlayer(dmg, e, pid, dir) {
-    if (pid === this.myId()) this.hurt(dmg, e.type, dir);
-    else this.session?.send('hurt', { dmg, type: e.type }, pid);
+    const d = dir ? { x: dir.x, z: dir.y ?? dir.z, k: e.type === 'brute' ? 14 : 4 } : null;
+    if (pid === this.myId()) this.hurt(dmg, e.type, d);
+    else this.session?.send('hurt', { dmg, type: e.type, dir: d }, pid);
   },
 
-  // ── attaque au clic ──
-  handleAttack(dt) {
-    this.attackCd -= dt;
-    if (this.carrying || this.nozzle === this.myId() || !this.input.hit('Mouse0') || this.attackCd > 0) return;
-    if (this.slot === 4 && this.own.flare) { this.fireWeapon('flare'); return; }
-    if (this.slot === 5 && this.own.harpoon) { this.fireWeapon('harpoon'); return; }
-    let kind = null;
-    if (this.slot === 0) kind = 'fist'; else if (this.slot === 1 && this.own.wrench) kind = 'wrench';
-    if (!kind) return;
-    if (this.tryHitFish(CFG.combat[kind].range + 0.8)) { this.vm.attack(kind); this.attackCd = CFG.combat[kind].cooldown; return; }
-    const C = CFG.combat[kind];
-    this.attackCd = C.cooldown;
-    this.vm.attack(kind);
-    this.audio.whoosh();
-    const dir = new THREE.Vector3();
-    this.camera.getWorldDirection(dir);
-    setTimeout(() => {
-      if (this.mode !== 'explore') return;
-      const origin = this.player.pos;
-      if (this.isAuthority()) {
-        const r = this.enemies.hit(origin, dir, C.range, C.dmg, C.knock, this.lightSources());
-        if (r) this.hitFeedback(r.e, r.mul);
-      } else {
-        const e = this.probe(origin, dir, C.range);
-        if (e) { this.session.send('hit', { id: e.id, dmg: C.dmg, dir: [dir.x, dir.z], knock: C.knock }, this.session.hostId); this.hitFeedback(e, e.type === 'kingcrab' && e.state !== 'stun' ? 0.35 : 1); e.flash = 0.15; }
-      }
-    }, kind === 'wrench' ? 140 : 90);
-  },
   hitFeedback(e, mul) {
     if (e.type === 'crab' || e.type === 'kingcrab') this.audio.hitShell(); else this.audio.hitFlesh();
     this.player.shake = Math.max(this.player.shake, 0.35);
@@ -131,8 +104,7 @@ export const CombatMixin = {
 
   fireWeapon(kind) {
     const W = WEAPONS[kind];
-    if (this.ammo[kind] <= 0) { this.audio.error(); this.attackCd = 0.4; this.ui.toast(kind === 'flare' ? 'Plus de fusées' : 'Plus de harpons', kind === 'flare' ? 'Coffre du canot, caisse du terminal ou comptoir.' : 'Ramassez vos harpons plantés, ou passez au comptoir.', 'bad', 2200); return; }
-    this.ammo[kind]--;
+    if (!this.invTake(kind === 'flare' ? 'a_flare' : 'a_harpoon', 1)) { this.audio.error(); this.attackCd = 0.4; this.ui.toast(kind === 'flare' ? 'Plus de fusées' : 'Plus de harpons', kind === 'flare' ? 'Comptoirs, caisses.' : 'Ramassez-les, ou comptoir.', 'bad', 1800); return; }
     this.attackCd = W.cooldown;
     this.vm.attack(kind);
     const dir = new THREE.Vector3();
@@ -218,20 +190,30 @@ export const CombatMixin = {
         else { this.ui.toast('Le Colosse s\'effondre', 'Les zombies autour de la centrale hésitent.', 'good', 8000); this.radioOnce('warddead', 'Le Colosse… à terre ? Je n\'aurais jamais cru ça possible. Tenez jusqu\'à 21 h !'); }
         break;
       case 'scrapDrop': this.addScrapPile(data.id, data.x, data.z, data.n, true); break;
+      case 'bloat': {
+        const p = new THREE.Vector3(...data.p);
+        this.gore.gas(p); this.gore.blood(p.clone().setY(p.y + 1), null, true, true);
+        if (p.distanceTo(this.camera.position) < 80) this.audio.bloat();
+        const me = this.playerWorld();
+        if (this.mode === 'explore' && !this.aboard && me.distanceTo(p) < 3.8) this.hurt(22, 'bloater', { x: me.x - p.x, z: me.z - p.z, k: 10 });
+        if (this.isAuthority()) for (const e of this.enemies.list) if (!e.dead && e.pos.distanceTo(p) < 3.5 && e.type !== 'bloater') this.enemies.damage(e, 60, { x: e.pos.x - p.x, z: e.pos.z - p.z }, 8, []);
+        break;
+      }
+      case 'scream': if (Math.hypot(this.playerWorld().x - data.p[0], this.playerWorld().z - data.p[1]) < 90) { this.audio.scream(); this.player.shake = Math.max(this.player.shake, 0.3); if (!this.said.has('scream')) { this.said.add('scream'); this.ui.toast('Un Hurleur !', 'Il appelle les autres. Abattez-le en priorité.', 'bad', 4000); } } break;
       case 'storm':
         this.audio.siren();
-        this.ui.toast('Tempête sur Saint-Escale', 'Mer démontée et rafales : décollage impossible avant 21 h. Ce soir, défendez la centrale : ses projecteurs sont votre seul abri.', 'bad', 9000);
-        this.radioOnce('storm', 'Mauvaise nouvelle : une tempête arrive sur Saint-Escale. Personne ne décolle avant 21 h, et la mer sera trop forte pour un décollage sur l\'eau : ce sera la piste. Postez-vous à la centrale, à l\'ouest du terminal, et gardez le générateur en vie. Reposez-vous dans l\'avion en attendant.');
+        this.ui.toast('Tempête sur Saint-Escale', 'Pas de décollage avant 21 h. Défendez la centrale.', 'bad', 6000);
+        this.radioOnce('storm', 'La tempête est là. Personne ne décolle avant 21 h. Sans courant, pas de projecteurs, et sans projecteurs, les morts vous submergent : postez-vous à la centrale, à l\'ouest du terminal, et gardez le générateur en vie jusqu\'à ce que le vent tombe.');
         break;
       case 'siege': this.ui.toast('Ils arrivent !', 'Défendez le générateur de la centrale jusqu\'à 21 h.', 'bad', 6000); this.audio.siren(); break;
       case 'wave': this.ui.toast(`Vague ${data.n}/3`, data.n === 3 ? 'Quelque chose d\'énorme sort de terre…' : 'Les zombies convergent vers la centrale.', 'bad', 5000); this.audio.hiss(); break;
       case 'genHit': if (near(this.island2.points.generator.x, this.island2.points.generator.z, 40)) this.audio.hitShell(); break;
-      case 'genDown': this.audio.explosion(); this.island2.setPower(false); this.ui.toast('Générateur en panne !', 'Plus de projecteurs. Réparez-le à la clé à molette (maintenir E).', 'bad', 6000); break;
+      case 'genDown': this.audio.explosion(); this.island2.setPower(false); this.ui.toast('Générateur en panne !', 'Réparez-le à la clé (E).', 'bad', 4000); break;
       case 'genUp': this.island2.setPower(true); this.audio.powerUp(); this.ui.toast('Générateur relancé', 'Les projecteurs se rallument.', 'good'); break;
       case 'stormOver':
         this.audio.success();
-        this.ui.toast('21:00 · la tempête passe', 'Le vent tombe. Roulez jusqu\'à la piste et décollez !', 'good', 9000);
-        this.radioOnce('stormover', 'La tempête s\'éloigne ! Vite, tout le monde à bord, et décollez depuis la piste. Kerloch vous attend.');
+        this.ui.toast('21:00 · la tempête passe', 'Décollez depuis la piste !', 'good', 5000);
+        this.radioOnce('stormover', 'La tempête s\'éloigne ! Tout le monde à bord, et décollez depuis la piste. Cap sur Hélios : cette fois, le réservoir est plein.');
         break;
       case 'ended': break;
       default: this.applyNightFx?.(type, data); this.applyWreckFx?.(type, data); break;

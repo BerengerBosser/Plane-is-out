@@ -1,12 +1,13 @@
 // Vue à la première personne : bras gauche avec montre et post-it, poings, clé à molette, lanterne
 import * as THREE from 'three';
-import { prep, flatMat } from './terrain.js';
+import { prep, flatMat, colorize } from './terrain.js';
 
 const SKIN = '#e0a982', SLEEVE = '#3d5566', CUFF = '#2c3f4b';
 
 function box(w, h, d, col, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(prep(new THREE.BoxGeometry(w, h, d), col), flatMat);
   m.position.set(x, y, z);
+  m.userData.tone = col;   // pour recolorer selon le personnage choisi
   return m;
 }
 
@@ -15,58 +16,56 @@ function watchFaceCanvas() {
   cv.width = cv.height = 256;
   return cv;
 }
+// montre numérique de baroudeur : écran LCD, grosse heure, compte à rebours avant la nuit
 function drawWatch(cv, hour, alarm, blink) {
   const g = cv.getContext('2d');
-  const c = 128;
   g.clearRect(0, 0, 256, 256);
-  g.fillStyle = '#c9a24c'; g.beginPath(); g.arc(c, c, 126, 0, Math.PI * 2); g.fill();
-  g.fillStyle = '#f6efdc'; g.beginPath(); g.arc(c, c, 110, 0, Math.PI * 2); g.fill();
-  // secteur 18h30 → 19h en rouge (danger)
-  const ang = (h) => ((h % 12) / 12) * Math.PI * 2 - Math.PI / 2;
-  g.fillStyle = alarm && blink ? 'rgba(200,60,40,0.55)' : 'rgba(200,60,40,0.25)';
-  g.beginPath(); g.moveTo(c, c); g.arc(c, c, 108, ang(18.5), ang(19)); g.closePath(); g.fill();
-  g.strokeStyle = '#3a2f25';
-  for (let i = 0; i < 60; i++) {
-    const a = (i / 60) * Math.PI * 2, big = i % 5 === 0;
-    g.lineWidth = big ? 6 : 2;
-    const r1 = big ? 86 : 96;
-    g.beginPath();
-    g.moveTo(c + Math.cos(a) * r1, c + Math.sin(a) * r1);
-    g.lineTo(c + Math.cos(a) * 104, c + Math.sin(a) * 104);
-    g.stroke();
-  }
-  g.fillStyle = '#3a2f25';
-  g.font = 'bold 26px Georgia, serif';
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  [[12, 0, -64], [3, 64, 0], [6, 0, 64], [9, -64, 0]].forEach(([n, x, y]) => g.fillText(String(n), c + x, c + y));
   const h = ((hour % 24) + 24) % 24;
+  const night = h >= 19 || h < 6.5;
+  g.fillStyle = night ? '#1d2440' : '#a9c79a';
+  g.fillRect(0, 0, 256, 256);
+  // écran LCD
+  g.fillStyle = night ? '#3a4cff' : 'rgba(0,0,0,0.06)';
+  if (night) { g.globalAlpha = 0.25; g.fillRect(0, 0, 256, 256); g.globalAlpha = 1; }
+  const ink = night ? '#d6e0ff' : '#17240f';
+  g.fillStyle = ink; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '800 30px ui-monospace, Menlo, Consolas, monospace';
+  g.fillText(night ? 'NUIT' : h >= 17.5 ? 'SOIR' : 'JOUR', 128, 40);
   const hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
-  g.font = '18px monospace'; g.fillStyle = '#8a6d2a';
-  g.fillText(`${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`, c, c + 34);
-  const hand = (a, len, w, col) => {
-    g.strokeStyle = col; g.lineWidth = w; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(c, c); g.lineTo(c + Math.cos(a) * len, c + Math.sin(a) * len); g.stroke();
-  };
-  hand(ang(h), 58, 9, '#2c2622');
-  hand((mm / 60) * Math.PI * 2 - Math.PI / 2, 84, 5, '#2c2622');
-  g.fillStyle = '#c8553d'; g.beginPath(); g.arc(c, c, 8, 0, Math.PI * 2); g.fill();
+  g.font = '900 96px ui-monospace, Menlo, Consolas, monospace';
+  const sep = blink ? ':' : ' ';
+  g.fillText(`${String(hh).padStart(2, '0')}${sep}${String(mm).padStart(2, '0')}`, 128, 128);
+  const until = night ? ((6.5 - h) + 24) % 24 : 19 - h;
+  g.font = '700 26px ui-monospace, Menlo, Consolas, monospace';
+  const u = `${Math.floor(until)}h${String(Math.floor((until % 1) * 60)).padStart(2, '0')}`;
+  g.fillStyle = alarm && blink ? '#c81e1e' : ink;
+  g.fillText(night ? `AUBE ${u}` : `NUIT ${u}`, 128, 206);
+  // barre de progression vers la nuit
+  if (!night) {
+    const k = Math.max(0, Math.min(1, (h - 7) / 12));
+    g.strokeStyle = ink; g.lineWidth = 3; g.strokeRect(28, 226, 200, 14);
+    g.fillStyle = k > 0.9 ? '#c81e1e' : ink; g.fillRect(31, 229, 194 * k, 8);
+  }
 }
 
+// post-it : la règle de survie, écrite à la main par Marthe
 function postItCanvas() {
   const cv = document.createElement('canvas');
   cv.width = cv.height = 256;
   const g = cv.getContext('2d');
-  g.fillStyle = '#ffe066'; g.fillRect(0, 0, 256, 256);
-  g.fillStyle = 'rgba(0,0,0,0.06)'; g.fillRect(0, 0, 256, 40);
+  g.fillStyle = '#ffb8cf'; g.fillRect(0, 0, 256, 256);
+  g.fillStyle = 'rgba(0,0,0,0.06)'; g.fillRect(0, 0, 256, 34);
   g.fillStyle = '#2d2a6e';
-  g.textAlign = 'center';
-  g.font = '700 74px Caveat, "Segoe Print", "Comic Sans MS", cursive';
-  g.save(); g.translate(128, 110); g.rotate(-0.06); g.fillText('18h30', 0, 0); g.restore();
-  g.font = '600 44px Caveat, "Segoe Print", "Comic Sans MS", cursive';
-  g.save(); g.translate(128, 175); g.rotate(0.03); g.fillText("c'est la merde !", 0, 0); g.restore();
+  g.textAlign = 'left';
+  const hand = (sz, w = 700) => `${w} ${sz}px Caveat, "Segoe Print", "Comic Sans MS", cursive`;
+  g.font = hand(44); g.save(); g.translate(16, 80); g.rotate(-0.04); g.fillText('19h : zombies', 0, 0, 226); g.restore();
+  g.font = hand(28, 600);
+  g.fillText('□ avion SUR L\'EAU', 18, 130, 226);
+  g.fillText('□ porte qui s\'ouvre', 18, 168, 226);
+  g.fillText('sinon : feu + lanterne', 18, 206, 226);
   g.strokeStyle = '#c8553d'; g.lineWidth = 5;
-  g.beginPath(); g.moveTo(40, 200); g.quadraticCurveTo(128, 212, 220, 196); g.stroke();
-  g.beginPath(); g.moveTo(30, 60); g.lineTo(80, 60); g.stroke();
+  g.beginPath(); g.moveTo(20, 96); g.quadraticCurveTo(128, 104, 236, 92); g.stroke();
+  g.font = hand(24, 600); g.fillStyle = '#c8553d'; g.fillText('— M.', 190, 244);
   return cv;
 }
 
@@ -96,18 +95,18 @@ export function createViewmodel() {
   fore.add(box(0.1, 0.05, 0.05, SKIN, 0.53, -0.03, 0.09)); // pouce
   // bracelet et boîtier
   fore.add(box(0.07, 0.112, 0.122, '#5a3b2a', 0.405, 0, 0));
-  const caseM = new THREE.Mesh(prep(new THREE.CylinderGeometry(0.058, 0.058, 0.025, 20), '#c9a24c'), flatMat);
-  caseM.position.set(0.405, 0.066, 0);
+  const caseM = box(0.12, 0.028, 0.13, '#2b2f36', 0.405, 0.066, 0);
   fore.add(caseM);
+  fore.add(box(0.013, 0.02, 0.02, '#f2a33a', 0.467, 0.066, 0.04));   // boutons latéraux
+  fore.add(box(0.013, 0.02, 0.02, '#8a93a0', 0.467, 0.066, -0.04));
   const faceCv = watchFaceCanvas();
   const faceTex = new THREE.CanvasTexture(faceCv);
   faceTex.colorSpace = THREE.SRGBColorSpace;
-  const face = new THREE.Mesh(new THREE.CircleGeometry(0.052, 32), new THREE.MeshBasicMaterial({ map: faceTex, toneMapped: false }));
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.108), new THREE.MeshBasicMaterial({ map: faceTex, toneMapped: false }));
   face.rotation.x = -Math.PI / 2;
   face.position.set(0.405, 0.08, 0);
   fore.add(face);
-  const crown = box(0.02, 0.012, 0.012, '#c9a24c', 0.47, 0.066, 0);
-  fore.add(crown);
+
   // post-it collé sur l'avant-bras
   const postTex = new THREE.CanvasTexture(postItCanvas());
   postTex.colorSpace = THREE.SRGBColorSpace;
@@ -204,16 +203,91 @@ export function createViewmodel() {
   rig.add(rod);
   let recoil = 0;
 
+  // ── nouvelles armes et talkie ──
+  const hand = (g, x = 0, y = -0.1, z = 0.06) => { g.add(box(0.11, 0.1, 0.12, SKIN, x, y, z)); g.add(box(0.12, 0.12, 0.34, SLEEVE, x, y - 0.02, z + 0.22)); };
+  const pistol = new THREE.Group(); hand(pistol);
+  pistol.add(box(0.06, 0.08, 0.3, '#2b2f36', 0, 0.0, -0.12));
+  pistol.add(box(0.055, 0.17, 0.08, '#3a3f48', 0, -0.08, 0.0));
+  pistol.add(box(0.015, 0.025, 0.02, '#ffd166', 0, 0.05, -0.25));
+  pistol.add(box(0.015, 0.025, 0.02, '#ffd166', 0, 0.05, 0.01));
+  rig.add(pistol);
+  // main gauche sous le garde-main (armes longues)
+  const leftHand = (g, z) => { g.add(box(0.1, 0.09, 0.13, SKIN, -0.01, -0.085, z)); const sl = box(0.11, 0.11, 0.36, SLEEVE, -0.12, -0.16, z + 0.2); sl.rotation.y = -0.55; sl.rotation.x = 0.3; g.add(sl); };
+  const shotgun = new THREE.Group(); hand(shotgun, 0.02, -0.1, 0.1);
+  shotgun.add(box(0.045, 0.045, 0.8, '#2b2f36', 0, 0.025, -0.47));
+  shotgun.add(box(0.04, 0.04, 0.6, '#3a3f48', 0, -0.02, -0.4));
+  const pump = box(0.075, 0.065, 0.2, '#8a5f3a', 0, -0.03, -0.5); shotgun.add(pump);
+  shotgun.add(box(0.065, 0.085, 0.2, '#3a3f48', 0, 0.0, -0.04));
+  shotgun.add(box(0.06, 0.1, 0.28, '#8a5f3a', 0, -0.04, 0.2));
+  shotgun.add(box(0.012, 0.02, 0.012, '#ffd166', 0, 0.055, -0.85));
+  leftHand(shotgun, -0.5);
+  rig.add(shotgun);
+  const rifle = new THREE.Group(); hand(rifle, 0.02, -0.12, 0.12);
+  rifle.add(box(0.06, 0.1, 0.5, '#3a4a3a', 0, 0.0, -0.2));
+  rifle.add(box(0.03, 0.03, 0.4, '#2b2f36', 0, 0.02, -0.62));
+  rifle.add(box(0.05, 0.16, 0.08, '#2b2f36', 0, -0.12, -0.12));
+  rifle.add(box(0.055, 0.09, 0.26, '#3a4a3a', 0, -0.02, 0.2));
+  rifle.add(box(0.045, 0.05, 0.16, '#1a1d22', 0, 0.09, -0.12));
+  rifle.add(box(0.012, 0.03, 0.012, '#ffd166', 0, 0.05, -0.8));
+  leftHand(rifle, -0.4);
+  rig.add(rifle);
+  const machete = new THREE.Group(); hand(machete, 0, 0, 0.02);
+  machete.add(box(0.04, 0.05, 0.16, '#3a2a1e', 0, 0.0, -0.08));
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.09, 0.6), new THREE.MeshLambertMaterial({ color: '#c9ccd2', emissive: '#222' })); blade.position.set(0, 0.015, -0.48); machete.add(blade);
+  rig.add(machete);
+  const bat = new THREE.Group(); hand(bat, 0, 0, 0.02);
+  const batG = new THREE.Mesh(prep(new THREE.CylinderGeometry(0.06, 0.025, 0.8, 7).rotateX(Math.PI / 2), '#b98b5e'), flatMat); batG.position.z = -0.42; bat.add(batG);
+  for (let i = 0; i < 5; i++) { const n = box(0.012, 0.09, 0.012, '#8d9299', 0, 0, -0.55 - i * 0.05); n.rotation.z = i * 1.3; bat.add(n); }
+  rig.add(bat);
+  const axe = new THREE.Group(); hand(axe, 0, 0, 0.02);
+  axe.add(box(0.035, 0.035, 0.75, '#6d4b37', 0, 0, -0.35));
+  axe.add(box(0.03, 0.2, 0.14, '#d8322a', 0, 0.06, -0.68));
+  axe.add(box(0.032, 0.22, 0.03, '#c9ccd2', 0, 0.07, -0.76));
+  rig.add(axe);
+  const talkie = new THREE.Group(); hand(talkie, 0, -0.12, 0.04);
+  talkie.add(box(0.08, 0.2, 0.05, '#2b2f36', 0, 0.02, -0.02));
+  talkie.add(box(0.012, 0.14, 0.012, '#10162b', 0.025, 0.18, -0.02));
+  const tScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.035), new THREE.MeshBasicMaterial({ color: '#ffb34a', toneMapped: false })); tScreen.position.set(0, 0.07, -0.046); tScreen.rotation.y = Math.PI; talkie.add(tScreen);
+  const tLed = new THREE.Mesh(new THREE.SphereGeometry(0.008, 6, 4), new THREE.MeshBasicMaterial({ color: '#3a1010', toneMapped: false })); tLed.position.set(-0.025, 0.11, -0.046); talkie.add(tLed);
+  for (let i = 0; i < 3; i++) talkie.add(box(0.05, 0.004, 0.004, '#555', 0, -0.02 - i * 0.012, -0.046));
+  rig.add(talkie);
+  // fer à souder (relié au poste de l'avion par un câble) : poignée, corps, panne qui rougit
+  const iron = new THREE.Group(); hand(iron, 0, -0.1, 0.06);
+  iron.add(box(0.07, 0.07, 0.22, '#33373f', 0, 0, -0.06));
+  iron.add(box(0.06, 0.06, 0.16, '#ffb020', 0, 0, -0.24));
+  iron.add(box(0.075, 0.075, 0.03, '#1d2233', 0, 0, -0.17));
+  const tipMat = new THREE.MeshBasicMaterial({ color: '#8a5a3a', toneMapped: false });
+  const ironTip = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.022, 0.14), tipMat); ironTip.position.set(0, 0, -0.39); iron.add(ironTip);
+  const cableV = box(0.025, 0.025, 0.3, '#1d2233', 0, -0.02, 0.2); iron.add(cableV);
+  rig.add(iron);
+  // objets rapides : bandage, trousse, parachute (tenus devant soi)
+  const bandage = new THREE.Group(); hand(bandage, 0, -0.1, 0.06);
+  const roll = new THREE.Mesh(prep(new THREE.CylinderGeometry(0.06, 0.06, 0.1, 10).rotateZ(Math.PI / 2), '#f4f1ea'), flatMat); roll.position.set(0, 0.02, -0.06); bandage.add(roll);
+  rig.add(bandage);
+  const medkit = new THREE.Group(); hand(medkit, 0, -0.14, 0.06);
+  medkit.add(box(0.26, 0.18, 0.1, '#f4f1ea', 0, 0, -0.08)); medkit.add(box(0.1, 0.03, 0.11, '#d8322a', 0, 0, -0.08)); medkit.add(box(0.03, 0.1, 0.11, '#d8322a', 0, 0, -0.08));
+  rig.add(medkit);
+  const chute = new THREE.Group(); hand(chute, 0, -0.14, 0.06);
+  chute.add(box(0.22, 0.26, 0.12, '#ff6b5b', 0, 0, -0.08)); chute.add(box(0.23, 0.04, 0.13, '#10162b', 0, 0.06, -0.08));
+  rig.add(chute);
+  let reloadT = 0, reloadDur = 1, heavySwing = 1;
+
   let punchT = 1, punchSide = 1, swingT = 1, armK = 0, bobT = 0, faceTimer = 0, blink = false;
 
   return {
     scene, camera,
+    // teintes du personnage choisi (peau, manche, poignet)
+    setLook(look) {
+      const map = { [SKIN]: look.skin || SKIN, [SLEEVE]: look.sleeve || SLEEVE, [CUFF]: look.cuff || CUFF };
+      rig.traverse((o) => { if (o.isMesh && o.userData.tone && map[o.userData.tone]) colorize(o.geometry, map[o.userData.tone]); });
+    },
     resize(aspect) { camera.aspect = aspect; camera.updateProjectionMatrix(); },
     attack(kind) {
-      if (kind === 'flare' || kind === 'harpoon') { recoil = 1; return; }
-      if (kind === 'wrench') swingT = 0;
+      if (kind === 'flare' || kind === 'harpoon' || kind === 'pistol' || kind === 'shotgun' || kind === 'rifle') { recoil = kind === 'rifle' ? 0.6 : 1; return; }
+      if (kind === 'wrench' || kind === 'machete' || kind === 'bat' || kind === 'axe') { swingT = 0; heavySwing = kind === 'axe' ? 0.7 : kind === 'machete' ? 1.3 : 1; }
       else { punchT = 0; punchSide *= -1; }
     },
+    reload(kind, dur) { reloadT = dur; reloadDur = dur; },
     update(dt, s) {
       // s : { slot, watchUp, carrying, moving, sprint, hour, alarm, lanternOn, light, hidden }
       bobT += dt * (s.moving ? (s.sprint ? 13 : 9) : 2);
@@ -268,14 +342,52 @@ export function createViewmodel() {
       fistR.rotation.set(0.25, 0.2, -0.35);
       fistL.rotation.set(0.25, -0.2, 0.35);
 
-      // clé à molette
-      swingT = Math.min(1, swingT + dt * 2.6);
+      // clé à molette et armes blanches (même geste de frappe)
+      swingT = Math.min(1, swingT + dt * 2.6 * heavySwing);
       wrench.visible = handsFree && s.slot === 1;
       const sw = swingT < 0.3 ? swingT / 0.3 : 1 - (swingT - 0.3) / 0.7;
       const swing = Math.sin(Math.max(0, Math.min(1, sw)) * Math.PI / 2);
       wrench.position.set(0.3 + bx - swing * 0.14, -0.27 + by + swing * 0.05, -0.6 - swing * 0.2);
       wrench.rotation.set(0.35 - swing * 1.3, 0.25, -0.25 - swing * 0.6);
+      for (const [g, id] of [[machete, 8], [bat, 9], [axe, 10]]) {
+        g.visible = handsFree && s.slot === id;
+        if (!g.visible) continue;
+        g.position.set(0.3 + bx - swing * 0.2, -0.3 + by + swing * 0.12, -0.5 - swing * 0.25);
+        g.rotation.set(0.9 - swing * 2.0, 0.3 - swing * 0.5, -0.4 - swing * 0.7);
+      }
+      // armes à feu : recul, rechargement (arme qui plonge)
+      reloadT = Math.max(0, reloadT - dt);
+      const rl = reloadT > 0 ? Math.sin(Math.min(1, (reloadDur - reloadT) / reloadDur) * Math.PI) : 0;
+      const rkg = Math.sin(Math.min(1, recoil) * Math.PI / 2);
+      for (const [g, id, x, y, z] of [[pistol, 11, 0.24, -0.24, -0.5], [shotgun, 12, 0.2, -0.22, -0.6], [rifle, 13, 0.2, -0.21, -0.58]]) {
+        g.visible = handsFree && s.slot === id;
+        if (!g.visible) continue;
+        const aim = s.aim ? 1 : 0;
+        g.position.set(x * (1 - aim * 0.9) + bx, y + by * (1 - aim) + rkg * 0.03 - rl * 0.25, z + rkg * (id === 12 ? 0.1 : 0.05));
+        g.rotation.set(rkg * (id === 12 ? 0.35 : 0.2) - rl * 0.7, 0.03 * (1 - aim), rl * 0.4);
+      }
+      pump.position.z = -0.5 + (recoil > 0.3 && recoil < 0.8 ? 0.1 : 0);
+      // talkie : devant le visage quand on parle
+      talkie.visible = handsFree && s.slot === 7;
+      if (talkie.visible) {
+        const up = s.talking ? 1 : 0;
+        talkie.position.set(0.28 - up * 0.2 + bx, -0.3 + up * 0.18 + by, -0.55 + up * 0.18);
+        talkie.rotation.set(0.25 + up * 0.35, -up * 0.5, up * 0.1);
+        tLed.material.color.set(s.talking ? '#ff3030' : s.radioIn ? '#5ef2c2' : '#3a1010');
+      }
 
+      // fer à souder : la panne rougit quand on soude
+      iron.visible = handsFree && s.slot === 17;
+      if (iron.visible) {
+        const w = s.welding ? 1 : 0;
+        iron.position.set(0.26 + bx - w * 0.05, -0.28 + by + w * 0.04 + (w ? Math.sin(bobT * 30) * 0.004 : 0), -0.55 - w * 0.08);
+        iron.rotation.set(0.15 + w * 0.2, 0.12, 0);
+        tipMat.color.set(w ? '#ffb347' : '#8a5a3a');
+      }
+      for (const [g, id] of [[bandage, 14], [medkit, 15], [chute, 16]]) {
+        g.visible = handsFree && s.slot === id;
+        if (g.visible) { g.position.set(0.24 + bx, -0.28 + by, -0.52); g.rotation.set(0.3, 0.2, 0); }
+      }
       // lanterne (main gauche)
       // armes à distance
       recoil = Math.max(0, recoil - dt * 4);

@@ -108,10 +108,23 @@ export function createSky(scene) {
   const seaTint = new THREE.Color('#4f9db3');
   const sunDir = new THREE.Vector3();
   const snap = new THREE.Vector3();
+  const GRAY_TOP = new THREE.Color('#5d646e'), GRAY_HOR = new THREE.Color('#8a9098'), FLASH = new THREE.Color('#e8eeff');
+  const grayTop = new THREE.Color(), grayHor = new THREE.Color(), WHITE = new THREE.Color('#ffffff');
 
-  function update(hour, camPos, t, dt, focus) {
+  // wx : météo { over (ciel couvert 0-1), rain, flash (éclair 0-1) }
+  function update(hour, camPos, t, dt, focus, view = 1, wx = null) {
     const s = sample(hour);
     const b = brumeFactor(hour);
+    const o = wx ? wx.over : 0, fl = wx ? wx.flash : 0;
+    if (o > 0.001 || fl > 0.001) {
+      // ciel gris et bas : on ternit les couleurs (le jour comme la nuit), l'éclair blanchit tout
+      const lum = 0.25 + s.amb * 0.55;
+      s.top.lerp(grayTop.copy(GRAY_TOP).multiplyScalar(lum), o * 0.9);
+      s.hor.lerp(grayHor.copy(GRAY_HOR).multiplyScalar(lum), o * 0.85);
+      s.amb *= 1 - o * 0.3;
+      s.top.lerp(FLASH, fl * 0.7);
+      s.hor.lerp(FLASH, fl * 0.6);
+    }
     skyMat.uniforms.top.value.copy(s.top);
     skyMat.uniforms.hor.value.copy(s.hor);
     skyMat.uniforms.bot.value.copy(s.hor).multiplyScalar(0.55);
@@ -123,7 +136,7 @@ export function createSky(scene) {
     const az = k * Math.PI; // est (+x) → sud (+z) → ouest (-x)
     sunDir.set(Math.cos(elev) * Math.cos(az), Math.sin(elev), Math.cos(elev) * Math.sin(az) * 0.7).normalize();
     skyMat.uniforms.sunDir.value.copy(sunDir);
-    skyMat.uniforms.sunCol.value.copy(s.sun).multiplyScalar(clamp(elev * 5 + 0.4, 0, 1) * (1 - b));
+    skyMat.uniforms.sunCol.value.copy(s.sun).multiplyScalar(clamp(elev * 5 + 0.4, 0, 1) * (1 - b) * (1 - o * 0.95));
 
     // ombres : la caméra d'ombre suit le point d'intérêt, alignée sur les texels
     const f = focus || camPos;
@@ -132,11 +145,13 @@ export function createSky(scene) {
     sun.position.copy(snap).addScaledVector(sunDir, 180);
     sun.target.position.copy(snap);
     sun.color.copy(s.sun);
-    sun.intensity = s.si * (elev > -0.02 ? 1 : 0);
-    sun.castShadow = elev > 0.04;
+    sun.intensity = s.si * (elev > -0.02 ? 1 : 0) * (1 - o * 0.85);
+    // l'ombre reste toujours active (basculer castShadow recompile les shaders et, avec les ombres calculées
+    // une image sur deux, dessine une image sans carte d'ombre → erreur WebGL) : on joue sur son intensité
+    sun.shadow.intensity = clamp((elev - 0.02) * 25, 0, 1) * (1 - smoothstep(0.35, 0.75, o));
 
-    hemi.intensity = s.amb * 1.5;
-    hemi.color.copy(s.hor).lerp(new THREE.Color('#ffffff'), 0.4);
+    hemi.intensity = s.amb * 1.5 + fl * 2.2;
+    hemi.color.copy(s.hor).lerp(WHITE, 0.4);
     hemi.groundColor.set('#7a6a48').multiplyScalar(0.5 + s.amb * 0.5);
 
     // nuages : dérive lente, teintés par le ciel, noyés dans la nuit
@@ -144,23 +159,25 @@ export function createSky(scene) {
       c.position.x += dt * (1.5 + (i % 3));
       if (c.position.x > 900) c.position.x = -900;
     });
-    cloudMat.color.copy(s.hor).lerp(new THREE.Color('#ffffff'), 0.55).multiplyScalar(0.35 + s.amb * 0.75);
+    cloudMat.color.copy(s.hor).lerp(WHITE, 0.55 * (1 - o * 0.7)).multiplyScalar((0.35 + s.amb * 0.75) * (1 - o * 0.35));
     cloudMat.emissive.copy(cloudMat.color).multiplyScalar(0.6);
-    cloudMat.opacity = 0.92 * (1 - b * 0.6);
+    cloudMat.opacity = 0.92 * (1 - b * 0.6) + o * 0.06;
 
     // nuit : lune bleutée (la lumière directionnelle passe à l'opposé du soleil), étoiles, brouillard bleu nuit
     if (elev < -0.02) {
       sun.position.copy(snap).addScaledVector(new THREE.Vector3(-0.35, 0.8, -0.45).normalize(), 180);
       sun.color.set('#9ab8ff');
-      sun.intensity = 0.55 * b;
-      sun.castShadow = b > 0.6;
+      sun.intensity = 0.55 * b * (1 - o * 0.8);
+      sun.shadow.intensity = smoothstep(0.5, 0.8, b) * (1 - smoothstep(0.35, 0.75, o));
     }
-    skyMat.uniforms.stars.value = b;
-    scene.fog.color.copy(s.hor).lerp(seaTint, 0.2 * (1 - b)).lerp(nightFog, b * 0.7);
-    scene.fog.near = lerp(170, 35, b);
-    scene.fog.far = lerp(1250, 300, b);
+    skyMat.uniforms.stars.value = b * (1 - o);
+    scene.fog.color.copy(s.hor).lerp(seaTint, 0.2 * (1 - b) * (1 - o)).lerp(nightFog, b * 0.7);
+    // la pluie rapproche l'horizon
+    const wet = 1 - (wx ? wx.rain : 0) * 0.5 - o * 0.12;
+    scene.fog.near = lerp(170, 35, b) * view * wet;
+    scene.fog.far = lerp(1250, 300, b) * view * wet;
     return { brume: b, sky: s, sunDir, fog: scene.fog };
   }
 
-  return { update, sun };
+  return { update, sun, dome };
 }

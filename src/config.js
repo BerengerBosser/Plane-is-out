@@ -59,6 +59,8 @@ export const CFG = {
     fist: { dmg: 12, range: 2.1, cooldown: 0.42, knock: 5 },
     wrench: { dmg: 30, range: 2.5, cooldown: 0.7, knock: 8 },
     maxVoiles: 4,            // solo
+    horde3: 2.5,             // Port-Cendre : horde de nuit plus grosse et plus rapide
+    day3: 1.5,               // Port-Cendre : errants de jour (× maxVoiles)
   },
 
   lantern: {

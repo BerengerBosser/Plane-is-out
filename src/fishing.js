@@ -58,13 +58,13 @@ export const FishingMixin = {
     document.getElementById('hud').appendChild(hud);
   },
   resetFishing() {
-    this.fish = {};
     this.stopFishing();
     for (const f of this.flops) this.scene.remove(f.mesh);
     this.flops = [];
   },
-  fishCount() { return Object.values(this.fish).reduce((a, b) => a + b, 0); },
-  fishValue() { return Object.entries(this.fish).reduce((a, [k, n]) => a + FISH[k].value * n, 0); },
+  // la pêche est rangée dans l'inventaire (objets f_sardine, f_thon…)
+  fishCount() { return Object.keys(FISH).reduce((a, k) => a + (FISH[k].junk ? 0 : this.invCount(`f_${k}`)), 0); },
+  fishValue() { return Object.keys(FISH).reduce((a, k) => a + (FISH[k].junk ? 0 : FISH[k].value * this.invCount(`f_${k}`)), 0); },
 
   stopFishing() {
     this.fishState = null;
@@ -94,7 +94,7 @@ export const FishingMixin = {
   updateFishing(dt) {
     this.updateFlops(dt);
     const hud = document.getElementById('fishHud');
-    if (this.slot !== 6 || !this.own.rod || this.aboard || this.carrying || this.mode !== 'explore') {
+    if (this.heldKey() !== 'rod' || this.aboard || this.carrying || this.mode !== 'explore') {
       if (this.fishState) { this.stopFishing(); }
       return false;
     }
@@ -111,7 +111,7 @@ export const FishingMixin = {
       const me0 = this.playerWorld();
       let p = me0.clone().addScaledVector(flat, dist);
       for (let d = dist; d <= 30 && (heightAt(p.x, p.z) > -0.4 || this.onAnyPlatform(p.x, p.z)); d += 1) { dist = d; p = me0.clone().addScaledVector(flat, d); }
-      if (heightAt(p.x, p.z) > -0.4 || this.onAnyPlatform(p.x, p.z)) { this.audio.error(); this.ui.toast('Visez l\'eau', 'Lancez depuis la plage, un ponton ou un rocher, vers l\'eau.', 'bad', 1800); return true; }
+      if (heightAt(p.x, p.z) > -0.4 || this.onAnyPlatform(p.x, p.z)) { this.audio.error(); this.ui.toast('Visez l\'eau', '', 'bad', 1400); return true; }
       this.fishState = 'cast';
       this.castT = 0;
       this.castFrom = tip.clone(); this.castTo = new THREE.Vector3(p.x, 0.05, p.z);
@@ -137,13 +137,13 @@ export const FishingMixin = {
         this.fishKind = this.pickFish(-heightAt(this.bobber.position.x, this.bobber.position.z));
         this.audio.splash(); this.audio.note(660);
       }
-      this.ui.prompt('En attente d\'une touche… <kbd>Clic</kbd> relever la ligne');
+      this.ui.prompt('Attente… <kbd>Clic</kbd> relever');
       return true;
     }
     if (this.fishState === 'bite') {
       this.biteWin -= dt;
       this.bobber.position.y = -0.18 + Math.sin(this.t * 30) * 0.05;
-      this.ui.prompt('<b>ÇA MORD !</b> <kbd>Clic</kbd> pour ferrer');
+      this.ui.prompt('<b>Ça mord !</b> <kbd>Clic</kbd> ferrer');
       if (inp.hit('Mouse0')) {
         this.fishState = 'reel';
         this.tension = 20; this.reelProg = 0; this.surgeT = 1 + Math.random() * 2; this.surge = 0;
@@ -152,7 +152,7 @@ export const FishingMixin = {
         this.audio.success();
       } else if (this.biteWin <= 0) {
         this.fishState = 'wait'; this.biteT = 2 + Math.random() * 5;
-        this.ui.toast('Trop tard', 'Le poisson a filé avec l\'appât. Attendez la prochaine touche.', 'bad', 1500);
+        this.ui.toast('Trop tard', '', 'bad', 1200);
       }
       return true;
     }
@@ -179,7 +179,7 @@ export const FishingMixin = {
       if (this.tension >= 100) {
         this.stopFishing();
         this.audio.error();
-        this.ui.toast('La ligne a cassé !', 'Relâchez quand le poisson tire (jauge rouge).', 'bad', 3000);
+        this.ui.toast('Ligne cassée', 'Relâchez quand il tire.', 'bad', 2200);
       } else if (this.reelProg >= 100) {
         this.stopFishing();
         this.landFish(this.fishKind);
@@ -201,12 +201,12 @@ export const FishingMixin = {
     this.scene.add(mesh);
     this.audio.splash();
     if (F.junk) {
-      this.ui.toast('Une vieille botte…', 'Ça ne se vend pas. Mais ça fait rire l\'équipage.', '', 2500);
+      this.ui.toast('Une vieille botte…', '', '', 1800);
       setTimeout(() => this.scene.remove(mesh), 4000);
       return;
     }
     this.flops.push({ kind, mesh, x, z, t: 0, vy: 3, y: 0, life: 12 });
-    this.ui.toast(`${F.name} !`, 'Il frétille : achevez-le (poing, clé ou tir). En plein saut, il vaut double !', 'good', 3500);
+    this.ui.toast(`${F.name} !`, 'Achevez-le. En plein saut : ×2.', 'good', 2600);
   },
   updateFlops(dt) {
     for (let i = this.flops.length - 1; i >= 0; i--) {
@@ -219,7 +219,7 @@ export const FishingMixin = {
       f.mesh.rotation.set(Math.sin(f.t * 17) * 0.8, f.t * 3, Math.PI / 2 + Math.sin(f.t * 11) * 0.5);
       if (f.life <= 0 || g < -0.6) {
         this.scene.remove(f.mesh); this.flops.splice(i, 1);
-        this.ui.toast('Il s\'est échappé !', 'Il a rejoint l\'eau en frétillant.', 'bad', 2000);
+        this.ui.toast('Il s\'est échappé', '', 'bad', 1400);
         this.audio.splash();
       }
     }
@@ -238,9 +238,9 @@ export const FishingMixin = {
       const trick = f.y > 0.4;
       this.scene.remove(f.mesh); this.flops.splice(i, 1);
       const n = trick ? 2 : 1;
-      this.fish[f.kind] = (this.fish[f.kind] || 0) + n;
+      this.giveItem(`f_${f.kind}`, n, {}, { toSlot: false });
       this.audio.hitFlesh();
-      this.ui.toast(trick ? 'Coup de maître !' : `${FISH[f.kind].name} dans la bourriche`, trick ? 'Achevé en plein saut : il compte double.' : `${this.fishCount()} poissons · ${this.fishValue()} 🐚 au comptoir`, 'good', 2500);
+      this.ui.toast(trick ? 'Coup de maître ! ×2' : FISH[f.kind].name, `${this.fishValue()} 🐚 au comptoir`, 'good', 1800);
       this.progress();
       return true;
     }
@@ -251,19 +251,19 @@ export const FishingMixin = {
   sellFish() {
     const v = this.fishValue(), n = this.fishCount();
     if (!n) return false;
-    this.fish = {};
+    for (const k of Object.keys(FISH)) this.invTake(`f_${k}`, 99);
     this.act('scrap', { n: v });
     this.audio.success();
     this.ui.toast('Pêche vendue', `${n} poissons · +${v} 🐚`, 'good');
     return true;
   },
   grillFish() {
-    const k = Object.keys(this.fish).filter((q) => this.fish[q] > 0).sort((a, b) => FISH[a].value - FISH[b].value)[0];
-    if (!k) { this.ui.toast('Rien à griller', 'Pêchez d\'abord quelque chose (canne à pêche, touche 7).', 'bad'); return; }
-    this.fish[k]--;
+    const k = Object.keys(FISH).filter((q) => !FISH[q].junk && this.invCount(`f_${q}`) > 0).sort((a, b) => FISH[a].value - FISH[b].value)[0];
+    if (!k) { this.ui.toast('Rien à griller', 'Pêchez d\'abord.', 'bad'); return; }
+    this.invTake(`f_${k}`, 1);
     this.hp = Math.min(CFG.player.health, this.hp + 40);
     this.stamina = CFG.player.stamina;
     this.audio.powerUp();
-    this.ui.toast(`${FISH[k].name} grillé(e)`, '+40 santé. Ça sent bon le feu de bois.', 'good');
+    this.ui.toast(`${FISH[k].name} grillé`, '+40 santé', 'good');
   },
 };

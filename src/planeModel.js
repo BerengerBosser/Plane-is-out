@@ -14,13 +14,14 @@ function cylZ(rTop, rBot, len, seg, col, dir = -1) {
   return mesh(g, col);
 }
 // boîte dont la face avant (-z) est réduite (nez, empennage)
-function taperBox(w, h, d, sx, sy, col, dy = 0, openBack = false) {
+function taperBox(w, h, d, sx, sy, col, dy = 0, openBack = false, openTop = false) {
   let g = new THREE.BoxGeometry(w, h, d);
   if (openBack) {
-    // on retire la face +z (arrière) : le nez devient une coque creuse
-    const gr = g.groups.find((q) => q.materialIndex === 4);
+    // on retire la face +z (arrière) : le nez devient une coque creuse ; openTop retire aussi le dessus
+    const faces = openTop === 'band' ? [2, 3, 4] : openTop ? [2, 4] : [4];
+    const drop = g.groups.filter((q) => faces.includes(q.materialIndex)).sort((a, b) => b.start - a.start);
     const idx = Array.from(g.index.array);
-    idx.splice(gr.start, gr.count);
+    for (const gr of drop) idx.splice(gr.start, gr.count);
     g.setIndex(idx);
     g.clearGroups();
   }
@@ -150,8 +151,8 @@ export const WHEEL_DROP = 1.08; // hauteur ajoutée sous la ligne de flottaison 
 
 export function buildDashboard() {
   const g = new THREE.Group();
-  g.add(box(2.1, 0.55, 0.35, '#4a5163'));
-  g.add(box(2.12, 0.08, 0.37, CREAM, 0, -0.26, 0));
+  g.add(box(1.9, 0.55, 0.35, '#4a5163'));
+  g.add(box(1.92, 0.08, 0.37, '#33373f', 0, -0.26, 0));
   const cols = ['#ffd166', '#5ef2c2', '#ff6b5b', '#e9e4d8', '#b8a4ff', '#ffd166'];
   [-0.85, -0.6, -0.35, 0.35, 0.6, 0.85].forEach((x, i) => {
     const d = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.02, 12), new THREE.MeshBasicMaterial({ color: cols[i], toneMapped: false }));
@@ -159,7 +160,7 @@ export function buildDashboard() {
     d.position.set(x, 0.04, 0.18);
     g.add(d);
   });
-  g.add(box(2.14, 0.06, 0.42, '#1d2233', 0, 0.3, 0.02));   // casquette anti-reflets
+  g.add(box(1.94, 0.05, 0.3, '#1d2233', 0, 0.245, 0.07));   // casquette anti-reflets (reste sous le pare-brise)
   // écran radar (canvas mis à jour par le jeu)
   const cv = document.createElement('canvas');
   cv.width = cv.height = 128;
@@ -205,7 +206,29 @@ export function buildPlate() {
 export const HOLES = [
   { p: new THREE.Vector3(-1.53, 2.0, -1.2), n: new THREE.Vector3(-1, 0, 0) },
   { p: new THREE.Vector3(1.53, 1.95, 4.0), n: new THREE.Vector3(1, 0, 0) },
+  { p: new THREE.Vector3(-1.53, 2.05, 3.0), n: new THREE.Vector3(-1, 0, 0) },
+  { p: new THREE.Vector3(1.53, 2.0, -1.9), n: new THREE.Vector3(1, 0, 0) },
 ];
+// bosses et brûlures de la carcasse (chacune coûte 5 % de coque) ; part : visible si la pièce est montée
+export const DENTS = [
+  { p: [-1.52, 1.78, -2.4], n: [-1, 0, 0] }, { p: [1.52, 1.8, -2.75], n: [1, 0, 0] }, { p: [0.3, 2.3, -4.95], n: [0, 1, 0.35] },
+  { p: [-1.52, 2.95, 1.6], n: [-1, 0, 0] }, { p: [1.52, 2.95, -0.2], n: [1, 0, 0] }, { p: [0.45, 3.79, -1.5], n: [0, 1, 0] },
+  { p: [-1.52, 1.8, 4.35], n: [-1, 0, 0] }, { p: [1.52, 3.0, 3.6], n: [1, 0, 0] }, { p: [-1.02, 2.7, 7.1], n: [-1, 0, 0] },
+  { p: [1.02, 2.7, 7.4], n: [1, 0, 0] }, { p: [4.4, 4.26, -0.3], n: [0, 1, 0] }, { p: [0.9, 4.11, -0.2], n: [0, 1, 0] },
+  { p: [-2.3, 0.53, 1.8], n: [0, 1, 0], part: 'floats' }, { p: [2.3, 0.53, -1.5], n: [0, 1, 0], part: 'floats' },
+];
+// poste à souder fixé sur le flanc droit, fer relié par un câble (repère local)
+export const WELDER = { box: new THREE.Vector3(1.62, 1.55, 0.35), cable: new THREE.Vector3(1.8, 1.72, 0.35) };
+// escalier invisible sous la porte cargo : paliers de 0,3 m qui descendent vers l'eau (repère local)
+export const STAIRS = (() => {
+  const s = [{ x0: 1.3, x1: 2.15, top: 1.6 }];
+  let top = 1.6;
+  for (let x = 2.15; top > -1.0; x += 0.32) { top -= 0.26; s.push({ x0: x, x1: x + 0.32, top }); }
+  return { z0: 1.5, z1: 2.9, steps: s };
+})();
+
+// échelle d'embarquement sur le flotteur droit, sous la porte cargo (repère local) : on grimpe face à l'avion (-x)
+export const BOARD_LADDER = { x: 2.6, z: 2.2, y0: 0.3, y1: FLOOR };
 
 export function buildDiable() {
   const g = new THREE.Group();
@@ -233,7 +256,7 @@ export const SLOTS = {
   wingL: new THREE.Vector3(-5.6, 4.1, -0.6),
   prop: new THREE.Vector3(-3.7, 3.55, -3.1),
   floats: new THREE.Vector3(0, 0.3, 0),
-  dashboard: new THREE.Vector3(0, FLOOR + 0.75, -4.45),
+  dashboard: new THREE.Vector3(0, FLOOR + 0.72, -4.45),
   wheels: new THREE.Vector3(0, 0.3, 0),
 };
 export const PLANE_POINTS = {
@@ -319,10 +342,19 @@ export function buildPlane() {
   shell.add(box(0.12, 0.3, 1.6, CREAM, 1.45, 3.45, 2.2));
 
   // cockpit : nez bas + verrière
-  const nose = taperBox(2.9, 1.2, 2.6, 0.38, 0.45, CREAM, -0.1, true);
+  const nose = taperBox(2.9, 1.2, 2.6, 0.38, 0.45, CREAM, -0.1, true, true);
   nose.position.set(0, 1.9, Z0 - 1.3);
   shell.add(nose);
-  const noseStripe = taperBox(2.92, 0.18, 2.6, 0.38, 0.4, CORAL, -0.05);
+  // capot du nez, devant le pare-brise (même pente que l'ancien dessus du nez)
+  {
+    const hood = new THREE.BufferGeometry();
+    hood.setAttribute('position', new THREE.Float32BufferAttribute([-0.97, 2.258, -4.86, 0.97, 2.258, -4.86, 0.551, 2.07, -6.0, -0.551, 2.07, -6.0], 3));
+    hood.setIndex([0, 2, 1, 0, 3, 2]);
+    hood.computeVertexNormals();
+    shell.add(mesh(hood, CREAM));
+    // entre l'arrière du nez et le pare-brise : joues latérales (le dessus est vitré)
+  }
+  const noseStripe = taperBox(2.92, 0.18, 2.6, 0.38, 0.4, CORAL, -0.05, true, 'band');   // bande seule : pas de dessus ni de dessous dans le cockpit
   noseStripe.position.set(0, 2.2, Z0 - 1.3);
   shell.add(noseStripe);
   const cap = cylZ(0.18, 0.55, 0.5, 8, CORAL);
@@ -376,13 +408,20 @@ export function buildPlane() {
     strut.rotation.z = -sx * 1.15;
     body.add(strut);
   }
-  // échelle sous la porte
-  const ladder = new THREE.Group();
-  ladder.add(box(0.06, 1.3, 0.06, METAL, 0, -0.65, -0.35));
-  ladder.add(box(0.06, 1.3, 0.06, METAL, 0, -0.65, 0.35));
-  for (let i = 0; i < 3; i++) ladder.add(box(0.06, 0.05, 0.7, METAL, 0, -0.3 - i * 0.4, 0));
-  ladder.position.set(1.6, FLOOR, 2.2);
-  body.add(ladder);
+  // marchepied sous la porte (on monte à bord par un escalier invisible)
+  body.add(box(0.5, 0.06, 1.3, METAL, 1.62, FLOOR - 0.05, 2.2));
+  // poste à souder sur le flanc droit : caisson, enrouleur de câble, support du fer
+  const welder = new THREE.Group();
+  welder.add(box(0.28, 0.46, 0.52, '#ffb020', 0, 0, 0));
+  welder.add(box(0.3, 0.08, 0.54, '#33373f', 0, 0.25, 0));
+  welder.add(box(0.02, 0.14, 0.2, '#10162b', 0.15, 0.05, -0.1));
+  const reel = new THREE.Mesh(prep(new THREE.TorusGeometry(0.13, 0.045, 5, 12), '#1d2233'), flatMat); reel.rotation.y = Math.PI / 2; reel.position.set(0.17, -0.05, 0.12); welder.add(reel);
+  const ironHome = new THREE.Group();
+  ironHome.add(box(0.05, 0.05, 0.2, '#33373f', 0, 0, 0.02), box(0.045, 0.045, 0.12, '#ffd166', 0, 0, -0.14), box(0.02, 0.02, 0.1, '#b87333', 0, 0, -0.25));
+  ironHome.position.set(0.1, 0.33, -0.05); ironHome.rotation.x = -0.3;
+  welder.add(ironHome);
+  welder.position.copy(WELDER.box);
+  body.add(welder);
 
   // porte cargo (charnière côté arrière)
   const doorPivot = new THREE.Group();
@@ -428,6 +467,11 @@ export function buildPlane() {
   bunk.add(box(0.55, 0.14, 0.35, '#fff4e0', 0, 0.62, -0.75));
   bunk.position.set(-0.8, FLOOR, 3.3);
   cabin.add(bunk);
+  // coffre de l'équipage (inventaire partagé du Coucou), au pied de la couchette
+  cabin.add(box(0.85, 0.46, 0.46, '#6d4b37', -0.78, FLOOR + 0.23, 4.55));
+  cabin.add(box(0.87, 0.07, 0.48, '#4a3222', -0.78, FLOOR + 0.49, 4.55));
+  for (const x of [-1.1, -0.46]) cabin.add(box(0.05, 0.47, 0.47, '#c9a24c', x, FLOOR + 0.24, 4.55));
+  cabin.add(box(0.1, 0.08, 0.03, '#ffd166', -0.78, FLOOR + 0.4, 4.31));
   // caisse arrimée (visible quand chargée)
   const crateAboard = buildCrate();
   crateAboard.position.set(0.62, FLOOR + 0.6, 4.05);
@@ -578,6 +622,23 @@ export function buildPlane() {
   };
   holes.forEach((_, i) => setHole(i, 0));
 
+  // bosses et brûlures : dégâts visibles de la carcasse, une par tranche de coque perdue
+  const scorchMat = new THREE.MeshBasicMaterial({ color: '#2a2320', transparent: true, opacity: 0.75, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  const dents = DENTS.map((D, i) => {
+    const g = new THREE.Group();
+    const p = new THREE.Vector3(...D.p), n = new THREE.Vector3(...D.n).normalize();
+    g.position.copy(p).addScaledVector(n, 0.03);
+    g.lookAt(p.clone().addScaledVector(n, 2));
+    const shape = new THREE.Shape();
+    for (let k = 0; k < 11; k++) { const a = (k / 11) * Math.PI * 2, r = 0.24 + ((k * 7 + i * 3) % 5) * 0.04; const x = Math.cos(a) * r * 1.3, y = Math.sin(a) * r; if (k) shape.lineTo(x, y); else shape.moveTo(x, y); }
+    g.add(new THREE.Mesh(new THREE.ShapeGeometry(shape), scorchMat));
+    for (let k = 0; k < 3; k++) { const b = box(0.2 - k * 0.04, 0.09, 0.03, k === 1 ? '#8d9299' : '#5d646c', (k - 1) * 0.11, (((k * 5 + i) % 3) - 1) * 0.06, 0.02); b.rotation.set(0.3 * (k - 1), 0.4, (i + k) * 0.7); g.add(b); }
+    g.visible = false;
+    g.userData.part = D.part;
+    body.add(g);
+    return g;
+  });
+
   // trophées : un souvenir par boss vaincu
   const tk = up('trophyKing');
   tk.add(box(0.5, 0.4, 0.04, WOOD, 0, 0, 0));
@@ -597,11 +658,21 @@ export function buildPlane() {
   mergeStatic(shell, shellMat);
   mergeStatic(cabin, flatMat, (o) => o === crateAboard);
   root.traverse((o) => { if (o.isMesh && !o.userData.glass && o.material !== glassMat && !o.material.isMeshBasicMaterial) { o.castShadow = true; o.receiveShadow = true; } });
+  // matériau propre à l'extérieur de l'avion : il se salit avec les dégâts et s'illumine quand on le répare
+  const planeMat = flatMat.clone();
+  for (const c of body.children) { if (c === cabin || c.userData.up) continue; c.traverse((o) => { if (o.isMesh && o.material === flatMat) o.material = planeMat; }); }
+  const dirty = new THREE.Color('#6a5d52'), white = new THREE.Color('#ffffff');
 
   return {
     root, body, parts, ghosts, spinners, projLight, projMat, doorPivot, crateAboard, seatMeshes,
-    cabinLights: [cabinLight, cockpitLight], mapCanvas: mapCv, mapTex, ups, stoveLight, setHole,
+    cabinLights: [cabinLight, cockpitLight], mapCanvas: mapCv, mapTex, ups, stoveLight, setHole, dents, ironHome, welder,
     setUpgrade(k, on) { if (ups[k]) ups[k].visible = !!on; if (k === 'stove') stoveLight.intensity = on ? 2.2 : 0; },
+    // k : 0 intact … 1 épave calcinée ; flash : lueur de réparation (0 … 1)
+    damageLook(k, flash = 0) {
+      const c = white.clone().lerp(dirty, Math.min(1, k) * 0.7);
+      planeMat.color.copy(c); shellMat.color.copy(c);
+      planeMat.emissive.setRGB(0.12 * flash, 0.42 * flash, 0.3 * flash); shellMat.emissive.copy(planeMat.emissive);
+    },
   };
 }
 
@@ -619,6 +690,7 @@ export function cabinColliders(crateLoaded, ups) {
     if (s.bunk) out.push(b(s.x - 0.43, s.x + 0.43, s.z - 1.0, s.z + 1.0));
     else out.push(b(s.x - 0.3, s.x + 0.3, s.z - 0.25, s.z + 0.38));
   }
+  out.push(b(-1.22, -0.34, 4.3, 4.8));        // coffre de l'équipage
   if (crateLoaded) out.push(b(0.1, 1.2, 3.5, 4.6));
   if (ups && ups.has('stove')) out.push(b(-1.3, -0.75, 1.6, 2.1));
   return out;

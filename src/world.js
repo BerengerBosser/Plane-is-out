@@ -86,7 +86,7 @@ export const WorldMixin = {
           this.plane.parts.wheels.visible = true;
           this.plane.ghosts.wheels.visible = false;
           this.audio.success();
-          this.ui.toast('Roues amphibies montées', 'Le Coucou peut rouler sur la terre ferme. Remontez la rampe jusqu\'à la piste.', 'good', 6000);
+          this.ui.toast('Roues amphibies montées', 'Il roule sur la terre ferme.', 'good', 3500);
           this.afterChange();
           return true;
         }
@@ -102,11 +102,12 @@ export const WorldMixin = {
         if (this.installed.size === 6) this.smoke.remove('wreck');
         if (!d.silent) {
           this.audio.success();
+          this.repairFx?.(this.plane.body.localToWorld(this.plane.parts[k].position.clone()));
           if (this.installed.size === 6) {
-            this.ui.toast('Le Coucou est réparé !', this.crateLoaded ? 'Montez à bord par la porte cargo, siège pilote à l\'avant.' : 'Il reste la caisse Hélios à charger avec le treuil.', 'good');
-            this.radioOnce('repaired', 'L\'avion est entier ? C\'est incroyable. Chargez la caisse et décollez !');
-          } else this.ui.toast(`${ITEMS[k].name} fixé${me ? '' : ` par ${this.nameOf(by)}`}`, `${this.installed.size}/6 pièces`, 'good');
-          if (k === 'floats') this.ui.toast('L\'épave flotte à nouveau', 'Les flotteurs la remettent à flot.', 'good');
+            this.ui.toast('Le Coucou est réparé !', this.crateLoaded ? 'Montez à bord.' : 'Reste la caisse Hélios.', 'good');
+            this.radioOnce('repaired', 'Le Coucou est entier ? C\'est incroyable. Chargez la caisse et décollez, cap sur Hélios !');
+          } else this.ui.toast(`${ITEMS[k].name} fixé${me ? '' : ` par ${this.nameOf(by)}`}`, `${this.installed.size}/6 pièces`, 'good', 2200);
+          if (k === 'floats') this.ui.toast('Il flotte à nouveau', '', 'good', 2000);
         }
         this.afterChange();
         return true;
@@ -118,7 +119,7 @@ export const WorldMixin = {
         this.crateLoaded = true;
         this.plane.crateAboard.visible = true;
         this.cable.visible = false;
-        if (!d.silent) { this.audio.success(); this.ui.toast('Caisse Hélios à bord', this.installed.size === 6 ? 'Tout est prêt. Montez à bord.' : 'Elle est arrimée dans la soute.', 'good'); }
+        if (!d.silent) { this.audio.success(); this.ui.toast('Caisse Hélios à bord', this.installed.size === 6 ? 'Tout est prêt.' : '', 'good', 2500); }
         this.afterChange();
         return true;
       }
@@ -165,7 +166,7 @@ export const WorldMixin = {
           this.island2.setPower(true);
           this.audio.powerUp();
           this.ui.toast('Courant rétabli !', 'Le balisage de la piste s\'allume, l\'ascenseur de la tour ronronne.', 'good', 6000);
-          this.radioOnce('power', 'Je vois l\'aéroport sur mon écran ! Montez à la tour et appelez-moi sur la fréquence d\'urgence. Elle est écrite sur la caisse.');
+          this.radioOnce('power', 'Le courant revient, la pompe du ponton aussi ! La radio du Coucou grésille trop : montez à la tour, son émetteur porte jusqu\'au labo. Appelez-moi sur la fréquence écrite sur la caisse, la tour a aussi la météo.');
         }
         this.afterChange();
         return true;
@@ -276,8 +277,15 @@ export const WorldMixin = {
         return true;
       }
       case 'puzzle': { this.puzzles[d.k] = d.v; this.afterChange(false); return true; }
+      case 'irot': { if (!it || it.state !== 'ground') return false; it.rotY = d.r; this.poseGround(it); return true; }
       case 'newday': { this.newDayLocal(); return true; }
       default: {
+        const ir = this.applyInvAct?.(type, d, by, auth);
+        if (ir !== null && ir !== undefined) return ir;
+        const vr = this.applyVehicleAct?.(type, d, by, auth);
+        if (vr !== null && vr !== undefined) return vr;
+        const r3 = this.applyChapter3Act?.(type, d, by, auth);
+        if (r3 !== null && r3 !== undefined) return r3;
         const r = this.applyWreckAct?.(type, d, by, auth);
         return r === null || r === undefined ? true : r;
       }
@@ -310,14 +318,15 @@ export const WorldMixin = {
     else if (k === 'chest') { this.audio.success(); if (!me) this.ui.toast('Coffre du canot ouvert', `${this.nameOf(by)} a trouvé la combinaison. Servez-vous : pistolets de détresse !`, 'good'); }
     else if (k === 'kingDead') { F.harpoonRack.group.visible = true; this.applyUpgrades(); }
     else if (k === 'wardenDead') this.applyUpgrades();
-    if (k === 'radioDone' && !this.own.talkie) {
-      this.own.talkie = true;
-      setTimeout(() => this.ui.toast('Talkie-walkie', 'La tour avait un carton de talkies : maintenez B pour parler à tout l\'équipage, où qu\'il soit.', 'good', 7000), 2500);
+    if (k === 'radioDone' && !this.hasItem('talkie')) {
+      this.giveItem('talkie', 1, {}, { silent: true });
+      setTimeout(() => this.ui.toast('Talkie-walkie', 'B : parler à tout l\'équipage.', 'good', 3500), 2500);
     }
     if (k === 'radioDone' && !me) {
-      this.ui.radio(`Je vous entends parfaitement ! Le hangar 2 : le code est ${CFG.island2.hangarCode}. C'était celui de ma sœur, elle était contrôleuse ici.`, () => this.audio.radio());
+      this.ui.radio(`Enfin une liaison claire ! Tempête ce soir : il vous faudra la piste, donc les roues amphibies du hangar 2. Le code : ${CFG.island2.hangarCode}. Ma sœur était contrôleuse ici, c'était son code.`, () => this.audio.radio());
     } else if (k === 'ended') this.showEnd();
     else if (k === 'refueled') { this.audio.success(); this.ui.toast('Plein fait !', 'Réservoir à 100 %.', 'good'); }
+    this.onFlag3?.(k, me, by);
   },
 
   // ── instantané complet (sauvegarde, synchro réseau) ──
@@ -336,7 +345,7 @@ export const WorldMixin = {
       ducks: [...this.ducks], fuses: [...this.fuses], fslots: this.fuseSlots.map((s) => s.fuse), valves: this.valves,
       sym: [...this.symbols], music: this.music ? 1 : 0, siege: [this.siege.active ? 1 : 0, Math.round(this.siege.genHp), this.siege.wave],
       stats: [this.stats.crabs, this.stats.voiles, this.stats.days], live: this.planeLive ? 1 : 0, pilot: this.pilotId || 0,
-      nozzle: this.nozzle || 0, wr: this.wreck, scrap: this.scrap, sp: (this.scrapPiles || []).filter((q) => q.taken && !q.dyn).map((q) => q.id), ups: [...this.upgrades], pz: this.puzzles, intro: this.mode === 'intro' ? 1 : 0,
+      nozzle: this.nozzle || 0, iron: this.iron || 0, wr: this.wreck, wi: this.winch, scrap: this.scrap, ...this.invWorldState(), sp: (this.scrapPiles || []).filter((q) => q.taken && !q.dyn).map((q) => q.id), ups: [...this.upgrades], pz: this.puzzles, intro: this.mode === 'intro' ? 1 : 0, vh: this.vehicleState(), c3: this.chapter3State?.(),
     };
   },
 
@@ -409,23 +418,32 @@ export const WorldMixin = {
     if (w.stats) { this.stats.crabs = w.stats[0]; this.stats.voiles = w.stats[1]; this.stats.days = w.stats[2]; }
     this.pilotId = w.pilot || null;
     this.nozzle = w.nozzle || null;
+    this.iron = w.iron || null;
     this.scrap = w.scrap ?? this.scrap;
+    if (w.wi) this.winch = { ...w.wi };
     if (w.wr) {
       this.wreck = JSON.parse(JSON.stringify(w.wr));
+      // anciennes sauvegardes : deux trous seulement, pas de bosses
+      while (this.wreck.holes.length < 4) this.wreck.holes.push(0);
+      this.wreck.dents = this.wreck.dents || [];
       this.wreck.holes.forEach((h, i) => this.plane.setHole(i, h));
       for (const k of Object.keys(this.wreck.placed)) if (this.plane.parts[k]) this.plane.parts[k].visible = true;
       if ((this.flags.wrecked || this.wreck.stranded) && this.wreck.pos) { this.planeLive = false; this.setWreckPose(this.wreck.pos.x, this.wreck.pos.z, this.wreck.pos.yaw); }
       this.refreshWelds();
+      this.refreshDamage();
     }
+    this.applyInvWorld(w);
     const spt = new Set(w.sp || []);
     for (const q of this.scrapPiles || []) if (!q.dyn) { q.taken = spt.has(q.id); q.mesh.visible = !q.taken; }
     this.upgrades = new Set(w.ups || []);
     this.puzzles = { ...(w.pz || {}) };
+    this.applyVehicleState(w.vh, full);
+    if (w.c3) this.applyChapter3State?.(w.c3, full);
     this.applyUpgrades();
     // avion
     if (w.live && !this.planeLive) {
       this.planeLive = true; this.planeLift = 1;
-      if (full || !this.flight.pos.lengthSq()) this.parkAt(this.flags.tookOff ? 2 : 1);
+      if (full || !this.flight.pos.lengthSq()) this.parkAt(this.flags.landed3 ? 3 : this.flags.tookOff ? 2 : 1);
     }
     if (!w.live && !this.planeLive && this.mode !== 'intro' && this.mode !== 'menu' && this.installed.size < 6 && !this.installed.has('floats')) this.setWreck();
     this.placeTools();
@@ -447,6 +465,7 @@ export const WorldMixin = {
     this.forceWorld = false;
     this.applyWorld(w, { full: !this.gotWorld });
     this.gotWorld = true;
+    if (this.lateSpawn) { this.lateSpawn = false; this.spawnNearHost(); }
   },
 
   newDayLocal() {

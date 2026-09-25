@@ -1,8 +1,10 @@
 // Interactions : prompts contextuels, énigmes, portage, pompe à carburant, comptoir
 import * as THREE from 'three';
+import { AMMO_MAX } from './arsenal.js';
 import { CFG } from './config.js';
 import { heightAt, LAYOUT } from './terrain.js';
 import { SLOTS, PLANE_POINTS, SEATS, FLOOR, HOLES } from './planeModel.js';
+import { GEAR } from './gear.js';
 import { FLAT } from './island2.js';
 import { ITEMS, TOOL_NAMES, SYMBOLS, SYMBOL_CODE } from './defs.js';
 import { WEAPONS } from './weapons.js';
@@ -49,12 +51,20 @@ function makePipes(seed) {
 
 // catalogue du comptoir
 const SHOP = [
-  { id: 'rod', icon: '🎣', name: 'Canne à pêche', desc: 'Touche 7 : pêchez, achevez, revendez', cost: 3, personal: true },
-  { id: 'talkie', icon: '📻', name: 'Talkie-walkie', desc: 'Parlez à tout l\'équipage, où qu\'il soit', cost: 5, personal: true },
-  { id: 'flares', icon: '🎆', name: '6 fusées', desc: 'Munitions du pistolet de détresse', cost: 3, personal: true, ammo: ['flare', 6] },
-  { id: 'harps', icon: '🔱', name: '5 harpons', desc: 'Munitions du fusil-harpon', cost: 4, personal: true, ammo: ['harpoon', 5] },
-  { id: 'mask', icon: '🦺', name: 'Gilet renforcé', desc: 'Les coups des zombies font 35 % de dégâts en moins', cost: 6, personal: true },
-  { id: 'medkit', icon: '🩹', name: 'Trousse de soin', desc: 'Santé au maximum, tout de suite', cost: 2, personal: true },
+  { id: 'rod', icon: '🎣', name: 'Canne à pêche', desc: 'Pêchez, achevez, revendez', cost: 3, personal: true, give: ['rod', 1] },
+  { id: 'talkie', icon: '📻', name: 'Talkie-walkie', desc: 'Parler à tout l\'équipage', cost: 5, personal: true, give: ['talkie', 1] },
+  { id: 'flares', icon: '🎆', name: '6 fusées', desc: 'Pistolet de détresse', cost: 3, personal: true, give: ['a_flare', 6], gun: 'flare' },
+  { id: 'harps', icon: '🔱', name: '4 harpons', desc: 'Fusil-harpon', cost: 4, personal: true, give: ['a_harpoon', 4], gun: 'harpoon' },
+  { id: 'p9', icon: '🔫', name: '24 balles de 9 mm', desc: 'Pistolet', cost: 4, personal: true, give: ['a_p9', 24], gun: 'pistol' },
+  { id: 'buck', icon: '💥', name: '12 cartouches', desc: 'Fusil à pompe', cost: 5, personal: true, give: ['a_buck', 12], gun: 'shotgun' },
+  { id: 'r556', icon: '🎯', name: '48 balles de 5,56', desc: 'Carabine', cost: 7, personal: true, give: ['a_r556', 48], gun: 'rifle' },
+  { id: 'chute', icon: '🪂', name: 'Parachute', desc: 'Sauter de l\'avion en vol', cost: 6, personal: true, give: ['parachute', 1], min: 2 },
+  { id: 'bandage', icon: '🩹', name: '3 bandages', desc: '+45 santé chacun (H)', cost: 2, personal: true, give: ['bandage', 3] },
+  { id: 'stakes', icon: '📍', name: '3 pieux d\'ancrage', desc: 'Ancrage du treuil', cost: 2, personal: true, give: ['stake', 3] },
+  { id: 'mask', icon: '🦺', name: 'Gilet renforcé', desc: '−30 % de dégâts · poches 2×2', cost: 6, personal: true, give: ['c_armorvest', 1] },
+  { id: 'satchel', icon: '👜', name: 'Sacoche', desc: 'Sac · poches 3×3', cost: 4, personal: true, give: ['c_satchel', 1] },
+  { id: 'backpack', icon: '🎒', name: 'Sac à dos', desc: 'Sac · poches 4×4', cost: 10, personal: true, give: ['c_backpack', 1], min: 2 },
+  { id: 'medkit', icon: '❤️', name: 'Repas chaud', desc: 'Santé au maximum, tout de suite', cost: 2, personal: true },
   { id: 'lamps', icon: '💡', name: 'Guirlande de cabine', desc: 'Le Coucou éclaire plus loin : les zombies y ralentissent', cost: 5, up: true },
   { id: 'rug', icon: '🪴', name: 'Tapis et plantes', desc: 'Cabine cosy : on y récupère deux fois plus vite', cost: 4, up: true },
   { id: 'stove', icon: '🔥', name: 'Petit poêle', desc: 'Recharge la lanterne et soigne à bord', cost: 8, up: true },
@@ -98,7 +108,8 @@ export const InteractMixin = {
     let holding = false;
     this.cable.visible = false;
     if (c) {
-      if (c.press && inp.hit('KeyE')) c.press();
+      if (c.alt && inp.hit('KeyR')) c.alt();
+      else if (c.press && inp.hit('KeyE')) c.press();
       else if (c.hold && inp.down('KeyE')) {
         holding = true;
         const before = this.holdT;
@@ -121,11 +132,11 @@ export const InteractMixin = {
       const help = this.carryHelp();
       const sub = (this.carryMode === 'diable' ? 'sur le diable · rapide' : it.def.weight >= 3 ? 'à bout de bras · très lent' : it.def.weight === 2 ? 'à bout de bras · lent' : '') + (help ? ` · aidé par ${help}` : '');
       ui.carry(it.def.name, sub);
-      if (!prompt) prompt = '<kbd>G</kbd> lâcher';
+      if (!prompt) prompt = '<kbd>G</kbd> Lâcher';
       if (inp.hit('KeyG')) this.dropCarried();
     } else if (this.nozzle === this.myId()) {
-      ui.carry('Pistolet de la pompe', 'branchez-le sur le bouchon de l\'aile droite');
-      if (!prompt) prompt = '<kbd>G</kbd> raccrocher le pistolet';
+      ui.carry('Pistolet de la pompe', 'aile droite');
+      if (!prompt) prompt = '<kbd>G</kbd> Raccrocher';
       if (inp.hit('KeyG')) this.act('nozzle', { on: false });
     } else ui.carry('');
     ui.prompt(prompt);
@@ -143,13 +154,13 @@ export const InteractMixin = {
     this.helpingFish = false;
     for (const m of this.mateList()) {
       if (m.fishing && !this.aboard) {
-        add(m.pos.clone().setY(me.y + 0.5), 3.2, { prio: 2, prompt: `<kbd>E</kbd> maintenir : aider ${m.name} à tirer la ligne`, hold: { tick: () => { this.helpingFish = true; } } });
+        add(m.pos.clone().setY(me.y + 0.5), 3.2, { prio: 2, prompt: `<kbd>E</kbd> Aider ${m.name}`, hold: { tick: () => { this.helpingFish = true; } } });
       }
       if (!m.downed) continue;
       if (m.aboard !== this.aboard) continue;
       add(m.pos.clone().setY(me.y + 0.5), 2.4, {
         prio: 3,
-        prompt: `<kbd>E</kbd> maintenir : relever ${m.name}`,
+        prompt: `<kbd>E</kbd> Relever ${m.name}`,
         hold: { seconds: 2.5, tick: (dt, b) => { if (Math.floor(b / 0.6) !== Math.floor(this.holdT / 0.6)) this.audio.beep(); }, done: () => { this.session.send('revive', { by: this.session.name }, m.id); this.ui.toast(`${m.name} est debout`, 'Beau travail d\'équipe.', 'good'); } },
       });
     }
@@ -161,52 +172,50 @@ export const InteractMixin = {
   cabinInteractions(add, L) {
     for (const s of SEATS) {
       const pt = L(new THREE.Vector3(s.x, FLOOR + 0.7, s.z));
-      if (this.seatTaken(s.id)) { add(pt, 1.4, { prompt: `<span class="warn">${s.name[0].toUpperCase()}${s.name.slice(4)} : occupé</span>` }); continue; }
+      if (this.seatTaken(s.id)) { add(pt, 1.4, { prompt: '<span class="warn">Occupé</span>' }); continue; }
       if (s.pilot) {
         add(pt, 1.6, {
-          prompt: this.planeReady() ? '<kbd>E</kbd> prendre les commandes' : `<span class="warn">Siège pilote : l'avion n'est pas prêt</span> (${this.installed.size}/6 pièces${this.crateLoaded ? '' : ', caisse non chargée'})`,
+          prompt: this.planeReady() ? '<kbd>E</kbd> Piloter' : `<span class="warn">Pas prêt</span> · ${this.installed.size}/6 pièces${this.crateLoaded ? '' : ', caisse'}`,
           press: () => { if (this.planeReady()) this.takeControls(); else this.sit(s); },
         });
       } else if (s.bunk) {
         const waitStorm = this.flags.radioDone && this.flags.wheels && this.flags.refueled && !this.flags.stormOver && this.hour < 18.4 && this.hour > 6;
         add(pt, 1.7, {
-          prompt: waitStorm ? '<kbd>E</kbd> se reposer jusqu\'à 18 h 30 (la tempête approche)' : this.isNightish() ? (this.planeAfloatNow() ? '<kbd>E</kbd> dormir jusqu\'au matin' : '<span class="warn">Dormir : l\'avion doit être à flot</span>') : '<kbd>E</kbd> s\'allonger sur la couchette',
+          prompt: waitStorm ? '<kbd>E</kbd> Attendre la tempête' : this.isNightish() ? (this.planeAfloatNow() ? '<kbd>E</kbd> Dormir' : '<span class="warn">Dormir : sur l\'eau seulement</span>') : '<kbd>E</kbd> S\'allonger',
           press: () => (waitStorm ? this.requestSleep(18.5) : this.isNightish() ? this.requestSleep() : this.sit(s)),
         });
-      } else add(pt, 1.4, { prompt: `<kbd>E</kbd> s'asseoir sur ${s.name}`, press: () => this.sit(s) });
+      } else add(pt, 1.4, { prompt: '<kbd>E</kbd> S\'asseoir', press: () => this.sit(s) });
     }
-    if (this.flags.doorJam) add(L(new THREE.Vector3(1.2, FLOOR + 1, 2.2)), 1.8, this.lockSpec());
-    else add(L(new THREE.Vector3(1.2, FLOOR + 1, 2.2)), 1.6, {
-      prompt: this.flight.airborne ? '<span class="warn">Porte : vous êtes en vol !</span>' : '<kbd>E</kbd> descendre de l\'avion',
-      press: () => this.leavePlane(),
-    });
+    const doorPt = L(new THREE.Vector3(1.2, FLOOR + 1, 2.2));
+    if (this.flags.doorJam) add(doorPt, 1.8, this.lockSpec());
+    else if (this.flight.airborne) add(doorPt, 1.6, { prio: 1, prompt: `<kbd>E</kbd> Sauter${this.chuteReady() ? '' : ' <span class="warn">(sans parachute)</span>'}`, press: () => this.jumpOut() });
+    // coffre du Coucou (partagé par l'équipage) : inventaire de l'avion et équipement installé
+    add(L(new THREE.Vector3(-0.8, FLOOR + 0.5, 4.55)), 1.8, { prio: 1, prompt: '<kbd>E</kbd> Coffre du Coucou', press: () => { this.openInventory('plane'); this.audio.clank(); } });
     if (this.crateLoaded) {
       add(L(new THREE.Vector3(0.62, FLOOR + 0.8, 4.05)), 1.8, {
-        prompt: '<kbd>E</kbd> lire l\'étiquette de la caisse Hélios',
+        prompt: '<kbd>E</kbd> Étiquette de la caisse',
         press: () => this.openNote('Étiquette de la caisse', 'LABORATOIRE HÉLIOS — FRAGILE<br>Ne pas ouvrir. Garder au frais et au sec.<br><br>En cas de problème : fréquence d\'urgence <b>127.35</b>', 'Caisse Hélios : fréquence d\'urgence 127.35'),
       });
     }
     if (!this.flags.reserveUsed) {
-      add(L(new THREE.Vector3(1.0, FLOOR + 0.4, 3.0)), 1.6, { prompt: `<kbd>E</kbd> vider le bidon de secours dans le réservoir (+${CFG.flight.reserveFuel} %)`, press: () => this.act('reserve') });
+      add(L(new THREE.Vector3(1.0, FLOOR + 0.4, 3.0)), 1.6, { prompt: `<kbd>E</kbd> Bidon de secours (+${CFG.flight.reserveFuel} %)`, press: () => this.act('reserve') });
     }
     if (this.upgrades.has('stove')) {
       add(L(new THREE.Vector3(-1.0, FLOOR + 0.7, 1.85)), 1.6, {
-        prompt: '<kbd>E</kbd> se réchauffer au poêle (santé, lanterne)',
-        press: () => { this.hp = CFG.player.health; this.oil = 100; this.audio.powerUp(); this.ui.toast('Au chaud', 'Santé et lanterne au maximum.', 'good', 2000); },
+        prompt: '<kbd>E</kbd> Poêle',
+        press: () => { this.hp = CFG.player.health; this.oil = 100; this.audio.powerUp(); this.ui.toast('Au chaud', 'Santé et lanterne au max.', 'good', 1600); },
       });
     }
     if (this.carrying && this.carrying.id === 'dashboard') this.installCandidate(add, 'dashboard');
-    add(L(new THREE.Vector3(-1.3, FLOOR + 1.35, 0.9)), 1.6, { prompt: '<kbd>E</kbd> regarder la carte (ou touche <kbd>M</kbd>)', press: () => { this.input.unlock(); this.toggleMap(true); } });
+    add(L(new THREE.Vector3(-1.3, FLOOR + 1.35, 0.9)), 1.6, { prompt: '<kbd>E</kbd> Carte', press: () => { this.input.unlock(); this.toggleMap(true); } });
   },
 
   // interactions dehors
   worldInteractions(add, L, me) {
     const doorOut = L(PLANE_POINTS.doorOut);
     if (this.flags.doorJam) add(doorOut, 3.0, this.lockSpec());
-    else add(doorOut, 3.0, {
-      prompt: this.carrying && this.carrying.def.weight >= 2 ? '<span class="warn">Porte cargo : posez d\'abord la pièce</span>' : '<kbd>E</kbd> monter à bord',
-      press: () => this.boardPlane(),
-    });
+    // poste à souder (flanc droit) : toujours accessible, pour ressouder bosses, tôles et pièces
+    if (!this.flight.airborne && !this.carrying) this.welderSpecs(add);
     // treuil
     if (!this.crateLoaded) {
       const winchPt = L(PLANE_POINTS.winch);
@@ -214,9 +223,9 @@ export const InteractMixin = {
       if (crate.state === 'ground') {
         const d = Math.hypot(crate.pos.x - winchPt.x, crate.pos.z - winchPt.z);
         add(winchPt, 3.2, d > CFG.winch.range
-          ? { prompt: `<span class="warn">Caisse hors de portée du treuil (${Math.round(d)} m / ${CFG.winch.range} m)</span>` }
+          ? { prompt: `<span class="warn">Caisse trop loin (${Math.round(d)}/${CFG.winch.range} m)</span>` }
           : {
-            prompt: `<kbd>E</kbd> maintenir : treuiller la caisse Hélios (${Math.round(d)} m)`,
+            prompt: `<kbd>E</kbd> Treuiller la caisse (${Math.round(d)} m)`,
             show: () => { this.cable.visible = true; this.setCable(this.cable, winchPt, crate.mesh.position.clone().add(new THREE.Vector3(0, 0.5, 0))); },
             hold: {
               tick: (dt, before) => {
@@ -235,71 +244,77 @@ export const InteractMixin = {
       }
     }
     if (this.carrying && this.plane.ghosts[this.carrying.id]) this.installCandidate(add, this.carrying.id);
-    // épave : tôles sur les trous, chalumeau, corde
+    // avion coincé : on le pousse, ou on le treuille vers un arbre / un pieu
+    if (!this.wreckActive() && this.canPushPlane()) { this.pushSpecs(add, me); this.winchSpecs(add); }
+    // épave : tôles sur les trous, treuil
     if (this.wreckActive()) {
       if (this.carrying && this.carrying.def.plate) {
         this.wreck.holes.forEach((h, i) => {
           if (h !== 1) return;
           const hp = this.plane.body.localToWorld(HOLES[i].p.clone());
-          add(hp, 3.2, { prio: 3, prompt: '<kbd>E</kbd> maintenir : plaquer la tôle sur le trou', hold: { seconds: 0.8, done: () => this.act('plate', { i, id: this.carrying.id }) } });
+          add(hp, 3.2, { prio: 3, prompt: '<kbd>E</kbd> Plaquer la tôle', hold: { seconds: 0.8, done: () => this.act('plate', { i, id: this.carrying.id }) } });
         });
       }
-      if (!this.own.torch) add(L(new THREE.Vector3(2.1, 1.1, 0.6)), 3.0, { prio: 2, prompt: '<kbd>E</kbd> prendre le chalumeau (caisse à outils de bord)', press: () => { this.own.torch = true; if (!this.own.wrench) this.own.wrench = true; this.slot = 1; this.audio.pickup(); this.ui.toast('Chalumeau', 'Outil <kbd>2</kbd> : visez un point orange, clic maintenu, relâchez dans la zone verte.', 'good', 7000); } });
-      add(this.ropePoint(), 3.2, this.pullSpec());
+      this.winchSpecs(add);
     }
+    this.groundInteractions(add, me);
 
     // pistolet de la pompe tenu en main : le brancher sur l'avion
     if (this.nozzle === this.myId()) {
-      add(L(FUEL_CAP), 3.4, { prio: 5, prompt: '<kbd>E</kbd> brancher le pistolet sur le réservoir', press: () => { this.act('nozzle', { on: true, plane: true }); this.audio.clank(); this.ui.toast('Pistolet branché', 'Retournez à la pompe pour envoyer le carburant.', 'good'); } });
+      add(L(FUEL_CAP), 3.4, { prio: 5, prompt: '<kbd>E</kbd> Brancher', press: () => { this.act('nozzle', { on: true, plane: true }); this.audio.clank(); this.ui.toast('Pistolet branché', 'Allez à la pompe.', 'good', 1800); } });
     }
 
     if (!this.carrying && this.nozzle !== this.myId()) {
       for (const it of Object.values(this.items)) {
         if (it.state !== 'ground') continue;
+        if (it.def.mirror && this.mirrorOn(it) >= 0) continue;   // miroir sur son socle : voir physInteractions
+        if (it.onVehicle) continue;
         const wgt = it.def.weight;
-        if (wgt === 4) { add(it.mesh.position.clone(), 3.6, { prompt: `<span class="warn">${it.def.name} : 4 porteurs.</span> Utilisez le treuil de l'avion.` }); continue; }
-        if (wgt >= 2 && this.slot === 2 && this.own.diable) add(it.mesh.position.clone(), 3.6, { prompt: `<kbd>E</kbd> charger sur le diable : ${it.def.name}`, press: () => this.pickUp(it, 'diable') });
+        if (wgt === 4) { add(it.mesh.position.clone(), 3.6, { prompt: `<span class="warn">${it.def.name} : trop lourd</span> · treuil` }); continue; }
+        if (wgt >= 2 && this.heldKey() === 'diable') add(it.mesh.position.clone(), 3.6, { prompt: `<kbd>E</kbd> Diable : ${it.def.name}`, press: () => this.pickUp(it, 'diable') });
         else {
           const slow = wgt === 3 ? ' <span class="warn">(très lent)</span>' : wgt === 2 ? ' (lent)' : '';
-          const tip = wgt >= 2 && this.own.diable ? ' · <kbd>3</kbd> diable : bien plus rapide' : wgt === 3 && this.session ? ' · à deux, ça va plus vite' : '';
-          add(it.mesh.position.clone(), wgt >= 3 ? 3.6 : CFG.player.interactDistance, { prompt: `<kbd>E</kbd> porter à la main : ${it.def.name}${slow}${tip}`, press: () => this.pickUp(it, 'hand') });
+          add(it.mesh.position.clone(), wgt >= 3 ? 3.6 : CFG.player.interactDistance, { prompt: `<kbd>E</kbd> Porter : ${it.def.name}${slow}`, press: () => this.pickUp(it, 'hand') });
         }
       }
       for (const [k, t] of Object.entries(this.tools)) {
-        if (!this.own[k] && t.mesh.visible) add(t.mesh.position.clone().add(new THREE.Vector3(0, 0.4, 0)), 2.6, { prompt: `<kbd>E</kbd> prendre ${TOOL_NAMES[k]}`, press: () => this.takeTool(k) });
+        if (!this.lootTaken[`tool:${k}`] && t.mesh.visible) add(t.mesh.position.clone().add(new THREE.Vector3(0, 0.4, 0)), 2.6, { prompt: `<kbd>E</kbd> ${GEAR[k].name}`, press: () => this.takeTool(k) });
       }
     }
     for (const d of this.duckSpots) {
       if (this.ducks.has(d.id)) continue;
-      add(this.duckMeshes[d.id].position.clone(), 2.4, { prompt: '<kbd>E</kbd> ramasser le canard en plastique', press: () => this.act('duck', { id: d.id }) });
+      add(this.duckMeshes[d.id].position.clone(), 2.4, { prompt: '<kbd>E</kbd> Canard en plastique', press: () => this.act('duck', { id: d.id }) });
     }
     // ferraille au sol
     for (const s of this.scrapPiles || []) {
       if (s.taken) continue;
-      add(s.pos, 2.4, { prompt: `<kbd>E</kbd> ramasser des coquillages (+${s.n} 🐚)`, press: () => this.takeScrap(s) });
+      add(s.pos, 2.4, { prompt: `<kbd>E</kbd> Coquillages +${s.n} 🐚`, press: () => this.takeScrap(s) });
     }
 
+    this.vehicleInteractions(add, me);
+    this.lootInteractions(add, me);
+    this.c3Interactions(add, me);
     // ── île 1 ──
     const cab = this.island.cabin;
     if (!this.flags.doorOpen) {
-      add(cab.pos.clone().add(new THREE.Vector3(-0.15, 1.5, 0)), 2.4, { prompt: '<kbd>E</kbd> lire le mot punaisé', press: () => this.openNote('Mot sur la porte', 'Code du cabanon = les trois derniers chiffres de l\'année du phare.<br>— le gardien', 'Mot du gardien : « Code du cabanon = les trois derniers chiffres de l\'année du phare. »') });
-      add(cab.pos.clone().add(new THREE.Vector3(0.45, 1.05, 0)), 2.4, { prompt: '<kbd>E</kbd> cadenas à code', press: () => this.openCabinLock() });
+      add(cab.pos.clone().add(new THREE.Vector3(-0.15, 1.5, 0)), 2.4, { prompt: '<kbd>E</kbd> Lire le mot', press: () => this.openNote('Mot sur la porte', 'Code du cabanon = les trois derniers chiffres de l\'année du phare.<br>— le gardien', 'Mot du gardien : « Code du cabanon = les trois derniers chiffres de l\'année du phare. »') });
+      add(cab.pos.clone().add(new THREE.Vector3(0.45, 1.05, 0)), 2.4, { prompt: '<kbd>E</kbd> Cadenas', press: () => this.openCabinLock() });
     }
-    add(this.island.plaquePos, 2.6, { prompt: '<kbd>E</kbd> lire la plaque', press: () => this.openNote('Plaque du phare', 'PHARE DE LA POINTE<br>mis en service en 1874', 'Plaque du phare : « mis en service en 1874 »') });
+    add(this.island.plaquePos, 2.6, { prompt: '<kbd>E</kbd> Lire la plaque', press: () => this.openNote('Plaque du phare', 'PHARE DE LA POINTE<br>mis en service en 1874', 'Plaque du phare : « mis en service en 1874 »') });
     const F = this.fun;
-    add(F.hammock.pos, 2.6, { prompt: '<kbd>E</kbd> s\'allonger dans le hamac', press: () => this.lieDown() });
-    add(F.boombox.pos, 2.4, { prompt: this.music ? '<kbd>E</kbd> couper la musique' : '<kbd>E</kbd> allumer le poste radio', press: () => this.toggleMusic() });
+    add(F.hammock.pos, 2.6, { prompt: '<kbd>E</kbd> Hamac', press: () => this.lieDown() });
+    add(F.boombox.pos, 2.4, { prompt: this.music ? '<kbd>E</kbd> Couper la musique' : '<kbd>E</kbd> Poste radio', press: () => this.toggleMusic() });
     if (!this.flags.treasure) {
       add(F.treasure.pos.clone().add(new THREE.Vector3(0, 0.4, 0)), 2.2, {
-        prompt: '<kbd>E</kbd> maintenir : creuser sous la croix',
+        prompt: '<kbd>E</kbd> Creuser',
         hold: { seconds: 3.5, tick: (dt, before) => { if (Math.floor(before / 0.5) !== Math.floor(this.holdT / 0.5)) this.audio.dig(); }, done: () => { this.act('flag', { treasure: true }); this.act('scrap', { n: 4 }); } },
       });
     }
-    if (!this.flags.bottle) add(F.bottle.pos, 2.2, { prompt: '<kbd>E</kbd> ramasser la bouteille', press: () => this.readBottle() });
+    if (!this.flags.bottle) add(F.bottle.pos, 2.2, { prompt: '<kbd>E</kbd> Bouteille', press: () => this.readBottle() });
     // symboles peints (énigme du coffre)
     for (const s of F.symbols) {
       add(s.pos, 3.2, {
-        prompt: `<kbd>E</kbd> examiner le symbole peint ${this.symbols.has(s.n) ? '(noté)' : ''}`,
+        prompt: `<kbd>E</kbd> Symbole peint${this.symbols.has(s.n) ? ' (noté)' : ''}`,
         press: () => {
           this.act('sym', { n: s.n });
           this.openNote('Symbole peint', `<span style="font-size:64px">${s.sym}</span><br>Un petit <b>${s.n}</b> est gravé dessous, ${s.where}.`, `Symbole n° ${s.n} : ${s.sym} (${s.where})`);
@@ -307,48 +322,51 @@ export const InteractMixin = {
       });
     }
     add(F.survival.pos, 2.6, this.flags.chest
-      ? { prompt: '<kbd>E</kbd> se servir dans le coffre (pistolet, fusées)', press: () => this.takeFromChest() }
-      : { prompt: '<kbd>E</kbd> coffre de survie du canot (cadenas à symboles)', press: () => this.openSymbolLock() });
-    if (this.flags.kingDead) add(F.harpoonRack.pos, 2.8, { prompt: `<kbd>E</kbd> prendre ${this.own.harpoon ? 'des harpons' : 'le fusil-harpon du Crabe-Roi'}`, press: () => this.takeHarpoon() });
+      ? { prompt: '<kbd>E</kbd> Coffre du canot', press: () => this.takeFromChest() }
+      : { prompt: '<kbd>E</kbd> Coffre du canot (cadenas)', press: () => this.openSymbolLock() });
+    if (this.flags.kingDead) add(F.harpoonRack.pos, 2.8, { prompt: `<kbd>E</kbd> ${this.lootTaken.harpoonGun ? 'Harpons' : 'Fusil-harpon'}`, press: () => this.takeHarpoon() });
     // griller un poisson au feu de camp
-    if (this.fishCount()) add(this.island.fire.pos.clone().add(new THREE.Vector3(0, 0.6, 0)), 3.2, { prompt: '<kbd>E</kbd> griller un poisson (+40 santé)', press: () => this.grillFish() });
+    if (this.fishCount()) add(this.island.fire.pos.clone().add(new THREE.Vector3(0, 0.6, 0)), 3.2, { prompt: '<kbd>E</kbd> Griller un poisson', press: () => this.grillFish() });
     // comptoir de l'île 1 (camp abandonné)
-    add(new THREE.Vector3(LAYOUT.camp.x + 2.2, heightAt(LAYOUT.camp.x + 2.2, LAYOUT.camp.z + 1.5) + 0.9, LAYOUT.camp.z + 1.5), 2.8, { prompt: '<kbd>E</kbd> caisse de troc de Jo', press: () => this.openShop(1) });
+    add(new THREE.Vector3(LAYOUT.camp.x + 2.2, heightAt(LAYOUT.camp.x + 2.2, LAYOUT.camp.z + 1.5) + 0.9, LAYOUT.camp.z + 1.5), 2.8, { prompt: '<kbd>E</kbd> Troc de Jo', press: () => this.openShop(1) });
 
     // ── île 2 ──
     const I = this.island2, P = I.points;
     if (Math.hypot(me.x - I.cx, me.z - I.cz) < 320) {
       for (const [k, m] of Object.entries(this.fuseMeshes)) {
         if (!m.visible) continue;
-        const where = { red: 'fouiller le bureau des objets trouvés', blue: 'fouiller les bagages', yellow: 'fouiller le cockpit de l\'épave' }[k];
-        add(this.fuseSpots[k], 2.8, { prompt: `<kbd>E</kbd> ${where}`, press: () => this.act('fuse', { k }) });
+        if (k === 'blue' && !this.puzzles.laser) continue;
+        if (k === 'yellow' && (this.pz2?.cage || 0) < 0.7) continue;
+        const where = { red: 'Fusible rouge', blue: 'Fusible bleu', yellow: 'Fusible jaune' }[k];
+        add(this.fuseSpots[k], 2.4, { prio: 2, prompt: `<kbd>E</kbd> ${where}`, press: () => this.act('fuse', { k }) });
       }
-      add(P.fusePanel, 2.6, { prompt: '<kbd>E</kbd> ouvrir le tableau électrique', press: () => this.openFusePanel() });
-      add(P.poster, 2.8, { prompt: '<kbd>E</kbd> lire l\'affiche', press: () => this.openNote('Consignes électriques', '☀ Éclairage : fusible <b>ROUGE</b><br>⚓ Ponton : fusible <b>BLEU</b><br>✈ Balisage : fusible <b>JAUNE</b>', 'Affiche du terminal : ☀ rouge · ⚓ bleu · ✈ jaune') });
+      this.physInteractions(add, me);
+      add(P.fusePanel, 2.6, { prompt: '<kbd>E</kbd> Tableau électrique', press: () => this.openFusePanel() });
+      add(P.poster, 2.8, { prompt: '<kbd>E</kbd> Affiche', press: () => this.openNote('Consignes électriques', 'La centrale (à l\'ouest du terminal) a trois circuits, chacun son fusible :<br>☀ Éclairage : fusible <b>ROUGE</b> — rechange sur le toit du terminal, près des projecteurs<br>⚓ Ponton et pompe : fusible <b>BLEU</b> — rechange au coffre du poste de sécurité<br>✈ Balisage de piste : fusible <b>JAUNE</b> — rechange dans le local technique, en bout de piste', 'Affiche du terminal : ☀ rouge (toit) · ⚓ bleu (poste de sécurité) · ✈ jaune (local de bout de piste)') });
       const inCab = me.y > FLAT + 10;
-      if (!inCab) add(P.lift, 2.4, { prompt: I.power ? '<kbd>E</kbd> prendre l\'ascenseur' : '<span class="warn">Ascenseur : pas de courant</span>', press: () => { if (I.power) this.useLift(true); else this.audio.error(); } });
+      if (!inCab) add(P.lift, 2.4, { prompt: I.power ? '<kbd>E</kbd> Ascenseur' : '<span class="warn">Pas de courant</span>', press: () => { if (I.power) this.useLift(true); else this.audio.error(); } });
       if (inCab) {
-        add(P.liftTop, 2.2, { prompt: '<kbd>E</kbd> redescendre', press: () => this.useLift(false) });
-        add(P.console, 2.4, { prompt: '<kbd>E</kbd> utiliser la radio de la tour', press: () => this.openRadio() });
+        add(P.liftTop, 2.2, { prompt: '<kbd>E</kbd> Descendre', press: () => this.useLift(false) });
+        add(P.console, 2.4, { prompt: '<kbd>E</kbd> Radio de la tour', press: () => this.openRadio() });
       }
-      add(P.hangarPad, 2.4, { prompt: this.flags.hangarOpen ? 'Hangar ouvert' : '<kbd>E</kbd> clavier du hangar', press: () => { if (!this.flags.hangarOpen) this.openHangarPad(); } });
-      add(P.shed, 2.6, { prompt: '<kbd>E</kbd> lire la consigne du dépôt', press: () => this.openNote('Consigne du dépôt', 'La cuve alimente la pompe du ponton.<br>Après un long arrêt : <b>purger le circuit</b> depuis le panneau de la pompe,<br>puis <b>doser la pression</b> : trop fort, la sécurité saute.', 'Dépôt : purger le circuit au panneau de la pompe, puis doser la pression') });
-      add(P.vending, 2.2, { prompt: '<kbd>E</kbd> distributeur de sodas', press: () => this.soda() });
+      add(P.hangarPad, 2.4, { prompt: this.flags.hangarOpen ? 'Hangar ouvert' : '<kbd>E</kbd> Clavier du hangar', press: () => { if (!this.flags.hangarOpen) this.openHangarPad(); } });
+      add(P.shed, 2.6, { prompt: '<kbd>E</kbd> Consigne', press: () => this.openNote('Consigne du dépôt', 'La cuve alimente la pompe du ponton.<br>Après un long arrêt : <b>purger le circuit</b> depuis le panneau de la pompe,<br>puis <b>doser la pression</b> : trop fort, la sécurité saute.', 'Dépôt : purger le circuit au panneau de la pompe, puis doser la pression') });
+      add(P.vending, 2.2, { prompt: '<kbd>E</kbd> Sodas', press: () => this.soda() });
       // pompe : pistolet et panneau
       if (this.nozzle === null && !this.flags.refueled || this.nozzle === null && this.flight.fuel < this.flight.tankMax - 1) {
-        add(P.pump.clone().add(new THREE.Vector3(0, 0.3, 0)), 2.6, { prio: 1, prompt: '<kbd>E</kbd> décrocher le pistolet de la pompe', press: () => { this.act('nozzle', { on: true }); this.audio.clank(); } });
+        add(P.pump.clone().add(new THREE.Vector3(0, 0.3, 0)), 2.6, { prio: 1, prompt: '<kbd>E</kbd> Pistolet de la pompe', press: () => { this.act('nozzle', { on: true }); this.audio.clank(); } });
       }
       if (this.nozzle === 'plane') add(P.pump.clone().add(new THREE.Vector3(0, 0.9, 0)), 2.8, { prio: 2, ...this.pumpSpec() });
-      if (this.nozzle === 'plane') add(L(FUEL_CAP), 3.0, { prompt: '<kbd>E</kbd> débrancher le pistolet', press: () => { this.act('nozzle', { on: true }); } });
+      if (this.nozzle === 'plane') add(L(FUEL_CAP), 3.0, { prompt: '<kbd>E</kbd> Débrancher', press: () => { this.act('nozzle', { on: true }); } });
       // armes et comptoir
-      add(P.flareBox, 2.6, { prompt: `<kbd>E</kbd> caisse de fusées de détresse${this.own.flare ? ' (recharger)' : ''}`, press: () => this.takeFlares() });
-      add(P.harpRack, 2.6, { prompt: `<kbd>E</kbd> râtelier de pêche${this.own.harpoon ? ' (harpons)' : ' (fusil-harpon)'}`, press: () => this.takeHarpoon() });
-      add(P.bar, 3.4, { prompt: '<kbd>E</kbd> Bar de l\'Escale · comptoir d\'échange', press: () => this.openShop(2) });
+      add(P.flareBox, 2.6, { prompt: '<kbd>E</kbd> Caisse de fusées', press: () => this.takeFlares() });
+      add(P.harpRack, 2.6, { prompt: '<kbd>E</kbd> Râtelier de pêche', press: () => this.takeHarpoon() });
+      add(P.bar, 3.4, { prompt: '<kbd>E</kbd> Bar de l\'Escale', press: () => this.openShop(2) });
       if (this.siege.active || this.siege.genHp < 100) {
         const hp = Math.round(this.siege.genHp);
-        add(P.generator, 3.0, hp >= 100 ? { prompt: 'Générateur : en marche' } : this.own.wrench
-          ? { prio: 2, prompt: `<kbd>E</kbd> maintenir : réparer le générateur (${hp} %)`, hold: { tick: (dt, b) => { if (Math.floor(b / 0.3) !== Math.floor(this.holdT / 0.3)) this.audio.clank(); this.repairGen(dt); } } }
-          : { prompt: `<span class="warn">Générateur ${hp} % : il faut une clé à molette</span>` });
+        add(P.generator, 3.0, hp >= 100 ? { prompt: 'Générateur : en marche' } : this.hasItem('wrench')
+          ? { prio: 2, prompt: `<kbd>E</kbd> Réparer (${hp} %)`, hold: { tick: (dt, b) => { if (Math.floor(b / 0.3) !== Math.floor(this.holdT / 0.3)) this.audio.clank(); this.repairGen(dt); } } }
+          : { prompt: `<span class="warn">Générateur ${hp} % · clé à molette</span>` });
       }
     }
   },
@@ -358,27 +376,27 @@ export const InteractMixin = {
     const me = this.playerWorld();
     const dist = Math.hypot(slot.x - me.x, slot.z - me.z);
     if (dist > CFG.carry.installDistance && !(k === 'dashboard' && this.aboard)) return;
-    if (k === 'prop' && !this.installed.has('engineL')) { add(slot, 99, { prompt: '<span class="warn">Fixez d\'abord le moteur gauche</span>', kind: 'install' }); return; }
+    if (k === 'prop' && !this.installed.has('engineL')) { add(slot, 99, { prompt: '<span class="warn">Moteur gauche d\'abord</span>', kind: 'install' }); return; }
     if (this.wreckActive()) {
       // après un crash : on positionne la pièce, puis on la soude point par point
       add(slot.clone().setY(me.y + 1), 99, {
         kind: 'install',
-        prompt: `<kbd>E</kbd> maintenir : positionner ${this.carrying.def.name} (à souder ensuite)`,
+        prompt: `<kbd>E</kbd> Positionner : ${this.carrying.def.name}`,
         show: () => { this.plane.ghosts[k].visible = true; },
-        hold: { seconds: 1.0, done: () => { if (this.carryMode === 'diable') this.slot = 2; this.act('place', { k, id: k }); } },
+        hold: { seconds: 1.0, done: () => this.act('place', { k, id: k }) },
       });
       return;
     }
     const helpers = this.mateList().filter((m) => m.pos.distanceTo(me) < 4 && !m.aboard).length;
-    const dur = (this.own.wrench ? CFG.carry.repairSecondsWrench : CFG.carry.repairSeconds) / (1 + helpers * 0.6);
+    const dur = (this.hasItem('wrench') ? CFG.carry.repairSecondsWrench : CFG.carry.repairSeconds) / (1 + helpers * 0.6);
     add(slot.clone().setY(me.y + 1), 99, {
       kind: 'install',
-      prompt: `<kbd>E</kbd> maintenir : fixer ${this.carrying.def.name}${this.own.wrench ? '' : ' <span class="warn">(sans clé : lent)</span>'}${helpers ? ` · ${helpers + 1} mécanos` : ''}`,
+      prompt: `<kbd>E</kbd> Fixer : ${this.carrying.def.name}${this.hasItem('wrench') ? '' : ' <span class="warn">(sans clé)</span>'}${helpers ? ` · ${helpers + 1} mécanos` : ''}`,
       show: () => { this.plane.ghosts[k].visible = true; },
       hold: {
         seconds: dur,
         tick: (dt, before) => { if (Math.floor(before / 0.3) !== Math.floor(this.holdT / 0.3)) this.audio.clank(); },
-        done: () => { if (this.carryMode === 'diable') this.slot = 2; this.act('install', { k, id: k }); },
+        done: () => this.act('install', { k, id: k }),
       },
     });
   },
@@ -387,7 +405,7 @@ export const InteractMixin = {
   pumpSpec() {
     const I = this.island2;
     if (!I.power) return { prompt: '<span class="warn">Pompe : pas de courant</span>' };
-    return { prompt: `<kbd>E</kbd> panneau de la pompe (${Math.round(this.flight.fuel)} %)`, press: () => this.openPump() };
+    return { prompt: `<kbd>E</kbd> Pompe (${Math.round(this.flight.fuel)} %)`, press: () => this.openPump() };
   },
 
   // ── tuyau de la pompe : un vrai tube qui suit le porteur ──
@@ -439,7 +457,7 @@ export const InteractMixin = {
   isNightish() { const h = ((this.hour % 24) + 24) % 24; return h >= 18 || h < 6.5; },
   // dormir : en équipe, tout le monde doit être à bord
   requestSleep(until) {
-    if (!until && !this.planeAfloatNow()) { this.audio.error(); this.ui.toast('Impossible de dormir ici', 'Au sol, les zombies grattent la carlingue toute la nuit. Il faut que l\'avion soit à flot, sur l\'eau.', 'bad', 5000); return; }
+    if (!until && !this.planeAfloatNow()) { this.audio.error(); this.ui.toast('Impossible de dormir ici', 'L\'avion doit être sur l\'eau.', 'bad', 3000); return; }
     const out = this.mateList().filter((m) => !m.aboard && !m.downed);
     if (out.length) { this.ui.toast('Pas encore', `Tout l'équipage doit être à bord (${out.map((m) => m.name).join(', ')} dehors).`, 'bad'); return; }
     if (this.session && !this.session.isHost) { this.session.send('sleepReq', { until }, this.session.hostId); return; }
@@ -526,36 +544,38 @@ export const InteractMixin = {
   // ── armes ──
   takeFromChest() {
     const W = WEAPONS.flare;
-    if (!this.own.flare) {
-      this.own.flare = true; this.ammo.flare = W.start; this.slot = 4;
+    if (!this.lootTaken.flareGun) {
+      this.lootTaken.flareGun = 'got';
+      this.giveEquip('flare', { ammo: W.start, silent: true });
       this.audio.success();
-      this.ui.toast('Pistolet de détresse', 'Touche <kbd>5</kbd>. Les fusées éblouissent les zombies et éclairent la nuit.', 'good', 6000);
+      this.ui.toast('Pistolet de détresse', this.keyHint('flare'), 'good', 3000);
       this.radioOnce('flare', 'Un pistolet de détresse ! Une fusée éblouit les zombies et éclaire une vingtaine de secondes. Gardez-en pour la nuit.');
-    } else if (this.ammo.flare < W.max) { this.ammo.flare = W.max; this.audio.pickup(); this.ui.toast('Fusées', `${W.max} fusées.`, 'good', 1800); }
-    else this.ui.toast('Coffre', 'Vous avez déjà tout ce qu\'il contient.', '', 1800);
+    } else if (!this.lootUsed('chestFlares')) { this.markLoot('chestFlares'); this.giveItem('a_flare', 6, {}, { toSlot: false }); this.audio.pickup(); this.ui.toast('Fusées', '+6', 'good', 1400); }
+    else this.ui.toast('Coffre vide', 'Revient demain.', '', 1400);
     this.refreshCarnet();
   },
   takeFlares() {
-    const W = WEAPONS.flare;
-    if (this.t - (this.refillT.flare || -99) < 45 && this.own.flare) { this.ui.toast('Caisse vide', 'Revenez plus tard : il en reste au fond, coincées.', 'bad', 2000); return; }
+    if (this.t - (this.refillT.flare || -99) < 45 && this.hasItem('flare')) { this.ui.toast('Caisse vide', 'Revenez plus tard.', 'bad', 1400); return; }
     this.refillT.flare = this.t;
-    if (!this.own.flare) { this.own.flare = true; this.slot = 4; this.ui.toast('Pistolet de détresse', 'Touche <kbd>5</kbd>.', 'good'); }
-    this.ammo.flare = W.max;
+    if (!this.hasItem('flare')) this.giveEquip('flare', { silent: true });
+    this.giveItem('a_flare', 6, {}, { toSlot: false, silent: true });
     this.audio.pickup();
-    this.ui.toast('Fusées', `${W.max} fusées en poche.`, 'good', 1800);
+    this.ui.toast('Fusées', '+6', 'good', 1400);
   },
   takeHarpoon() {
     const W = WEAPONS.harpoon;
-    if (!this.own.harpoon) {
-      this.own.harpoon = true; this.ammo.harpoon = W.start; this.slot = 5;
+    if (!this.lootTaken.harpoonGun) {
+      this.lootTaken.harpoonGun = 'got';
+      this.giveEquip('harpoon', { ammo: 4, silent: true });
       this.audio.success();
-      this.ui.toast('Fusil-harpon', 'Touche <kbd>6</kbd>. Lent à recharger, mais dévastateur. Ramassez vos harpons plantés.', 'good', 6000);
+      this.ui.toast('Fusil-harpon', this.keyHint('harpoon'), 'good', 3000);
       this.radioOnce('harp', 'Un fusil-harpon. Visez bien : chaque harpon compte. Ils se ramassent en passant dessus.');
     } else {
-      if (this.t - (this.refillT.harp || -99) < 45) { this.ui.toast('Râtelier vide', 'Revenez plus tard.', 'bad', 1800); return; }
+      if (this.t - (this.refillT.harp || -99) < 45) { this.ui.toast('Râtelier vide', 'Revenez plus tard.', 'bad', 1400); return; }
       this.refillT.harp = this.t;
-      this.ammo.harpoon = W.max; this.audio.pickup(); this.ui.toast('Harpons', `${W.max} harpons.`, 'good', 1800);
+      this.giveItem('a_harpoon', 4, {}, { toSlot: false }); this.audio.pickup(); this.ui.toast('Harpons', '+4', 'good', 1400);
     }
+    void W;
   },
   repairGen(dt) {
     const hp = Math.min(100, this.siege.genHp + 12 * dt);
@@ -618,7 +638,7 @@ export const InteractMixin = {
       else if (full) {
         this.audio.spark();
         this.hp -= 8; this.lastHurt = this.t; this.ui.hurt(0.6); setTimeout(() => this.ui.hurt(0), 250);
-        this.ui.toast('Court-circuit !', 'Mauvais fusibles aux mauvais endroits. Une affiche du terminal doit expliquer le code couleur.', 'bad');
+        this.ui.toast('Court-circuit !', 'Voir l\'affiche du terminal.', 'bad', 3000);
       }
     }, () => this.input.lock());
   },
@@ -630,8 +650,8 @@ export const InteractMixin = {
       this.act('flag', { radioDone: true });
       this.audio.success();
       setTimeout(() => this.closeModal(), 600);
-      this.ui.radio(`Je vous entends parfaitement ! Le hangar 2 : le code est ${CFG.island2.hangarCode}. C'était celui de ma sœur, elle était contrôleuse ici.`, () => this.audio.radio());
-      this.ui.radio('Une tempête arrive ce soir : la mer sera trop forte pour décoller sur l\'eau. Il vous faut la piste, donc les roues amphibies du hangar 2, et le plein au ponton. Décollage possible à 21 h, quand le vent tombe.', () => this.audio.radio());
+      this.ui.radio(`Enfin une liaison claire ! Écoutez : la météo de la tour annonce une tempête ce soir. La mer sera trop forte pour décoller sur l'eau : il vous faudra la piste, donc les roues amphibies du hangar 2. Le code : ${CFG.island2.hangarCode}. Ma sœur était contrôleuse ici, c'était son code.`, () => this.audio.radio());
+      this.ui.radio('Faites le plein au ponton, montez les roues, et tenez jusqu\'à 21 h, quand le vent tombe. Et prenez les talkies de la tour : vous vous entendrez partout sur l\'île.', () => this.audio.radio());
       this.addNote(`Radio : code du hangar 2 = ${CFG.island2.hangarCode}`);
       return true;
     }, () => this.input.lock());
@@ -670,9 +690,9 @@ export const InteractMixin = {
   },
   openShop(where) {
     this.openModalCommon();
-    const items = () => SHOP.filter((s) => where === 2 || !['tank', 'engine'].includes(s.id)).map((s) => ({
+    const items = () => SHOP.filter((s) => (where >= 2 || !['tank', 'engine'].includes(s.id)) && (!s.min || where >= s.min)).map((s) => ({
       ...s,
-      owned: s.up ? this.upgrades.has(s.id) : ['talkie', 'mask', 'rod'].includes(s.id) ? !!this.own[s.id] : false,
+      owned: s.up ? this.upgrades.has(s.id) : false,
     }));
     const withSell = () => [{ id: 'sell', icon: '🐟', name: 'Vendre ma pêche', desc: this.fishCount() ? `${this.fishCount()} poissons dans la bourriche` : 'Bourriche vide', gain: this.fishValue(), sell: true }, ...items()];
     this.ui.shop({
@@ -684,14 +704,13 @@ export const InteractMixin = {
         if (id === 'sell') return this.sellFish();
         const s = SHOP.find((q) => q.id === id);
         if (this.scrap < s.cost) { this.audio.error(); return false; }
-        if (s.ammo && !this.own[s.ammo[0]]) { this.audio.error(); this.ui.toast('Pas d\'arme', 'Trouvez d\'abord l\'arme correspondante.', 'bad', 2000); return false; }
+        if (s.gun && !this.hasItem(s.gun)) { this.audio.error(); this.ui.toast('Pas d\'arme', 'Il faut l\'arme d\'abord.', 'bad', 1600); return false; }
         this.act('shop', { cost: s.cost, up: s.up ? s.id : null });
-        if (s.id === 'talkie') { this.own.talkie = true; this.ui.toast('Talkie-walkie', 'Maintenez <kbd>B</kbd> pour parler à tout l\'équipage, où qu\'il soit.', 'good'); }
-        if (s.ammo) this.ammo[s.ammo[0]] = Math.min(WEAPONS[s.ammo[0]].max, this.ammo[s.ammo[0]] + s.ammo[1]);
+        // les achats vont dans l'inventaire (au sol s'il n'y a plus de place)
+        if (s.give) { this.giveItem(s.give[0], s.give[1], {}, { toSlot: !GEAR[s.give[0]].cat.match(/ammo|misc/) }); this.ui.toast(s.name, GEAR[s.give[0]].wear ? 'Enfilez-le dans l\'inventaire (<kbd>I</kbd>).' : '', 'good', 2000); }
         if (s.id === 'medkit') this.hp = CFG.player.health;
-        if (s.id === 'rod') { this.own.rod = true; this.slot = 6; this.ui.toast('Canne à pêche', 'Touche <kbd>7</kbd>. Clic pour lancer vers l\'eau, clic pour ferrer, clic maintenu pour mouliner.', 'good', 7000); }
-        if (s.id === 'mask') { this.own.mask = true; this.ui.toast('Masque à gaz', 'La toxicité monte deux fois moins vite.', 'good'); }
-        if (s.up) this.ui.toast(s.name, 'Installé dans le Coucou.', 'good');
+        if (s.id === 'rod') this.selectKey('rod');
+        if (s.up) this.ui.toast(s.name, 'Installé dans le Coucou.', 'good', 2000);
         this.audio.success();
         return true;
       },
@@ -699,36 +718,31 @@ export const InteractMixin = {
   },
 
   // ── à bord ──
-  boardPlane() {
-    if (this.wreckActive()) { this.audio.error(); this.ui.toast('Épave', 'Trop penchée et trop abîmée pour monter à bord. Réparez-la d\'abord.', 'bad'); return; }
-    if (this.flags.doorJam) { this.audio.error(); this.ui.toast('Porte bloquée', 'Le verrou est grippé.', 'bad'); return; }
+  // local : position dans le repère de l'avion (on garde exactement le même point : pas de téléportation)
+  boardPlane(local) {
+    if (this.wreckActive()) { this.audio.error(); this.ui.toast('Épave', 'Réparez-la d\'abord.', 'bad', 1600); return; }
+    if (this.flags.doorJam) { this.audio.error(); this.ui.toast('Porte bloquée', '', 'bad', 1400); return; }
     if (this.carrying && this.carrying.def.weight >= 2) { this.audio.error(); return; }
     if (this.nozzle === this.myId()) this.act('nozzle', { on: false });
+    if (this.iron === this.myId()) this.dropIron();
     this.aboard = true;
     this.lying = false;
-    this.player.pos.set(PLANE_POINTS.doorIn.x, FLOOR, PLANE_POINTS.doorIn.z);
-    this.player.yaw = Math.PI / 2 + 0.3;
-    this.player.pitch = 0;
+    if (local) { this.player.pos.set(local.x, FLOOR, local.z); this.player.yaw -= this.plane.root.rotation.y; }
+    else { this.player.pos.set(PLANE_POINTS.doorIn.x, FLOOR, PLANE_POINTS.doorIn.z); this.player.yaw = Math.PI / 2 + 0.3; this.player.pitch = 0; }
     this.player.velY = 0;
-    this.audio.door();
-    if (this.slot >= 3) this.slot = 0;
+    this.fallVel = null;
     this.radioOnce('aboard', this.planeReady() ? 'Vous êtes à bord. Le siège pilote est tout à l\'avant, à gauche.' : 'Home sweet home. Enfin, sweet… Il reste du travail avant qu\'il vole.');
   },
+  // sortie forcée (foudre sur le verrou…) : on se retrouve sur le palier, devant la porte
   leavePlane(force) {
-    if (this.flags.doorJam && !force) { this.audio.error(); this.ui.toast('Porte bloquée', 'Le verrou est grippé : dégrippez-le à la clé (maintenir E).', 'bad'); return; }
-    if (this.flight.airborne) { this.ui.toast('Vous êtes en vol !', 'Sauter serait une très mauvaise idée.', 'bad'); this.audio.error(); return; }
-    if (this.carrying && this.carrying.def.weight >= 2) return;
-    const out = this.plane.root.localToWorld(PLANE_POINTS.doorOut.clone().add(new THREE.Vector3(1.2, 0, 0)));
-    this.aboard = false;
+    if (this.flags.doorJam && !force) { this.audio.error(); return; }
+    if (this.flight.airborne) return;
     this.seat = null;
-    this.player.pos.set(out.x, Math.max(this.groundAt(out.x, out.z, out.y), CFG.swim.level), out.z);
-    this.player.yaw += this.flight.yaw;
-    this.player.velY = 0;
-    this.audio.door();
-    if (heightAt(out.x, out.z) < CFG.player.maxWadeDepth && !this.onAnyPlatform(out.x, out.z)) this.ui.toast('Plouf', 'L\'eau est profonde ici : vous nagez. Approchez l\'avion du rivage ou du ponton.', '', 3500);
+    this.player.pos.set(1.8, FLOOR, 2.2);
+    this.exitPlane();
   },
   takeControls() {
-    if (this.seatTaken('pilot')) { this.ui.toast('Siège occupé', 'Quelqu\'un pilote déjà.', 'bad'); return; }
+    if (this.seatTaken('pilot')) { this.ui.toast('Siège occupé', '', 'bad', 1400); return; }
     this.act('pilot', { on: true });
     this.seat = null;
     this.mode = 'flight';
@@ -740,13 +754,13 @@ export const InteractMixin = {
     this.flight.snapCamera();
     if (!this.said.has('controls')) {
       this.said.add('controls');
-      this.ui.toast('Aux commandes', '<kbd>Z</kbd> gaz · <kbd>Q</kbd>/<kbd>D</kbd> diriger sur l\'eau · au-delà de 54 km/h, tirez le manche (souris vers le haut ou <kbd>↑</kbd>) · <kbd>P</kbd> pilote automatique', '', 10000);
+      this.ui.toast('Aux commandes', '<kbd>Z</kbd> gaz · 54 km/h : tirez le manche · <kbd>P</kbd> pilote auto', '', 6000);
     }
   },
   leaveControls() {
     const f = this.flight;
-    if (f.airborne && !f.autopilot) { this.ui.toast('Pas de pilote', 'Activez le pilote automatique (<kbd>P</kbd>) avant de quitter le siège.', 'bad'); this.audio.error(); return; }
-    if (!f.airborne && f.speed > 3) { this.ui.toast('Trop vite', 'Arrêtez-vous avant de quitter le siège.', 'bad'); return; }
+    if (f.airborne && !f.autopilot) { this.ui.toast('Pas de pilote', 'Pilote automatique : <kbd>P</kbd>', 'bad', 1800); this.audio.error(); return; }
+    if (!f.airborne && f.speed > 3) { this.ui.toast('Trop vite', '', 'bad', 1200); return; }
     if (!f.airborne) f.throttle = 0;
     this.act('pilot', { on: false });
     this.mode = 'explore';
@@ -756,27 +770,21 @@ export const InteractMixin = {
     this.player.yaw = Math.PI;
     this.player.pitch = 0;
     this.ui.flight(false);
-    if (f.airborne) this.ui.toast('Pilote automatique', 'L\'avion tient son cap et son altitude. Retournez au siège pour atterrir.', '', 5000);
+    if (f.airborne) this.ui.toast('Pilote automatique', 'Cap et altitude tenus.', '', 2500);
   },
 
   // ── portage ──
+  // outils de départ (clé, diable, lanterne) : chaque joueur prend son exemplaire
   takeTool(k) {
-    this.own[k] = true;
+    this.lootTaken[`tool:${k}`] = 'got';
     this.placeTools();
-    this.audio.pickup();
     this.act('tool', { k });
-    const idx = { wrench: 1, diable: 2, lantern: 3 }[k];
-    if (!this.carrying) this.slot = idx;
-    if (k === 'diable') {
-      this.ui.toast('Diable de secours', 'Touche <kbd>3</kbd>. Les pièces lourdes roulent bien plus vite que portées à la main.', 'good');
-      this.radioOnce('diable', 'Le diable de secours ! Sélectionnez-le avec la touche 3 : les pièces lourdes rouleront bien plus vite qu\'à bout de bras.');
-    } else if (k === 'wrench') {
-      this.ui.toast('Clé à molette', 'Touche <kbd>2</kbd>. Répare plus vite et frappe fort.', 'good');
-      this.radioOnce('wrench', 'Une clé à molette : les réparations iront bien plus vite. Et c\'est une arme correcte, si les crabes du coin vous cherchent.');
-    } else {
-      this.ui.toast('Lanterne du gardien', 'Touche <kbd>4</kbd>. Sa lumière ralentit les zombies. Rechargez-la au feu.', 'good');
-      this.radioOnce('lantern', 'Une lanterne de gardien. Les zombies détestent la lumière : elle les ralentit. Remplissez-la au feu de camp.');
-    }
+    this.giveEquip(k, { silent: true });
+    this.audio.pickup();
+    this.ui.toast(GEAR[k].name, this.keyHint(k), 'good', 2600);
+    if (k === 'diable') this.radioOnce('diable', 'Le diable de secours ! Prenez-le en main : les pièces lourdes rouleront bien plus vite qu\'à bout de bras.');
+    else if (k === 'wrench') this.radioOnce('wrench', 'Une clé à molette : les réparations iront bien plus vite. Et c\'est une arme correcte, si les crabes du coin vous cherchent.');
+    else this.radioOnce('lantern', 'Une lanterne de gardien. Les zombies détestent la lumière : elle les ralentit. Remplissez-la au feu de camp.');
   },
   setCable(line, a, b) {
     const pos = line.geometry.attributes.position;
@@ -786,11 +794,11 @@ export const InteractMixin = {
     line.geometry.computeBoundingSphere();
   },
   pickUp(it, mode) {
-    if (this.act('pick', { id: it.id, mode }) === false) { this.ui.toast('Déjà pris', 'Quelqu\'un porte déjà cette pièce.', 'bad', 1800); return; }
-    if (this.carryMode === 'hand' && this.slot === 1) this.slot = 0;
+    if (this.act('pick', { id: it.id, mode }) === false) { this.ui.toast('Déjà pris', '', 'bad', 1200); return; }
+    if (mode === 'hand') this.selectEq('fists');
     this.audio.pickup();
     if (mode === 'hand' && it.def.weight === 3 && !this.said.has('heavy')) {
-      this.radioOnce('heavy', this.own.diable ? 'Vous allez vous tuer le dos. Posez ça (G), prenez le diable (touche 3) et rechargez.' : this.session ? 'Ça pèse une tonne… Demandez à un coéquipier de marcher à côté de vous : à deux, ça va bien plus vite.' : 'Ça pèse une tonne… Le diable de secours est quelque part près des débris, sur la plage.');
+      this.radioOnce('heavy', this.hasItem('diable') ? 'Vous allez vous tuer le dos. Posez ça (G), prenez le diable en main et rechargez.' : this.session ? 'Ça pèse une tonne… Demandez à un coéquipier de marcher à côté de vous : à deux, ça va bien plus vite.' : 'Ça pèse une tonne… Le diable de secours est quelque part près des débris, sur la plage.');
     }
   },
   dropCarried() {

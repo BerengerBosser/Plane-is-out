@@ -6,10 +6,12 @@ export function createMap() {
   base.width = base.height = 640;
   let view = null; // { cx, cz, size }
 
-  // rend le fond (relief) une fois pour une position d'île 2 donnée
-  function build(i2x, i2z) {
-    const cx = i2x / 2, cz = i2z / 2;
-    const size = Math.hypot(i2x, i2z) + 760;
+  // rend le fond (relief) une fois pour des positions d'îles données
+  function build(islands) {
+    const xs = islands.map((p) => p.x), zs = islands.map((p) => p.z);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    const size = Math.max(x1 - x0, z1 - z0) + 800;
     view = { cx, cz, size };
     const g = base.getContext('2d');
     const img = g.createImageData(base.width, base.height);
@@ -41,10 +43,10 @@ export function createMap() {
     g.clearRect(0, 0, W, H);
     g.drawImage(base, ox, oy, S, S);
     const P = (x, z) => [ox + ((x - view.cx) / view.size + 0.5) * S, oy + ((z - view.cz) / view.size + 0.5) * S];
-    // brouillard sur l'île inconnue
-    if (data.hideIsland2) {
-      const [x, y] = P(data.i2.x, data.i2.z);
-      const rr = (340 / view.size) * S;
+    // brouillard sur les îles inconnues
+    for (const hid of [data.hideIsland2 && data.i2, data.hideIsland3 && data.i3].filter(Boolean)) {
+      const [x, y] = P(hid.x, hid.z);
+      const rr = (380 / view.size) * S;
       const grd = g.createRadialGradient(x, y, rr * 0.2, x, y, rr);
       grd.addColorStop(0, 'rgba(16,22,43,0.97)'); grd.addColorStop(1, 'rgba(16,22,43,0)');
       g.fillStyle = grd; g.beginPath(); g.arc(x, y, rr, 0, Math.PI * 2); g.fill();
@@ -57,6 +59,19 @@ export function createMap() {
     const label = (t, x, z, dy) => { const [a, b] = P(x, z); g.lineWidth = 4; g.strokeStyle = '#10162b'; g.strokeText(t, a, b + dy); g.fillStyle = '#fff4e0'; g.fillText(t, a, b + dy); };
     label('Plage du Crash', 0, 0, (-200 / view.size) * S);
     if (!data.hideIsland2) label('Saint-Escale', data.i2.x, data.i2.z, (-190 / view.size) * S);
+    if (data.i3 && !data.hideIsland3) label('Port-Cendre', data.i3.x, data.i3.z, (-300 / view.size) * S);
+    // boutiques : drapeau bien visible
+    for (const s of data.shops || []) {
+      const [x, y] = P(s.x, s.z);
+      g.strokeStyle = '#10162b'; g.lineWidth = 3;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x, y - 26); g.stroke();
+      g.fillStyle = '#ffd166'; g.beginPath(); g.moveTo(x, y - 26); g.lineTo(x + 20, y - 20); g.lineTo(x, y - 14); g.closePath(); g.fill(); g.stroke();
+      g.fillStyle = '#10162b'; g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill();
+      g.font = `800 ${Math.round(S / 56)}px "Bricolage Grotesque", sans-serif`; g.lineWidth = 3; g.strokeStyle = '#10162b'; g.textAlign = 'center';
+      g.strokeText(`🐚 ${s.label}`, x + 8, y - 32); g.fillStyle = '#ffd166'; g.fillText(`🐚 ${s.label}`, x + 8, y - 32);
+    }
+    // véhicules
+    for (const v of data.vehicles || []) { const [x, y] = P(v.x, v.z); g.fillStyle = '#5ef2c2'; g.strokeStyle = '#10162b'; g.lineWidth = 2; g.fillRect(x - 4, y - 4, 8, 8); g.strokeRect(x - 4, y - 4, 8, 8); }
     // objectif
     if (data.objective) {
       const [x, y] = P(data.objective.x, data.objective.z);
