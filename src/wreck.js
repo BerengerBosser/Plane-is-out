@@ -8,14 +8,23 @@ import { heightAt } from './terrain.js';
 import { SLOTS, HOLES, DENTS, WELDER, WHEEL_DROP } from './planeModel.js';
 import { ITEMS, PART_ORDER } from './defs.js';
 
-const IRON_LEN = 18;          // longueur du câble du fer (m)
-const LO = 58, HI = 86;       // zone verte de la jauge de chaleur
+const IRON_LEN = 18;
+// treuil : quand l'avion coince, le câble se tend puis l'arrache d'un coup, comme un élastique
+const STRAIN_T = 1.8;         // s de tension avant que ça lâche
+const SNAP_DUR = 0.45;        // durée du bond
+const SNAP_TRIES = [3.5, 5, 6.5, 2.5, 8];          // longueur du câble du fer (m)
+const LO = 50, HI = 90;       // zone verte de la jauge de chaleur
 // coque : chaque bosse, pièce manquante ou trou ouvert retire des points (le pire crash laisse ~10 à 20 %)
 const HP = { dent: 5, part: 8, hole: 6 };
 const PLATES = ['plateA', 'plateB', 'plateC', 'plateD'];
 
-// points de soudure (repère local de la carlingue)
+// points de soudure (repère local de la carlingue) : un seul par pièce ou par tôle, au centre des fixations
 function weldPoints(k) {
+  const pts = rawWeldPoints(k);
+  if (pts.length <= 1) return pts;
+  return [pts.reduce((a, p) => a.add(p), new THREE.Vector3()).multiplyScalar(1 / pts.length)];
+}
+function rawWeldPoints(k) {
   const add = (base, offs) => offs.map(([x, y, z]) => base.clone().add(new THREE.Vector3(x, y, z)));
   if (k === 'engineL' || k === 'engineR') return add(SLOTS[k], [[-0.5, 0.42, 0.7], [0.5, 0.42, 0.7], [-0.5, -0.38, 0.7], [0.5, -0.38, 0.7]]);
   if (k === 'wingL') return [new THREE.Vector3(-3.05, 4.1, -1.5), new THREE.Vector3(-3.05, 4.1, -0.6), new THREE.Vector3(-3.05, 4.1, 0.3), new THREE.Vector3(-3.3, 3.9, -0.6)];
@@ -118,7 +127,7 @@ export const WreckMixin = {
     if (sp < 3 || this.t - (this._bumpT || -9) < 1.2) return;
     const sev = sp / 7;
     this._bumpT = this.t;
-    const n = sev > 0.6 ? 2 : 1;
+    const n = 1;
     const free = DENTS.map((_, i) => i).filter((i) => !this.wreck.dents.includes(i));
     const add = free.sort(() => Math.random() - 0.5).slice(0, n);
     if (add.length) this.act('dent', { add });
@@ -132,9 +141,10 @@ export const WreckMixin = {
     const yaw = f.yaw;
     if (heightAt(x, z) < -1.4) { const s = this.nearestShore(x, z); x = s.x; z = s.z; }
     sev = Math.max(0, Math.min(1, sev));
-    const nParts = sev < 0.3 ? 0 : sev < 0.6 ? 1 : sev < 0.85 ? 2 : 3;
-    const nHoles = sev < 0.15 ? 0 : sev < 0.5 ? 1 : sev < 0.8 ? 2 : 3;
-    const nDents = Math.round(2 + sev * 6);
+    // réparation courte : au pire 2 pièces, 2 trous et 3 bosses
+    const nParts = sev < 0.5 ? 0 : sev < 0.85 ? 1 : 2;
+    const nHoles = sev < 0.3 ? 0 : sev < 0.75 ? 1 : 2;
+    const nDents = Math.round(1 + sev * 2);
     const cand = ['engineL', 'engineR', 'wingL', 'prop'].filter((k) => this.installed.has(k)).sort(() => Math.random() - 0.5);
     const spot = (dmin, dmax) => {
       for (let t = 0; t < 30; t++) {
@@ -167,10 +177,20 @@ export const WreckMixin = {
     if (g > -0.6 && this.flags.wheels) { f.surface = 'ground'; f.pos.y = heightAt(f.pos.x, f.pos.z) + WHEEL_DROP; } else { f.surface = 'water'; f.pos.y = 0; }
     f.apply();
     const free = DENTS.map((_, i) => i).filter((i) => !this.wreck.dents.includes(i)).sort(() => Math.random() - 0.5);
-    this.act('dent', { add: free.slice(0, 2 + Math.round(sev * 6)) });
+    this.act('dent', { add: free.slice(0, 1 + Math.round(sev)) });
     this.audio.clank(); this.audio.splash?.();
     this.player.shake = 1;
     this.ui.toast('Atterrissage brutal', `Coque ${Math.round(this.planeHp())} %`, 'bad', 2600);
+  },
+  // eau libre la plus proche (pour remettre une épave à flot)
+  nearestWater(x, z) {
+    for (let d = 4; d < 400; d += 4) {
+      for (let a = 0; a < 16; a++) {
+        const px = x + Math.cos(a / 16 * Math.PI * 2) * d, pz = z + Math.sin(a / 16 * Math.PI * 2) * d;
+        if (heightAt(px, pz) < -1.6 && heightAt(px + 8, pz) < -1.2 && heightAt(px - 8, pz) < -1.2 && heightAt(px, pz + 8) < -1.2 && heightAt(px, pz - 8) < -1.2) return { x: px, z: pz };
+      }
+    }
+    return { x, z };
   },
   // rivage le plus proche (vers le centre de l'île la plus proche)
   nearestShore(x, z) {
@@ -249,12 +269,14 @@ export const WreckMixin = {
   welderSpecs(add) {
     const me = this.myId();
     const box = this.plane.root.localToWorld(WELDER.box.clone());
-    if (!this.iron) add(box, 2.6, { prio: 2.5, prompt: '<kbd>E</kbd> Fer à souder', press: () => this.takeIron() });
-    else if (this.iron === me) add(box, 2.6, { prio: 2.5, prompt: '<kbd>E</kbd> Raccrocher le fer', press: () => this.dropIron() });
+    // toujours accessible : libre, tenu par moi, ou repris à un coéquipier (fer oublié, joueur parti…)
+    if (this.iron === me) add(box, 3.2, { prio: 4, prompt: '<kbd>E</kbd> Raccrocher le fer', press: () => this.dropIron() });
+    else add(box, 3.2, { prio: 4, prompt: this.iron ? '<kbd>E</kbd> Reprendre le fer à souder' : '<kbd>E</kbd> Fer à souder', press: () => this.takeIron() });
   },
   takeIron() {
-    if (this.carrying) { this.ui.toast('Mains prises', '', 'bad', 1200); return; }
-    if (this.act('iron', { on: 1 }) === false) return;
+    if (this.carrying) this.dropCarried();
+    if (this.act('iron', { on: 1, force: 1 }) === false) return;
+    if (this.inv.sel !== 'fists') { this.inv.sel = 'fists'; this.syncHeld?.(); }
     this.reloadT = 0;
     this.audio.clank();
     if (!this.said.has('ironTip')) { this.said.add('ironTip'); this.ui.toast('Fer à souder', 'Visez un point orange · clic maintenu · relâchez dans le vert.', 'good', 5000); }
@@ -408,7 +430,7 @@ export const WreckMixin = {
     const me = by === this.myId();
     if (type === 'wreck') { this.applyWreck(d, me); return true; }
     if (type === 'iron') {
-      if (d.on) { if (auth && this.iron && this.iron !== by && (!this.session || this.session.players.has(this.iron))) return false; this.iron = by; }
+      if (d.on) { if (auth && !d.force && this.iron && this.iron !== by && (!this.session || this.session.players.has(this.iron))) return false; this.iron = by; }
       else if (this.iron === by || d.force) this.iron = null;
       return true;
     }
@@ -480,6 +502,34 @@ export const WreckMixin = {
       return true;
     }
     if (type === 'winch') return this.applyWinch(d, by);
+    if (type === 'fixAll') {
+      // admin : avion remis à neuf (pièces ressoudées, trous colmatés, bosses effacées)
+      for (const k of PART_ORDER) {
+        if (this.installed.has(k)) continue;
+        const it = this.items[k];
+        if (this.carrying === it) this.carrying = null;
+        it.state = 'installed'; it.carrier = null; it.mesh.visible = false;
+        this.installed.add(k);
+        this.plane.parts[k].visible = true;
+        if (this.plane.ghosts[k]) this.plane.ghosts[k].visible = false;
+      }
+      for (const id of PLATES) { const it = this.items[id]; if (it && it.state !== 'hidden') { if (this.carrying === it) this.carrying = null; it.state = 'hidden'; it.carrier = null; it.mesh.visible = false; } }
+      this.wreck.placed = {};
+      this.wreck.holes = [0, 0, 0, 0];
+      HOLES.forEach((_, i) => this.plane.setHole(i, 0));
+      this.wreck.dents = [];
+      this.refreshWelds();
+      this.refreshDamage();
+      this.repairFx(this.plane.root.position.clone().add(new THREE.Vector3(0, 3, 0)));
+      if (auth && this.wreckActive()) {
+        const p = this.wreck.pos || { x: this.plane.root.position.x, z: this.plane.root.position.z, yaw: this.flight.yaw };
+        const w = heightAt(p.x, p.z) < -0.8 || this.flags.wheels ? p : this.nearestWater(p.x, p.z);
+        this.act('winch', { stow: 1 });
+        this.act('refloat', { x: +w.x.toFixed(2), z: +w.z.toFixed(2), yaw: p.yaw });
+      }
+      this.afterChange();
+      return true;
+    }
     if (type === 'wreckPos') { if (!me) this.setWreckPose(d.x, d.z, d.yaw); this.wreck.stranded = !!d.st; return true; }
     if (type === 'refloat') {
       this.flags.wrecked = false;
@@ -582,6 +632,7 @@ export const WreckMixin = {
     if (d.hook !== undefined) { W.hook = d.hook; W.anchor = d.anchor || null; W.stake = d.stake ? 1 : 0; if (d.hook !== 'anchor') W.on = false; }
     if (d.on !== undefined) W.on = !!d.on && W.hook === 'anchor';
     if (d.stow) { W.hook = null; W.anchor = null; W.on = false; }
+    if (!W.on) { this._snap = null; this._strain = 0; }
     void by;
     return true;
   },
@@ -612,13 +663,20 @@ export const WreckMixin = {
     if (W.on && W.hook === 'anchor' && !this.wreckActive() && this.ownsPlane()) {
       const c = this.plane.root.position;
       const dir = new THREE.Vector2(end.x - c.x, end.z - c.z);
-      if (dir.length() < 9) { this.act('winch', { on: false }); this.ui.toast('Treuil arrêté', 'Arrivé.', '', 1600); return; }
+      const left = dir.length();
+      if (left < 9) { this._snap = null; this._strain = 0; this.act('winch', { on: false }); this.ui.toast('Treuil arrêté', 'Arrivé.', '', 1600); return; }
       dir.normalize();
       let dy = Math.atan2(-dir.x, -dir.y) - this.flight.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      if (this.stepSnap(dt, (sx, sz, syaw) => this.nudgePlane(sx, sz, syaw, true))) return;
       if (!this.nudgePlane(dir.x * 1.3 * dt, dir.y * 1.3 * dt, dy * Math.min(1, dt * 0.7))) {
-        if (this.t - (this._blockT || -9) > 3) { this._blockT = this.t; this.ui.toast('Ça coince', 'Changez d\'ancrage.', 'bad', 1600); this.audio.clank(); }
+        const f = this.flight;
+        this.winchStrain(dt, dir, dy, left, (d) => {
+          const p = new THREE.Vector3(f.pos.x + dir.x * d, f.pos.y, f.pos.z + dir.y * d);
+          return !this.planeHitTest(p, f.yaw + dy * 0.5);
+        });
         return;
       }
+      this._strain = Math.max(0, (this._strain || 0) - dt * 2);
       this._pullRatchet = (this._pullRatchet || 0) - dt;
       if (this._pullRatchet <= 0) { this._pullRatchet = 0.35; this.audio.ratchet(); }
       return;
@@ -626,17 +684,29 @@ export const WreckMixin = {
     if (W.on && W.hook === 'anchor' && this.isAuthority()) {
       const c = this.plane.root.position;
       const dir = new THREE.Vector2(end.x - c.x, end.z - c.z);
-      if (dir.length() < 9) { this.act('winch', { on: false }); this.ui.toast('Treuil arrêté', 'Raccrochez plus loin.', '', 1600); return; }
+      const left = dir.length();
+      if (left < 9) { this._snap = null; this._strain = 0; this.act('winch', { on: false }); this.ui.toast('Treuil arrêté', 'Raccrochez plus loin.', '', 1600); return; }
       dir.normalize();
-      const sp = 1.3 * dt;
       const yawT = Math.atan2(-dir.x, -dir.y);   // nez vers l'ancrage
       let dy = yawT - this.flight.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      const moveWreck = (mx, mz, myaw, last) => {
+        const nx = c.x + mx, nz = c.z + mz, ny = this.flight.yaw + myaw;
+        this.setWreckPose(nx, nz, ny);
+        this._pullSend = (this._pullSend || 0) + 1;
+        if (this._pullSend > 3 || last) { this._pullSend = 0; this.act('wreckPos', { x: nx, z: nz, yaw: ny, st: this.wreck.stranded ? 1 : 0 }); }
+        if (this.wreck.stranded && heightAt(nx, nz) < -0.8) { this._snap = null; this.act('winch', { stow: 1 }); this.act('refloat', { x: nx, z: nz, yaw: ny }); }
+        return true;
+      };
+      if (this.stepSnap(dt, moveWreck)) return;
+      const sp = 1.3 * dt;
       const ny = this.flight.yaw + dy * Math.min(1, dt * 0.7);
       const nx = c.x + dir.x * sp, nz = c.z + dir.y * sp;
       if (this.wreckBlocked(nx, nz, ny)) {
-        if (this.t - (this._blockT || -9) > 3) { this._blockT = this.t; this.ui.toast('Ça coince', 'Changez d\'ancrage.', 'bad', 1600); this.audio.clank(); }
+        const pen = this.wreckPenetration(c.x, c.z, this.flight.yaw);
+        this.winchStrain(dt, dir, dy, left, (d) => this.wreckPenetration(c.x + dir.x * d, c.z + dir.y * d, this.flight.yaw + dy * 0.5) <= pen + 0.02);
         return;
       }
+      this._strain = Math.max(0, (this._strain || 0) - dt * 2);
       this.setWreckPose(nx, nz, ny);
       this._pullRatchet = (this._pullRatchet || 0) - dt;
       if (this._pullRatchet <= 0) { this._pullRatchet = 0.35; this.audio.ratchet(); }
@@ -644,6 +714,38 @@ export const WreckMixin = {
       if (this._pullSend > 0.25) { this._pullSend = 0; this.act('wreckPos', { x: nx, z: nz, yaw: ny, st: this.wreck.stranded ? 1 : 0 }); }
       if (this.wreck.stranded && heightAt(nx, nz) < -0.8) { this.act('winch', { stow: 1 }); this.act('refloat', { x: nx, z: nz, yaw: ny }); }
     }
+  },
+  // avion bloqué : le câble se tend, grince… puis arrache l'avion d'un bond (ok(d) : distance libre de l'autre côté)
+  winchStrain(dt, dir, dy, left, ok) {
+    const was = this._strain || 0;
+    this._strain = was + dt;
+    if (was === 0) { this.ui.toast('Le câble se tend…', 'Le treuil force.', 'bad', 1600); }
+    this._creak = (this._creak || 0) - dt;
+    if (this._creak <= 0) { this._creak = Math.max(0.12, 0.5 - this._strain * 0.2); this.audio.ratchet(); if (this._strain > STRAIN_T * 0.5) this.audio.clank(); }
+    const near = this.plane.root.position.distanceTo(this.playerWorld()) < 25;
+    if (near) this.player.shake = Math.max(this.player.shake, 0.15 + 0.25 * this._strain / STRAIN_T);
+    if (this._strain < STRAIN_T) return;
+    this._strain = 0;
+    const max = Math.max(0.5, left - 9);
+    let dist = SNAP_TRIES.find((d) => d <= max && ok(d));
+    if (dist === undefined) dist = Math.min(SNAP_TRIES[0], max);
+    this._snap = { t: 0, k: 0, dx: dir.x * dist, dz: dir.y * dist, dyaw: dy * 0.5 };
+    this.audio.clank(); this.audio.whoosh?.(); this.audio.splash?.();
+    if (near) this.player.shake = 1;
+    this.ui.toast('Ça lâche !', '', 'good', 1200);
+  },
+  // bond de l'avion après la tension du câble (sortie rapide, puis amorti)
+  stepSnap(dt, move) {
+    const S = this._snap;
+    if (!S) return false;
+    S.t += dt;
+    const u = Math.min(1, S.t / SNAP_DUR);
+    const k = 1 - Math.pow(1 - u, 3);
+    const dk = k - S.k;
+    S.k = k;
+    move(S.dx * dk, S.dz * dk, S.dyaw * dk, u >= 1);
+    if (u >= 1) this._snap = null;
+    return true;
   },
 
   // orbes de réparation : petites boules lumineuses qui flottent devant chaque endroit à réparer (visibles de loin)

@@ -46,7 +46,7 @@ export const AdminMixin = {
       </div>
       <h3>Progression <small>chapitre ${ch}</small></h3>
       <div class="admGrid">
-        ${B('repair', '🔧', 'Réparer le Coucou', 'pièces, caisse, outils', ch !== 1 ? ' off' : '')}
+        ${B('repair', '🔧', 'Réparer le Coucou', this.wreckActive() ? 'épave remise à flot' : `coque ${Math.round(this.planeHp())} %`)}
         ${B('ch2', '🛬', 'Chapitre 2', 'posé à Saint-Escale', ch >= 2 ? ' off' : '')}
         ${B('ch3', '🔥', 'Chapitre 3', 'posé à Port-Cendre', ch >= 3 ? ' off' : '')}
       </div>

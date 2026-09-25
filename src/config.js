@@ -108,5 +108,5 @@ export const CFG = {
     valves: { A: false, B: true, C: false, D: true },
     lightRadius: 18,
   },
-  swim: { level: -1.25, speed: 0.5 },
+  swim: { level: -1.25, speed: 0.9 },
 };

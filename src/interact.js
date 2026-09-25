@@ -175,7 +175,7 @@ export const InteractMixin = {
       if (this.seatTaken(s.id)) { add(pt, 1.4, { prompt: '<span class="warn">Occupé</span>' }); continue; }
       if (s.pilot) {
         add(pt, 1.6, {
-          prompt: this.planeReady() ? '<kbd>E</kbd> Piloter' : `<span class="warn">Pas prêt</span> · ${this.installed.size}/6 pièces${this.crateLoaded ? '' : ', caisse'}`,
+          prompt: this.planeReady() ? '<kbd>E</kbd> Piloter' : this.wreckActive() ? `<span class="warn">${this.flags.wrecked ? 'Épave à réparer' : 'À sec : treuil vers l\'eau'}</span>` : `<span class="warn">Pas prêt</span> · ${this.installed.size}/6 pièces${this.crateLoaded ? '' : ', caisse'}`,
           press: () => { if (this.planeReady()) this.takeControls(); else this.sit(s); },
         });
       } else if (s.bunk) {
@@ -586,7 +586,7 @@ export const InteractMixin = {
 
   // ── fenêtres ──
   openModalCommon() { this.input.unlock(); this.ui.prompt(''); },
-  closeModal(silent) { if (this.ui.modalOpen()) this.ui.closeModal(); if (!silent && this.mode === 'explore') this.input.lock(); },
+  closeModal(silent) { if (this.ui.modalOpen()) { this.modalClosedT = performance.now(); this.ui.closeModal(); } if (!silent && this.mode === 'explore') this.input.lock(); },
   openNote(title, html, note) {
     this.openModalCommon();
     this.ui.note(title, html, () => this.input.lock());
@@ -720,7 +720,6 @@ export const InteractMixin = {
   // ── à bord ──
   // local : position dans le repère de l'avion (on garde exactement le même point : pas de téléportation)
   boardPlane(local) {
-    if (this.wreckActive()) { this.audio.error(); this.ui.toast('Épave', 'Réparez-la d\'abord.', 'bad', 1600); return; }
     if (this.flags.doorJam) { this.audio.error(); this.ui.toast('Porte bloquée', '', 'bad', 1400); return; }
     if (this.carrying && this.carrying.def.weight >= 2) { this.audio.error(); return; }
     if (this.nozzle === this.myId()) this.act('nozzle', { on: false });
