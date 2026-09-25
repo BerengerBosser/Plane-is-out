@@ -293,6 +293,22 @@ export function createIsland2(scene, seed) {
   stairSign.position.set(To.x + SH + 0.06, FLAT + 2.2, To.z + 2.2);
   stairSign.rotation.y = Math.PI / 2;
   group.add(stairSign);
+  // grille cadenassée au pied de l'escalier : on monte d'abord par l'ascenseur (séquenceur), elle s'ouvre ensuite
+  const stairGate = new THREE.Group();
+  stairGate.userData.dynamic = true;
+  const gx = To.x + 2.56, gz0 = LANE - LW / 2 - 0.1, gz1 = LANE + LW / 2 + 0.2, gzc = (gz0 + gz1) / 2, gw = gz1 - gz0;
+  stairGate.add(boxM(0.08, 2.3, 0.08, '#3d434d', gx, FLAT + 1.15, To.z + gz0));
+  stairGate.add(boxM(0.08, 2.3, 0.08, '#3d434d', gx, FLAT + 1.15, To.z + gz1));
+  stairGate.add(boxM(0.06, 0.08, gw, '#3d434d', gx, FLAT + 2.25, To.z + gzc));
+  stairGate.add(boxM(0.06, 0.08, gw, '#3d434d', gx, FLAT + 0.15, To.z + gzc));
+  for (let k = 1; k < 9; k++) stairGate.add(boxM(0.04, 2.1, 0.04, '#5d6470', gx, FLAT + 1.2, To.z + gz0 + gw * k / 9));
+  stairGate.add(boxM(0.1, 0.24, 0.16, '#ffd166', gx + 0.06, FLAT + 1.1, To.z + gzc));
+  const gateSign = sign(['FERMÉ', 'Accès vigie : ascenseur'], '#ffd166', '#10162b', 1.2, 0.5, 512, 210);
+  gateSign.position.set(gx + 0.06, FLAT + 1.7, To.z + gzc); gateSign.rotation.y = Math.PI / 2;
+  stairGate.add(gateSign);
+  group.add(stairGate);
+  const stairGateCol = { type: 'box', minX: cx + gx - 0.1, maxX: cx + gx + 0.1, minZ: cz + To.z + gz0, maxZ: cz + To.z + gz1 };
+  colliders.push(stairGateCol);
   // vigie : plancher en trois parties autour de la trémie (côté est), vitres, toit
   const floorParts = [[-4.5, 2.3, -4.5, 4.5], [2.3, 4.5, -4.5, -1.0], [2.3, 4.5, 2.5, 4.5]];
   for (const [x0, x1, z0, z1] of floorParts) {
@@ -887,6 +903,7 @@ export function createIsland2(scene, seed) {
     setFuse(i, color) { fuseSlots[i].material = color ? new THREE.MeshLambertMaterial({ color: { red: '#ff4d4d', blue: '#3d7bff', yellow: '#ffd166' }[color] }) : flatMat; },
     setValve(k, open) { valves[k].open = open; },
     openHangar() { hangarTarget = 1; hangarDoorCol.disabled = true; },
+    setStairGate(open) { stairGate.visible = !open; stairGateCol.disabled = !!open; },
     get hangarMoving() { return hangarOpen < hangarTarget; },
     hangarDoorPts: [wp(H.x - H.w / 4, FLAT + 0.4, H.z - H.d / 2 - 0.6), wp(H.x + H.w / 4, FLAT + 0.4, H.z - H.d / 2 - 0.6)],
     setHangarOpen() { hangarOpen = hangarTarget = 1; hangarDoorCol.disabled = true; },

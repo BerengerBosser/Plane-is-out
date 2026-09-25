@@ -39,25 +39,30 @@ export class Input {
     addEventListener('mouseup', (e) => { this.dragging = false; if (e.button === 0) this.keys.delete('MouseL'); if (e.button === 2) this.keys.delete('MouseR'); });
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === canvas;
+      this.pending = false;
       this.onLockChange?.(this.locked);
     });
     // un refus isolé (clic trop rapide après Échap, page sans focus…) n'est pas définitif :
     // on ne passe en mode « glisser » qu'après plusieurs refus consécutifs suivant un vrai clic
     this.lockFails = 0;
-    document.addEventListener('pointerlockerror', () => this.lockFailed());
+    document.addEventListener('pointerlockerror', () => { this.pending = false; this.lockFailed(); });
   }
   lockFailed() {
     this.lockFails++;
     if (this.lockFails >= 3) this.dragMode = true;
     this.onLockFail?.();
   }
+  // une seule demande à la fois : deux demandes rapprochées (fermeture d'une fenêtre d'énigme…) peuvent
+  // faire perdre la capture aussitôt obtenue, ce qui ouvrait la pause par erreur
   lock() {
-    if (this.locked) return;
+    if (this.locked || (this.pending && performance.now() - this.lockReqT < 2000)) return;
     if (this.dragMode) { this.onLockChange?.(true, true); return; }
+    this.lockReqT = performance.now();
+    this.pending = true;
     try {
       const p = this.canvas.requestPointerLock();
-      if (p && p.then) p.then(() => { this.lockFails = 0; }, () => this.lockFailed());
-    } catch { this.lockFailed(); }
+      if (p && p.then) p.then(() => { this.pending = false; this.lockFails = 0; }, () => { this.pending = false; this.lockFailed(); });
+    } catch { this.pending = false; this.lockFailed(); }
   }
   // déverrouillage voulu par le jeu (menu, fin de mission…) : ne doit pas ouvrir la pause
   unlock() { if (document.pointerLockElement) { this.expectUnlock = true; document.exitPointerLock(); } }

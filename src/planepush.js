@@ -66,17 +66,18 @@ export const PlanePushMixin = {
     }
   },
   // déplacement contrôlé (poussée à la main, treuil) : pas à travers les obstacles, pas sur le sable sans roues
-  nudgePlane(dx, dz, dyaw = 0) {
+  // force : arrachement du treuil (on passe malgré le sable, la pente ou l'obstacle)
+  nudgePlane(dx, dz, dyaw = 0, force = false) {
     const f = this.flight;
     if (f.airborne) return false;
     const nx = f.pos.x + dx, nz = f.pos.z + dz, ny = f.yaw + dyaw;
     const g0 = heightAt(f.pos.x, f.pos.z), g1 = heightAt(nx, nz);
-    if (g1 > -0.45) {
+    if (g1 > -0.45 && !force) {
       if (!f.wheels && g1 > g0 + 0.005) return false;
       if (f.wheels && slopeAt(nx, nz).s > 0.32) return false;
     }
     const hitNow = this.planeHitTest(f.pos, f.yaw);
-    if (!hitNow && this.planeHitTest(new THREE.Vector3(nx, f.pos.y, nz), ny)) return false;
+    if (!force && !hitNow && this.planeHitTest(new THREE.Vector3(nx, f.pos.y, nz), ny)) return false;
     f.pos.x = nx; f.pos.z = nz; f.yaw = ny; f.speed = 0;
     if (f.wheels && g1 > -0.45) { f.surface = 'ground'; f.pos.y = g1 + WHEEL_DROP; } else if (g1 <= -0.45 && f.surface !== 'water') { f.surface = 'water'; f.pos.y = 0; }
     f.apply();

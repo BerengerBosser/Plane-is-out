@@ -196,6 +196,8 @@ export function createEnemies(scene, colliders, hooks) {
   let spawnT = 0, nextId = 1;
   const tmp = new THREE.Vector3();
   let hpScale = 1;
+  // zombies errants tués récemment : leur place reste vide un moment (sinon la horde se reconstitue en continu)
+  let kills = [];
 
   function add(type, x, z, opts = {}) {
     const T = TYPES[type];
@@ -269,9 +271,10 @@ export function createEnemies(scene, colliders, hooks) {
     if (e.hp <= 0) kill(e);
     return { e, mul };
   }
-  function kill(e) {
+  function kill(e, natural) {
     if (e.dead) return;
     e.dead = true; e.deadT = 0;
+    if (!natural && isVoile(e.type) && !e.T.boss && !e.siege && !e.indoor) kills.push({ x: e.pos.x, z: e.pos.z, t: 0, dayz: e.dayz });
     hooks.onKill?.(e);
     hooks.onDeathFx?.(e);
     if (e.type === 'bloater') hooks.onBloat?.(e);
@@ -345,8 +348,8 @@ export function createEnemies(scene, colliders, hooks) {
         }
       }
     },
-    clearVoiles() { list.filter((e) => isVoile(e.type)).forEach(remove); },
-    clearAll() { list.slice().forEach(remove); },
+    clearVoiles() { list.filter((e) => isVoile(e.type)).forEach(remove); kills = []; },
+    clearAll() { list.slice().forEach(remove); kills = []; },
     aliveCount(type) { return list.filter((e) => e.type === type && !e.dead).length; },
     byId(id) { return list.find((e) => e.id === id); },
     bosses() { return list.filter((e) => e.T.boss && !e.dead && e.state !== 'sleep'); },
@@ -468,13 +471,22 @@ export function createEnemies(scene, colliders, hooks) {
         for (const p of active) { const d = Math.hypot(p.pos.x - x, p.pos.z - z); if (d < bd) { bd = d; best = p; } }
         return best ? { p: best, d: bd } : null;
       };
+      // délai de réapparition : un kill récent réserve sa place tant qu'un joueur reste dans les parages
+      const C = CFG.combat;
+      kills = kills.filter((k) => {
+        k.t += dt;
+        if (k.t > C.respawnDelay) return false;
+        return active.some((p) => Math.hypot(p.pos.x - k.x, p.pos.z - k.z) < C.respawnNear);
+      });
+      const reserved = (dayz) => kills.filter((k) => !!k.dayz === dayz).length;
+      const cleared = (x, z) => kills.some((k) => Math.hypot(x - k.x, z - k.z) < C.respawnClear);
       // un groupe de zombies sort de terre autour d'un joueur, hors des zones éclairées
       const spawnGroup = (room, extra, dMin, dMax, opts) => {
         const P = active[Math.floor(Math.random() * active.length)].pos;
         for (let tries = 0; tries < 12; tries++) {
           const a = Math.random() * Math.PI * 2, d = dMin + Math.random() * (dMax - dMin);
           const x = P.x + Math.cos(a) * d, z = P.z + Math.sin(a) * d;
-          if (heightAt(x, z) < 0.2 || inLight(x, z, ctx.lights, 4)) continue;
+          if (heightAt(x, z) < 0.2 || inLight(x, z, ctx.lights, 4) || cleared(x, z)) continue;
           const n = Math.min(room, 1 + (Math.random() < extra ? 1 + Math.floor(Math.random() * 2) : 0));
           for (let k = 0; k < n; k++) {
             const ox = (Math.random() - 0.5) * 3, oz = (Math.random() - 0.5) * 3;
@@ -490,7 +502,7 @@ export function createEnemies(scene, colliders, hooks) {
       // les zombies sortent de terre la nuit, de plus en plus nombreux
       if (ctx.night > 0.6 && active.length) {
         spawnT -= dt;
-        const count = roaming(false);
+        const count = roaming(false) + reserved(false);
         const cap = Math.round(ctx.maxVoiles * (ctx.hordeMul ?? 1) * (0.5 + 0.5 * (ctx.depth ?? 1)));
         if (spawnT <= 0 && count < cap) {
           spawnT = (6 - 3 * (ctx.depth ?? 0) + Math.random() * 3) / Math.max(1, active.length * 0.7) / (ctx.hordeMul ?? 1);
@@ -499,7 +511,7 @@ export function createEnemies(scene, colliders, hooks) {
       } else if (ctx.dayCap && active.length) {
         // certaines îles (Port-Cendre) sont infestées même en plein jour
         spawnT -= dt;
-        const count = roaming(true);
+        const count = roaming(true) + reserved(true);
         if (spawnT <= 0 && count < ctx.dayCap) {
           spawnT = (5 + Math.random() * 4) / Math.max(1, active.length * 0.7);
           spawnGroup(ctx.dayCap - count, 0.4, 24, 40, { dayz: true });
@@ -511,7 +523,7 @@ export function createEnemies(scene, colliders, hooks) {
         e.t += dt;
         if (e.dead) { if (deathAnim(e, dt)) remove(e); continue; }
         if (isVoile(e.type)) {
-          if (ctx.night < 0.3 && !e.siege && !e.indoor && !e.dayz) { kill(e); continue; }   // l'aube les consume (sauf à l'abri des bâtiments)
+          if (ctx.night < 0.3 && !e.siege && !e.indoor && !e.dayz) { kill(e, true); continue; }   // l'aube les consume (sauf à l'abri des bâtiments)
           // les errants de jour laissés loin derrière retournent sous terre
           if (e.dayz) { const np = nearestPlayer(e.pos.x, e.pos.z); if (!np || np.d > 90) { remove(e); continue; } }
           e.appear = Math.min(1, e.appear + dt * 0.7);

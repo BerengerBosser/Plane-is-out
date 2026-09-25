@@ -217,6 +217,27 @@ export const DENTS = [
   { p: [1.02, 2.7, 7.4], n: [1, 0, 0] }, { p: [4.4, 4.26, -0.3], n: [0, 1, 0] }, { p: [0.9, 4.11, -0.2], n: [0, 1, 0] },
   { p: [-2.3, 0.53, 1.8], n: [0, 1, 0], part: 'floats' }, { p: [2.3, 0.53, -1.5], n: [0, 1, 0], part: 'floats' },
 ];
+// dessus de l'avion où l'on peut marcher (repère local) : flotteurs, toit, ailes ; need : pièce requise
+export const PLANE_TOPS = [
+  { minX: -2.72, maxX: -1.88, minZ: -3.3, maxZ: 4.1, top: 0.82, need: 'floats' },
+  { minX: 1.88, maxX: 2.72, minZ: -3.3, maxZ: 4.1, top: 0.82, need: 'floats' },
+  { minX: -0.95, maxX: 0.95, minZ: -3.4, maxZ: 5.0, top: 3.77 },
+  { minX: -1.5, maxX: 1.5, minZ: -1.85, maxZ: 0.65, top: 4.1 },
+  { minX: 1.5, maxX: 9.7, minZ: -1.85, maxZ: 0.65, top: 4.24 },
+  { minX: -9.7, maxX: -1.5, minZ: -1.85, maxZ: 0.65, top: 4.24, need: 'wingL' },
+];
+// échelles des flotteurs vers le bord d'attaque des ailes (repère local)
+export const WING_LADDERS = [
+  { x: -2.2, z: -2.3, y0: 0.82, y1: 4.24, topZ: -1.4, need: 'wingL' },
+  { x: 2.2, z: -2.3, y0: 0.82, y1: 4.24, topZ: -1.4 },
+];
+function buildLadder(h) {
+  const g = new THREE.Group();
+  for (const sx of [-0.2, 0.2]) g.add(box(0.05, h, 0.05, METAL, sx, h / 2, 0));
+  for (let y = 0.3; y < h - 0.05; y += 0.32) g.add(box(0.4, 0.04, 0.04, METAL, 0, y, 0));
+  return g;
+}
+
 // poste à souder fixé sur le flanc droit, fer relié par un câble (repère local)
 export const WELDER = { box: new THREE.Vector3(1.62, 1.55, 0.35), cable: new THREE.Vector3(1.8, 1.72, 0.35) };
 // escalier invisible sous la porte cargo : paliers de 0,3 m qui descendent vers l'eau (repère local)
@@ -531,6 +552,13 @@ export function buildPlane() {
   for (const [k, g] of Object.entries(parts)) {
     g.position.copy(SLOTS[k]);
     body.add(g);
+  }
+  // échelles d'accès aux ailes : celle de droite suit les flotteurs, celle de gauche l'aile gauche
+  for (const L of WING_LADDERS) {
+    const lad = buildLadder(L.y1 - L.y0);
+    const host = L.need ? parts[L.need] : parts.floats;
+    lad.position.set(L.x, L.y0, L.z).sub(host.position);
+    host.add(lad);
   }
   parts.wheels.visible = false;
   const spinners = [parts.engineR.userData.prop, parts.prop.userData.spin];
