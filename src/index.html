@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Plane is out</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Caveat:wght@500;700&display=swap">
+<style>/*__STYLE__*/</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="view"></canvas>
+
+  <!-- ── HUD ── -->
+  <div id="hud" class="hidden" data-mode="explore">
+    <div id="crosshair"></div>
+    <div id="prompt"></div>
+    <div id="hold"><div></div></div>
+    <div id="carry"></div>
+    <div id="toast"></div>
+
+    <div id="tracker">
+      <span id="trIsland" class="chip">Île 1 · Plage du Crash</span>
+      <b id="trTitle">Réparer le Coucou</b>
+      <small id="trSub"></small>
+    </div>
+    <div id="compass" class="hidden"><div id="compassStrip"></div><i></i></div>
+
+    <div id="keys"></div>
+
+    <div id="vitals">
+      <div class="pill hp"><svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9.3-9A5.3 5.3 0 0 1 12 6.4 5.3 5.3 0 0 1 21.3 12C19 16.5 12 21 12 21z"/></svg><div class="bar"><div id="hpBar"></div></div></div>
+      <div class="pill st"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg><div class="bar"><div id="stBar"></div></div></div>
+      <div class="pill tox" id="tox" hidden><svg viewBox="0 0 24 24"><path d="M4 15c2-2 4 2 6 0s4 2 6 0 4 2 4 2M4 10c2-2 4 2 6 0s4 2 6 0 4 2 4 2"/></svg><div class="bar"><div id="toxBar"></div></div></div>
+    </div>
+
+    <div id="radio"><div class="avatar">M</div><div class="rbody"><b>Marthe · labo Hélios</b><p id="radioText"></p></div><div class="wave"><i></i><i></i><i></i><i></i></div></div>
+
+    <div id="hotbar">
+      <div class="slot" data-slot="0"><i>1</i><svg viewBox="0 0 32 32"><path d="M9 14h12a3 3 0 0 1 3 3v4a6 6 0 0 1-6 6h-5a6 6 0 0 1-6-6v-5a2 2 0 0 1 2-2zM9 14V9a2 2 0 0 1 4 0v5M13 14V8a2 2 0 0 1 4 0v6M17 14V9a2 2 0 0 1 4 0v5"/></svg><span>Poings</span></div>
+      <div class="slot" data-slot="1"><i>2</i><svg viewBox="0 0 32 32"><path d="M20 5a6 6 0 0 0-5 8L5 23a2.5 2.5 0 0 0 4 4l10-10a6 6 0 0 0 8-5l-4 2-3-3 2-4z"/></svg><span>Clé</span></div>
+      <div class="slot" data-slot="2"><i>3</i><svg viewBox="0 0 32 32"><path d="M11 4v18h14M11 22l-3 3M14 10h8v12M9 26a3 3 0 1 0 6 0 3 3 0 1 0-6 0"/></svg><span>Diable</span></div>
+      <div class="slot" data-slot="3"><i>4</i><svg viewBox="0 0 32 32"><path d="M12 7h8M16 3v4M11 9h10v14H11zM10 23h12v3H10zM16 13v6"/></svg><span>Lanterne</span><em><b id="oilBar"></b></em></div>
+      <div class="slot" data-slot="4"><i>5</i><svg viewBox="0 0 32 32"><path d="M5 12h16l3-3h3v7h-3l-3-2h-5l-2 9H8l1-9H5z"/></svg><span>Fusées</span><u id="ammoFlare">0</u></div>
+      <div class="slot" data-slot="5"><i>6</i><svg viewBox="0 0 32 32"><path d="M3 18h19M22 15l7 3-7 3zM6 18v5h5l2-5M9 18l-2-4"/></svg><span>Harpon</span><u id="ammoHarp">0</u></div>
+      <div class="slot" data-slot="6"><i>7</i><svg viewBox="0 0 32 32"><path d="M5 27L25 5M25 5v14M22 19a3 3 0 1 0 6 0 3 3 0 1 0-6 0M8 24a2 2 0 1 0 0.1 0"/></svg><span>Canne</span><u id="fishCount">0</u></div>
+    </div>
+    <div id="bossBar" class="hidden"><b id="bossName">Boss</b><div class="bb"><div id="bossHp"></div></div><small id="bossHint"></small></div>
+    <div id="genBar" class="hidden"><span>Générateur</span><div class="bb"><div id="genHp"></div></div><small id="genInfo"></small></div>
+    <div id="crew" class="hidden"></div>
+    <div id="chatLog"></div>
+    <input id="chatInput" class="hidden" maxlength="120" autocomplete="off" placeholder="Message à l'équipage · Entrée pour envoyer">
+    <div id="wheel" class="hidden"><span data-k="0">Ici !</span><span data-k="1">Aide-moi à porter</span><span data-k="2">Attention !</span><span data-k="3">On décolle !</span><i></i></div>
+    <div id="downed" class="hidden"><b>À terre !</b><p id="downedText">Un coéquipier peut vous relever (E maintenu à côté de vous).</p></div>
+
+    <div id="flight">
+      <div class="gauges">
+        <div class="g"><b id="fSpeed">0</b><small>km/h</small></div>
+        <div class="g"><b id="fAlt">0</b><small>m</small></div>
+      </div>
+      <div class="lbl">Gaz</div><div class="meter"><div id="fThrottle"></div></div>
+      <div class="lbl">Carburant <span id="fFuelTxt">42 %</span></div><div class="meter fuel"><div id="fFuel"></div></div>
+      <div id="fState">Sur l'eau</div>
+    </div>
+    <div id="radarBox"><canvas id="radar" width="220" height="220"></canvas><span>Radar</span></div>
+  </div>
+
+  <div id="subtitle"></div>
+  <div id="hurt"></div>
+  <div id="veil"></div>
+
+  <!-- ── Carnet ── -->
+  <div id="carnet" class="panel hidden">
+    <div class="paper">
+      <h2>Carnet de bord</h2>
+      <p class="sub" id="carnetSub">Plage du Crash</p>
+      <ul id="objList"></ul>
+      <h3>Notes</h3>
+      <ul id="noteList"></ul>
+      <h3 id="photoTitle" hidden>Photos</h3>
+      <div id="photoList"></div>
+      <p class="close">Relâchez Tab pour fermer · <kbd>P</kbd> prendre une photo</p>
+    </div>
+  </div>
+
+  <!-- ── Fenêtres d'énigmes ── -->
+  <div id="modal" class="panel hidden">
+    <div class="device" id="modalBox">
+      <header><b id="mTitle">Cadenas</b><button type="button" id="mClose" aria-label="Fermer">✕</button></header>
+      <div id="mBody"></div>
+      <p class="hint" id="mHint">Échap pour fermer</p>
+    </div>
+  </div>
+
+  <!-- ── Carte ── -->
+  <div id="mapScreen" class="panel hidden"><div class="mapBox"><canvas id="mapCanvas" width="900" height="900"></canvas><p>Carte de l'archipel · M pour fermer</p></div></div>
+
+  <!-- ── Multijoueur ── -->
+  <div id="mpSheet" class="screen hidden">
+    <div class="sheet">
+      <header><h2>Multijoueur</h2><button type="button" id="mpClose" aria-label="Fermer">✕</button></header>
+      <section id="mpSetup">
+        <p class="mpStatus" id="mpStatus">Recherche du serveur de jeu…</p>
+        <div class="row serverRow"><span>Serveur</span><input id="mpServer" placeholder="ex. plane-is-out.onrender.com" autocomplete="off" spellcheck="false"><button id="mpConnect" type="button" class="tab">Connecter</button></div>
+        <div id="mpRooms" hidden><small>Parties ouvertes sur ce serveur</small><ul id="mpRoomList"></ul></div>
+        <label class="row" for="mpName"><span>Votre nom</span><input id="mpName" maxlength="14" autocomplete="off"></label>
+        <div class="row"><span>Couleur</span><div class="swatches" id="mpColors"></div></div>
+        <div class="mpActions">
+          <button id="mpCreate" class="big primary" disabled><span>Créer une partie</span><small>vous êtes l'hôte</small></button>
+          <div class="joinRow"><input id="mpCode" maxlength="4" placeholder="CODE" autocomplete="off"><button id="mpJoin" class="big" disabled><span>Rejoindre</span></button></div>
+        </div>
+        <p class="small">Jusqu'à 4 joueurs sur le même serveur. Laissez « Serveur » vide si cette page est servie par le serveur du jeu.</p>
+      </section>
+      <section id="mpLobby" hidden>
+        <div class="codeBig"><small>Code de la partie</small><b id="mpCodeShow">ABCD</b><button id="mpCopy" type="button" class="tab">Copier</button></div>
+        <ul id="mpPlayers"></ul>
+        <label class="row check" for="mpResume"><span id="mpResumeLabel">Reprendre ma sauvegarde</span><input id="mpResume" type="checkbox"></label>
+        <button id="mpStart" class="big primary"><span>Lancer la partie</span></button>
+        <p class="small" id="mpWait">En attente de l'hôte…</p>
+        <button id="mpLeave" class="big"><span>Quitter le salon</span></button>
+      </section>
+    </div>
+  </div>
+
+  <!-- ── Menu principal ── -->
+  <div id="menu" class="screen">
+    <div class="menuWrap">
+      <div class="brand">
+        <span class="sticker">v5 · coop · nuits de zombies</span>
+        <h1><span>Plane</span><span>is</span><span>out</span></h1>
+        <p class="tag">Fuir la nuit, d'île en île, dans un vieil hydravion qui ne demande qu'à tomber en morceaux.</p>
+      </div>
+      <nav class="menuBtns">
+        <button id="btnContinue" class="big hidden"><span>Continuer</span><small id="continueInfo"></small></button>
+        <button id="btnPlay" class="big primary"><span>Nouvelle partie</span><small>Solo · île 1</small></button>
+        <button id="btnImport" class="big"><span>Importer une sauvegarde</span><small>fichier .json</small></button>
+        <button id="btnSettings" class="big"><span>Paramètres</span></button>
+        <button id="btnHelp" class="big"><span>Commandes</span></button>
+        <button id="btnMulti" class="big"><span>Multijoueur</span><small>1 à 4 joueurs</small></button>
+      </nav>
+      <p class="small touchNote hidden">Cette démo se joue au clavier et à la souris.</p>
+    </div>
+    <div class="menuFoot">
+      <div class="duckStat" id="menuDucks"></div>
+      <span>v3 · son recommandé</span>
+    </div>
+  </div>
+
+  <!-- ── Pause ── -->
+  <div id="pause" class="screen hidden">
+    <div class="pauseCard">
+      <h2>Pause</h2>
+      <p id="pauseInfo"></p>
+      <button id="btnResume" class="big primary"><span>Reprendre</span></button>
+      <button id="btnSettings2" class="big"><span>Paramètres</span></button>
+      <button id="btnHelp2" class="big"><span>Commandes</span></button>
+      <div class="pauseRow">
+        <button id="btnSave" class="big"><span>Sauvegarder</span></button>
+        <button id="btnExport" class="big"><span>Télécharger</span><small>la sauvegarde</small></button>
+      </div>
+      <div class="pauseRow">
+        <button id="btnImport2" class="big"><span>Importer</span><small>une sauvegarde</small></button>
+        <button id="btnRestart" class="big"><span>Nouvelle partie</span><small>recommencer</small></button>
+      </div>
+      <input id="importFile" type="file" accept=".json,application/json" hidden>
+      <button id="btnQuit" class="big"><span>Retour au menu</span></button>
+    </div>
+  </div>
+
+  <!-- ── Paramètres ── -->
+  <div id="settings" class="screen hidden">
+    <div class="sheet">
+      <header><h2>Paramètres</h2><button type="button" id="setClose" aria-label="Fermer">✕</button></header>
+      <div class="tabs" role="tablist">
+        <button class="tab on" data-tab="jeu">Jeu</button>
+        <button class="tab" data-tab="audio">Audio</button>
+        <button class="tab" data-tab="gfx">Graphismes</button>
+      </div>
+      <section data-pane="jeu">
+        <label class="row" for="optSens"><span>Sensibilité de la souris</span><input id="optSens" type="range" min="0.3" max="2.5" step="0.1" value="1"><output id="oSens">1.0</output></label>
+        <label class="row" for="optFov"><span>Champ de vision</span><input id="optFov" type="range" min="60" max="100" step="1" value="72"><output id="oFov">72°</output></label>
+        <label class="row check" for="optInvert"><span>Inverser le manche en vol</span><input id="optInvert" type="checkbox"></label>
+        <label class="row check" for="optHints"><span>Afficher l'aide des touches</span><input id="optHints" type="checkbox" checked></label>
+        <label class="row check" for="optBob"><span>Balancement de la caméra</span><input id="optBob" type="checkbox" checked></label>
+      </section>
+      <section data-pane="audio" hidden>
+        <label class="row" for="optVol"><span>Volume général</span><input id="optVol" type="range" min="0" max="1" step="0.05" value="0.7"><output id="oVol">70 %</output></label>
+        <label class="row" for="optMusic"><span>Musique</span><input id="optMusic" type="range" min="0" max="1" step="0.05" value="0.8"><output id="oMusic">80 %</output></label>
+      </section>
+      <section data-pane="gfx" hidden>
+        <label class="row check" for="optShadows"><span>Ombres</span><input id="optShadows" type="checkbox" checked></label>
+        <label class="row check" for="optBloom"><span>Halos lumineux (bloom)</span><input id="optBloom" type="checkbox" checked></label>
+        <label class="row" for="optGrass"><span>Densité de végétation</span><input id="optGrass" type="range" min="0" max="1" step="0.25" value="1"><output id="oGrass">100 %</output></label>
+        <label class="row" for="optRes"><span>Résolution</span><input id="optRes" type="range" min="0.5" max="1" step="0.05" value="1"><output id="oRes">100 %</output></label>
+        <label class="row check" for="optFps"><span>Afficher les FPS</span><input id="optFps" type="checkbox"></label>
+      </section>
+    </div>
+  </div>
+
+  <!-- ── Commandes ── -->
+  <div id="help" class="screen hidden">
+    <div class="sheet">
+      <header><h2>Commandes</h2><button type="button" id="helpClose" aria-label="Fermer">✕</button></header>
+      <div class="keyGrid">
+        <h3>À pied</h3>
+        <p><kbd>Z Q S D</kbd><span>se déplacer (ou W A S D)</span></p>
+        <p><kbd>Maj</kbd><span>courir</span></p>
+        <p><kbd>Espace</kbd><span>sauter</span></p>
+        <p><kbd>E</kbd><span>interagir · maintenir pour réparer ou treuiller</span></p>
+        <p><kbd>G</kbd><span>lâcher ce qu'on porte</span></p>
+        <p><kbd>1</kbd>–<kbd>4</kbd><span>poings, clé, diable, lanterne</span></p>
+        <p><kbd>Clic</kbd><span>frapper</span></p>
+        <p><kbd>T</kbd><span>regarder la montre</span></p>
+        <p><kbd>Tab</kbd><span>carnet de bord</span></p>
+        <p><kbd>M</kbd><span>carte de l'archipel</span></p>
+        <p><kbd>P</kbd><span>photographier un indice (rangé dans le carnet)</span></p>
+        <p><kbd>7</kbd><span>canne à pêche : clic lancer, clic ferrer, clic maintenu mouliner, puis achever le poisson</span></p>
+        <p><kbd>2</kbd><span>après un crash : chalumeau, clic maintenu sur un point orange, relâcher dans le vert</span></p>
+        <p><kbd>5</kbd> <kbd>6</kbd><span>pistolet de détresse, fusil-harpon</span></p>
+        <h3>Multijoueur</h3>
+        <p><kbd>Entrée</kbd><span>écrire à l'équipage</span></p>
+        <p><kbd>V</kbd><span>placer un repère « ici ! »</span></p>
+        <p><kbd>B</kbd><span>parler (micro) · de près, ou partout avec un talkie</span></p>
+        <p><kbd>C</kbd><span>maintenu : roue de messages rapides (bougez la souris, relâchez)</span></p>
+        <p><kbd>E</kbd><span>maintenu près d'un coéquipier à terre : le relever</span></p>
+        <h3>Aux commandes</h3>
+        <p><kbd>Z</kbd>/<kbd>S</kbd><span>gaz</span></p>
+        <p><kbd>Q</kbd>/<kbd>D</kbd><span>palonnier, diriger au sol et sur l'eau</span></p>
+        <p><kbd>Souris</kbd><span>manche (ou flèches)</span></p>
+        <p><kbd>P</kbd><span>pilote automatique</span></p>
+        <p><kbd>C</kbd><span>vue cockpit</span></p>
+        <p><kbd>E</kbd><span>quitter le siège</span></p>
+        <h3>Débogage</h3>
+        <p><kbd>F1</kbd><span>panneau d'infos</span></p>
+        <p><kbd>F2</kbd><span>temps ×10</span></p>
+        <p><kbd>F3</kbd><span>passer à 18 h 30</span></p>
+        <p><kbd>F4</kbd><span>réparer l'avion (île 1)</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Mort ── -->
+  <div id="dead" class="screen hidden">
+    <div class="pauseCard dark">
+      <h2 id="deadTitle">Les zombies vous ont eu</h2>
+      <p>Vous vous réveillez au petit matin. Tout ce qui est fixé sur l'avion est toujours là.</p>
+      <button id="btnRetry" class="big primary"><span>Recommencer la journée</span></button>
+    </div>
+  </div>
+
+  <!-- ── Fin de la démo ── -->
+  <div id="endScreen" class="screen hidden">
+    <div class="pauseCard end">
+      <span class="sticker">fin de la démo</span>
+      <h2>Cap sur Kerloch</h2>
+      <p>Le Coucou file vers l'ouest avec la caisse Hélios dans la soute. Marthe a allumé la cafetière.</p>
+      <ul id="endStats"></ul>
+      <button id="btnEndFly" class="big primary"><span>Continuer à voler</span></button>
+      <button id="btnEndMenu" class="big"><span>Retour au menu</span></button>
+    </div>
+  </div>
+
+  <div id="fade"></div>
+  <div id="fps" class="hidden"></div>
+  <div id="debug" class="hidden"></div>
+</div>
+<script>/*__SCRIPT__*/</script>
+</body>
+</html>

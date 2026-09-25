@@ -1,0 +1,12 @@
+# Déploiement Render (plan gratuit) : « New + » → « Blueprint » → ce dépôt.
+services:
+  - type: web
+    name: plane-is-out
+    runtime: node
+    plan: free
+    buildCommand: npm install && node build.mjs
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
