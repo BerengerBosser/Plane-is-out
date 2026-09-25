@@ -1,10 +1,14 @@
 // Véhicules de piste : kart à bagages électrique (île 2), et sur Port-Cendre (île 3) le camion de pompiers,
 // le camion-escalier, le camion-citerne, le chariot élévateur et le tracteur de repoussage.
 // Le conducteur simule son véhicule et le publie dans sa présence ; à la descente, l'état est validé par l'hôte.
+// Les zombies abîment la carrosserie des véhicules occupés ; à 0 % le véhicule est en panne (il roule au pas)
+// et se répare au fer d'un poste à souder (un par île, voir vweld.js).
 import * as THREE from 'three';
 import { prep, flatMat, heightAt, textTexture } from './terrain.js';
 import { clamp } from './terrain.js';
 import { buildAvatar } from './avatars.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { makeColGrid } from './colgrid.js';
 
 function box(w, h, d, col, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(prep(new THREE.BoxGeometry(w, h, d), col), flatMat);
@@ -53,7 +57,8 @@ export function buildCharger() {
 }
 // ── habitacle : vitres transparentes, tableau de bord, volant, sièges (vue à la première personne dégagée) ──
 const glassMat = new THREE.MeshLambertMaterial({ color: '#b8dcef', transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide });
-const glowMat = (c) => new THREE.MeshBasicMaterial({ color: c, toneMapped: false });
+const glowMats = {};
+const glowMat = (c) => glowMats[c] || (glowMats[c] = new THREE.MeshBasicMaterial({ color: c, toneMapped: false }));   // partagé : fusionnable
 function glass(g, w, h, x, y, z, ry = 0) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glassMat); m.position.set(x, y, z); m.rotation.y = ry; m.userData.noCollide = true; g.add(m); return m; }
 function steering(g, x, y, z, r = 0.19, tilt = -1.05) {
   const w = new THREE.Mesh(prep(new THREE.TorusGeometry(r, 0.028, 5, 16), '#15181d'), flatMat); w.position.set(x, y, z); w.rotation.x = tilt; g.add(w);
@@ -228,6 +233,46 @@ function buildTug() {
   return { root: g, wheels: wh, lamp, bar, hitch: new THREE.Vector3(0, 0.6, -3.9) };
 }
 
+// fusionne les pièces fixes d'un groupe par matériau : un appel de dessin (et d'ombre) par matériau
+// au lieu d'un par pièce. `skip(o)` : pièces à garder à part (roues, gyrophares, tourelle, fourches…)
+export function mergeByMaterial(root, skip = () => false) {
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), m4 = new THREE.Matrix4();
+  const groups = new Map();
+  root.traverse((o) => {
+    if (!o.isMesh || !o.material || Array.isArray(o.material)) return;
+    for (let p = o; p && p !== root; p = p.parent) if (skip(p)) return;
+    const keys = ['position', 'normal', 'color'].filter((k) => o.geometry.attributes[k]);
+    if (o.material.map) keys.push('uv');
+    const id = `${o.material.uuid}|${keys.join()}`;
+    if (!groups.has(id)) groups.set(id, { mat: o.material, keys, list: [] });
+    groups.get(id).list.push(o);
+  });
+  for (const { mat, keys, list } of groups.values()) {
+    if (list.length < 2) continue;
+    const geos = list.map((o) => {
+      const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      for (const k of Object.keys(g.attributes)) if (!keys.includes(k)) g.deleteAttribute(k);
+      return g.applyMatrix4(m4.multiplyMatrices(inv, o.matrixWorld));
+    });
+    const merged = mergeGeometries(geos);
+    if (!merged) continue;
+    list.forEach((o) => o.parent.remove(o));
+    const m = new THREE.Mesh(merged, mat);
+    m.castShadow = list.some((o) => o.castShadow); m.receiveShadow = list.some((o) => o.receiveShadow);
+    m.userData.noCollide = list.every((o) => o.userData.noCollide);
+    root.add(m);
+  }
+}
+function mergeModel(model) {
+  const keep = new Set([model.lamp, model.lamp2, model.turret, model.carriage, model.gauge, ...model.wheels.filter((_, i) => i % 2 === 0)].filter(Boolean));
+  mergeByMaterial(model.root, (o) => keep.has(o));
+  if (model.turret) mergeByMaterial(model.turret);
+  if (model.carriage) mergeByMaterial(model.carriage, (o) => o === model.pallet);
+  if (model.pallet) mergeByMaterial(model.pallet);
+  return model;
+}
+
 export const VTYPES = {
   kart: { name: 'Kart à bagages', build: buildKart, max: 9, accel: 7, turn: 1.9, len: 3.0, wid: 1.6, h: 2.65, seat: [-0.3, 1.0, -0.05], pass: [0.33, 1.0, -0.05], eye: 0.86, cam: 6, battery: true, cargo: true, drain: 0.12 },
   fire: { name: 'Camion de pompiers', build: buildFireTruck, max: 11, accel: 4, turn: 1.1, len: 7.4, wid: 2.4, h: 2.9, seat: [-0.55, 1.2, -2.8], pass: [0.55, 1.2, -2.8], eye: 0.95, cam: 11, spray: true },
@@ -256,12 +301,12 @@ export const VehicleMixin = {
     const old = this.vehicles[id];
     if (old) { this.scene.remove(old.model.root); if (old.palletMesh) this.scene.remove(old.palletMesh); }
     const def = VTYPES[type];
-    const model = def.build();
+    const model = mergeModel(def.build());
     this.scene.add(model.root);
-    const v = { id, type, def, model, home: { x, z, yaw }, x, z, yaw, y: heightAt(x, z), pitch: 0, speed: 0, drv: null, bat: 100, cargo: null, fork: 0, spray: false, t: { x, z, yaw }, wheelA: 0, ...extra };
+    const v = { id, type, def, model, home: { x, z, yaw }, x, z, yaw, y: heightAt(x, z), pitch: 0, speed: 0, drv: null, bat: 100, hp: 100, cargo: null, fork: 0, spray: false, t: { x, z, yaw }, wheelA: 0, ...extra };
     this.vehicles[id] = v;
     // chariot élévateur : palette détachable (sur les fourches, ou posée au sol)
-    if (def.forks) { v.palletMesh = buildPallet(); v.palletMesh.visible = false; this.scene.add(v.palletMesh); this.setPallet(v, 1); }
+    if (def.forks) { v.palletMesh = buildPallet(); mergeByMaterial(v.palletMesh); v.palletMesh.visible = false; this.scene.add(v.palletMesh); this.setPallet(v, 1); }
     this.poseVehicle(v);
     return v;
   },
@@ -269,7 +314,7 @@ export const VehicleMixin = {
     if (this.driving) this.exitVehicle(true);
     if (this.riding) this.exitPassenger(true);
     for (const v of Object.values(this.vehicles)) {
-      Object.assign(v, { x: v.home.x, z: v.home.z, yaw: v.home.yaw, speed: 0, drv: null, pas: null, bat: 100, cargo: null, fork: 0, spray: false, hitched: false, vlat: 0, roll: 0, pdyn: 0 });
+      Object.assign(v, { x: v.home.x, z: v.home.z, yaw: v.home.yaw, speed: 0, drv: null, pas: null, bat: 100, hp: 100, cargo: null, fork: 0, spray: false, hitched: false, vlat: 0, roll: 0, pdyn: 0 });
       v.t = { x: v.x, z: v.z, yaw: v.yaw };
       if (v.def.forks) this.setPallet(v, 1);
       this.poseVehicle(v);
@@ -324,7 +369,27 @@ export const VehicleMixin = {
     for (let i = 0; i < v.model.wheels.length; i += 2) v.model.wheels[i].rotation.x = v.wheelA;
     if (v.model.carriage) v.model.carriage.position.y = 0.25 + v.fork;
   },
-  vehicleWorld(v, local) { const r = v.model.root; r.updateMatrixWorld(true); return r.localToWorld(local.clone()); },
+  // le modèle est posé directement dans la scène : sa matrice monde = sa matrice locale (pas besoin de parcourir ses enfants)
+  vehicleWorld(v, local) { const r = v.model.root; r.updateMatrix(); r.matrixWorld.copy(r.matrix); return local.clone().applyMatrix4(r.matrixWorld); },
+
+  // colliders à moins de R (en x/z) d'un point, pris dans plusieurs listes : évite de tester (et de recopier)
+  // les milliers de boîtes de tout l'archipel à chaque image
+  nearCols(x, z, R, ...lists) {
+    const out = [];
+    for (let L of lists) {
+      if (!L) continue;
+      // la grande liste de l'archipel passe par sa grille
+      if (L === this.colliders) { this._colGrid = this._colGrid?.list === L ? this._colGrid : Object.assign(makeColGrid(L), { list: L }); L = this._colGrid.query(x, z, R); }
+      for (const c of L) {
+        if (!c) continue;
+        if (c.type === 'circle') { if (Math.abs(c.x - x) > R + c.r || Math.abs(c.z - z) > R + c.r) continue; }
+        else if (c.minX !== undefined && (c.maxX < x - R || c.minX > x + R || c.maxZ < z - R || c.minZ > z + R)) continue;
+        out.push(c);
+      }
+    }
+    return out;
+  },
+  planeNear(x, z, R) { const p = this.plane.root.position; return Math.abs(p.x - x) < R && Math.abs(p.z - z) < R; },
 
   // ── chaque image : miroirs, colliders, cargaisons, recharge ──
   updateVehicles(dt) {
@@ -343,6 +408,13 @@ export const VehicleMixin = {
           this.poseVehicle(v);
         }
         if (v.t.fork !== undefined) { v.fork += (v.t.fork - v.fork) * k; if (v.model.carriage) v.model.carriage.position.y = 0.25 + v.fork; }
+      }
+      // carrosserie abîmée : fumée grise, noire quand le véhicule est en panne
+      const smoke = v.hp <= 0 ? 'dead' : v.hp < 50 ? 'hurt' : null;
+      if (smoke !== v._smoke || (smoke && !this.smoke.emitters.has(`veh_${v.id}`))) {
+        v._smoke = smoke;
+        this.smoke.remove(`veh_${v.id}`);
+        if (smoke) this.smoke.add(`veh_${v.id}`, () => this.vehicleWorld(v, new THREE.Vector3(0, v.def.h * 0.55, -v.def.len * 0.3)), smoke === 'dead' ? '#2a2724' : '#9a9690', smoke === 'dead' ? 5 : 2.5, 1.6);
       }
       // lumière tournante quand quelqu'un conduit
       if (v.model.lamp) v.model.lamp.visible = !!v.drv && Math.sin(this.t * 8 + v.x) > -0.2;
@@ -409,7 +481,8 @@ export const VehicleMixin = {
       if (d > v.def.len / 2 + 3) continue;
       const seat = this.vehicleWorld(v, V3(v.def.seat));
       const taken = v.drv && v.drv !== this.myId() && this.session?.players.has(v.drv);
-      if (!this.carrying) add(seat.clone().setY(Math.max(seat.y, me.y + 0.6)), v.def.len / 2 + 1.2, taken ? { prompt: `<span class="warn">${v.def.name} : quelqu'un conduit</span>` } : { prio: 1, prompt: `<kbd>E</kbd> conduire : ${v.def.name}${v.def.battery ? ` (batterie ${Math.round(v.bat)} %)` : ''}`, press: () => this.enterVehicle(v) });
+      const state = v.hp <= 0 ? ' · <span class="warn">en panne</span>' : v.hp < 100 ? ` · état ${Math.round(v.hp)} %` : '';
+      if (!this.carrying) add(seat.clone().setY(Math.max(seat.y, me.y + 0.6)), v.def.len / 2 + 1.2, taken ? { prompt: `<span class="warn">${v.def.name} : quelqu'un conduit</span>` } : { prio: 1, prompt: `<kbd>E</kbd> conduire : ${v.def.name}${v.def.battery ? ` (batterie ${Math.round(v.bat)} %)` : ''}${state}`, press: () => this.enterVehicle(v) });
       // place passager (côté droit)
       if (v.def.pass && !this.carrying) {
         const ps = this.vehicleWorld(v, V3(v.def.pass));
@@ -475,7 +548,7 @@ export const VehicleMixin = {
       const tgt = new THREE.Vector3(v.x, v.y + d.h * 0.7, v.z), dist = d.cam, pitch = clamp(0.25 - P.pitch * 0.6, -0.3, 1.0);
       cam.position.set(tgt.x + Math.sin(P.yaw) * Math.cos(pitch) * dist, tgt.y + Math.sin(pitch) * dist, tgt.z + Math.cos(P.yaw) * Math.cos(pitch) * dist);
       cam.position.y = Math.max(cam.position.y, this.groundAt(cam.position.x, cam.position.z, 99) + 0.6);
-      this.camClip('veh', tgt, cam.position, dt, { ignoreVeh: v.id });
+      this.camClip('veh', tgt, cam.position, dt, { ignoreVeh: v.id, cols: this.nearCols(v.x, v.z, dist + 3, this.colliders, this.blockCols, this.vehicleCols) });
       cam.lookAt(tgt);
     }
     this.moving = false;
@@ -506,7 +579,7 @@ export const VehicleMixin = {
     this.driving = null;
     v.speed = 0; v.vlat = 0; v.roll = 0; v.pdyn = 0;
     this.audio.setEngine(0, 0);
-    this.camera.fov = +document.getElementById('optFov').value || 72; this.camera.updateProjectionMatrix();
+    this.camera.fov = this.baseFov || 72; this.camera.updateProjectionMatrix();
     this.act('vdrive', { v: v.id, on: 0, x: +v.x.toFixed(2), z: +v.z.toFixed(2), yaw: +v.yaw.toFixed(3), bat: Math.round(v.bat), fork: +v.fork.toFixed(2) });
     // on descend côté conducteur
     const side = this.vehicleWorld(v, new THREE.Vector3(-(v.def.wid / 2 + 0.9), 0, v.def.seat[2]));
@@ -533,7 +606,8 @@ export const VehicleMixin = {
     }
     if (d.reverseSeat) { thr = -thr; }
     const dead = d.battery && v.bat <= 0;
-    const max = dead ? 1.2 : d.max;
+    const broken = v.hp <= 0;
+    const max = dead || broken ? (broken ? 1.8 : 1.2) : d.max * (v.hp < 35 ? 0.75 : 1);
     const hand = !blocked && inp.down('Space') && !d.fuel && !d.forks && !d.tug;
     // direction progressive (plus douce à haute vitesse)
     v.steer = (v.steer || 0) + (steer - (v.steer || 0)) * Math.min(1, dt * (steer ? 5 : 8));
@@ -560,14 +634,15 @@ export const VehicleMixin = {
     const rev = Math.min(1, Math.abs(v.speed) / d.max);
     this.audio.setEngine(0.18 + rev * 0.3 + Math.abs(thr) * 0.08, 0.12 + rev * 0.55 + (thr ? 0.08 : 0));
     // champ de vision : un peu plus large avec la vitesse
-    const baseFov = +document.getElementById('optFov').value || 72;
+    const baseFov = this.baseFov || 72;
     const fov = baseFov + rev * 9;
     if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 3); this.camera.updateProjectionMatrix(); }
     // eau profonde : on s'arrête au bord
     const probe = Math.sign(v.speed || 1) * d.len * 0.5;
     if (heightAt(nx + fw.x * probe, nz + fw.z * probe) < -0.7 && !this.onAnyPlatform(nx + fw.x * probe, nz + fw.z * probe)) { nx = v.x; nz = v.z; v.speed = 0; }
     // collisions : cercles le long du véhicule
-    const cols = this.colliders.concat(this.blockCols || [], this.vehicleCols || [], this.planeColliders(), this.extraVehicleCols?.(v) || []);
+    const reach = d.len + Math.abs(v.speed) * dt + 2;
+    const cols = this.nearCols(nx, nz, reach, this.colliders, this.blockCols, this.vehicleCols, this.planeNear(nx, nz, reach + 12) ? this.planeColliders() : null, this.extraVehicleCols?.(v));
     const r = d.wid / 2, n = d.len > 5 ? 3 : 2;
     let hit = false;
     for (let pass = 0; pass < 2; pass++) {
@@ -614,7 +689,6 @@ export const VehicleMixin = {
     if (this.vcam.first) {
       const eye = this.vehicleWorld(v, V3(d.seat).add(new THREE.Vector3(0, d.eye, 0.04)));
       cam.position.copy(eye);
-      v.model.root.updateMatrixWorld(true);
       cam.quaternion.copy(v.model.root.quaternion).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-this.vcam.pitch + 0.2, (d.reverseSeat ? Math.PI : 0) + this.vcam.yaw, 0, 'YXZ')));
     } else {
       if (Math.abs(v.speed) > 1 && !inp.mdx) this.vcam.yaw *= Math.exp(-1.2 * dt);
@@ -622,13 +696,14 @@ export const VehicleMixin = {
       const tgt = new THREE.Vector3(v.x, v.y + d.h * 0.7, v.z);
       cam.position.set(tgt.x + Math.sin(a) * Math.cos(this.vcam.pitch) * dist, tgt.y + Math.sin(this.vcam.pitch) * dist, tgt.z + Math.cos(a) * Math.cos(this.vcam.pitch) * dist);
       cam.position.y = Math.max(cam.position.y, this.groundAt(cam.position.x, cam.position.z, 99) + 0.6);
-      this.camClip('veh', tgt, cam.position, dt, { ignoreVeh: v.id });
+      this.camClip('veh', tgt, cam.position, dt, { ignoreVeh: v.id, cols: this.nearCols(v.x, v.z, dist + 3, this.colliders, this.blockCols, this.vehicleCols) });
       cam.lookAt(tgt);
     }
     P.yaw = v.yaw + this.vcam.yaw + (d.reverseSeat ? Math.PI : 0);
     // HUD
     const bat = d.battery ? ` · batterie ${Math.round(v.bat)} %${v.charging ? ' ⚡ en charge' : dead ? ' · <span class="warn">vide : borne de recharge !</span>' : ''}` : '';
-    ui.carry(d.name, `${Math.round(Math.abs(v.speed) * 3.6)} km/h${bat}${d.forks ? ` · fourches ${v.fork.toFixed(1)} m · ${v.cargo ? 'chargé' : v.pallet ? 'palette dessus' : 'fourches nues'}` : ''}`);
+    const body = broken ? ' · <span class="warn">en panne : roulez au pas jusqu\'à un poste à souder</span>' : v.hp < 100 ? ` · état ${Math.round(v.hp)} %` : '';
+    ui.carry(d.name, `${Math.round(Math.abs(v.speed) * 3.6)} km/h${bat}${body}${d.forks ? ` · fourches ${v.fork.toFixed(1)} m · ${v.cargo ? 'chargé' : v.pallet ? 'palette dessus' : 'fourches nues'}` : ''}`);
     this.tipKeys(`veh:${v.type}`, `<kbd>Z</kbd>/<kbd>S</kbd> avancer/freiner · <kbd>Q</kbd>/<kbd>D</kbd> tourner${!d.fuel && !d.forks && !d.tug ? ' · <kbd>Espace</kbd> frein à main' : ''}<br><kbd>C</kbd> vue · <kbd>E</kbd> descendre${this.vehicleKeys(v)}`);
     if (inp.hit('KeyE') && !blocked) { this.exitVehicle(); inp.pressed.delete('KeyE'); }
   },
@@ -662,6 +737,7 @@ export const VehicleMixin = {
       // les gros morceaux (boss, cogneurs) arrêtent presque le véhicule ; les autres le ralentissent à peine
       const big = e.T.boss || (e.T.hp >= 200 && heavy < 1.5);
       v.speed *= big ? 0.25 : 0.9;
+      this.damageVehicle(v, e.T.boss || e.T.elite ? 10 : e.T.hp >= 200 ? 5 : 1.5, true);
     }
   },
   vehicleKeys(v) {
@@ -732,7 +808,7 @@ export const VehicleMixin = {
     const o = {};
     for (const v of Object.values(this.vehicles)) {
       const P = v.palletAt, pal = !v.def.forks ? 0 : v.pallet || !P ? 1 : [P.x, P.z, P.yaw, P.y];
-      o[v.id] = [+v.x.toFixed(2), +v.z.toFixed(2), +v.yaw.toFixed(3), v.drv || 0, Math.round(v.bat), v.cargo || 0, +v.fork.toFixed(2), v.hitched ? 1 : 0, pal];
+      o[v.id] = [+v.x.toFixed(2), +v.z.toFixed(2), +v.yaw.toFixed(3), v.drv || 0, Math.round(v.bat), v.cargo || 0, +v.fork.toFixed(2), v.hitched ? 1 : 0, pal, Math.round(v.hp)];
     }
     return o;
   },
@@ -740,8 +816,8 @@ export const VehicleMixin = {
     for (const [id, a] of Object.entries(s || {})) {
       const v = this.vehicles[id];
       if (!v || v === this.driving) continue;
-      const [x, z, yaw, drv, bat, cargo, fork, hitched, pal] = a;
-      v.drv = drv || null; v.bat = bat; v.hitched = !!hitched;
+      const [x, z, yaw, drv, bat, cargo, fork, hitched, pal, hp] = a;
+      v.drv = drv || null; v.bat = bat; v.hitched = !!hitched; v.hp = hp ?? 100;
       if (!v.drv || full) { v.t = { x, z, yaw, fork }; if (full) { v.x = x; v.z = z; v.yaw = yaw; v.fork = fork; this.poseVehicle(v); } }
       this.setCargo(v, cargo || null);
       if (v.def.forks && pal) this.setPallet(v, !Array.isArray(pal), Array.isArray(pal) ? { x: pal[0], z: pal[1], yaw: pal[2], y: pal[3] } : null);
@@ -752,11 +828,30 @@ export const VehicleMixin = {
     v.cargo = id;
     if (id) { const it = this.items[id]; if (it) { it.onVehicle = v.id; it.state = 'ground'; it.carrier = null; it.mesh.visible = true; if (this.carrying === it) this.carrying = null; } }
   },
+  // coups encaissés par un véhicule (appelé chez celui qui est à bord) : l'état est partagé avec l'équipage
+  damageVehicle(v, dmg, quiet) {
+    const before = v.hp ?? 100;
+    if (before <= 0) return;
+    const hp = Math.max(0, before - dmg * (v.def.len > 5 ? 0.5 : 1));   // les camions encaissent deux fois mieux
+    this.act('vhp', { v: v.id, hp: +hp.toFixed(1) });
+    if (quiet) return;
+    this.audio.clank(); this.audio.thud();
+    this.player.shake = Math.max(this.player.shake, 0.4);
+    if (hp <= 0) { this.audio.explosion(); this.ui.toast(`${v.def.name} en panne !`, 'Il ne roule plus qu\'au pas, et ne vous protège plus. Réparez-le au fer d\'un poste à souder (🔧 sur la carte).', 'bad', 6000); }
+    else if (before >= 50 && hp < 50) this.ui.toast(`${v.def.name} endommagé`, `État ${Math.round(hp)} % · un poste à souder le remettra à neuf.`, 'bad', 3500);
+  },
   applyVehicleAct(type, d, by, auth) {
     const v = d.v && this.vehicles[d.v];
     if (!v) return null;
     const me = by === this.myId();
     switch (type) {
+      case 'vhp': {
+        const was = v.hp;
+        v.hp = Math.max(0, Math.min(100, +d.hp || 0));
+        if (was > 0 && v.hp <= 0 && !me && Math.hypot(v.x - this.playerWorld().x, v.z - this.playerWorld().z) < 60) this.audio.explosion();
+        this.dirtyWorld = true;
+        return true;
+      }
       case 'vdrive': {
         if (d.on) {
           if (auth && v.drv && v.drv !== by && (!this.session || this.session.players.has(v.drv))) return false;

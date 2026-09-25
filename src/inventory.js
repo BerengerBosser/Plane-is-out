@@ -186,13 +186,13 @@ export const InventoryMixin = {
   // ── en main ──
   heldItem() { const s = this.inv.sel; return s !== 'fists' ? this.inv.eq[s] : null; },
   heldKey() {
-    if (this.iron === this.myId()) return 'iron';
+    if (this.iron === this.myId() || this.vweld) return 'iron';
     return this.heldItem()?.k || 'fists';
   },
   syncHeld() { const k = this.heldKey(); this.slot = EQ[k] ?? 0; },
   selectEq(s) {
     if (s !== 'fists' && !this.inv.eq[s]) { s = 'fists'; }
-    if (this.iron === this.myId() && s !== this.inv.sel) { this.ui.toast('Mains prises', 'Raccrochez d\'abord le fer (<kbd>G</kbd>).', 'bad', 1800); return; }
+    if ((this.iron === this.myId() || this.vweld) && s !== this.inv.sel) { this.ui.toast('Mains prises', 'Raccrochez d\'abord le fer (<kbd>G</kbd>).', 'bad', 1800); return; }
     const want = s === 'fists' ? 'fists' : this.inv.eq[s].k;
     if (this.carrying && this.carryMode === 'diable' && want !== 'diable') { this.ui.toast('Mains prises', 'Posez la pièce (<kbd>G</kbd>).', 'bad', 1800); return; }
     if (this.carrying && this.carryMode === 'hand' && s !== 'fists') { this.ui.toast('Mains prises', 'Posez la pièce (<kbd>G</kbd>).', 'bad', 1800); return; }
@@ -318,7 +318,7 @@ export const InventoryMixin = {
     if (!g) return;
     const it = clone(g.it);
     const left = this.invPut(it);
-    if (left === (g.it.n || 1)) { this.audio.error(); this.ui.toast('Plus de place', 'Libérez de la place (<kbd>I</kbd>).', 'bad', 1800); this.invUndoPut(it); return; }
+    if (left === (g.it.n || 1)) { this.audio.error(); this.ui.toast('Plus de place', 'Libérez de la place (<kbd>A</kbd>).', 'bad', 1800); this.invUndoPut(it); return; }
     const ok = this.act('cx', { s: 'ground', u });
     if (ok === false) { this.invUndoPut(it); return; }
     if (this.session && !this.session.isHost) this.pendingCx[this.mySeq] = { remove: it.u };
@@ -340,6 +340,11 @@ export const InventoryMixin = {
   // src / dst : 'g:top', 's:primary', 'c:back', 'plane', 'loot:ID', 'ground'
   invMove(src, u, dst, x, y, r = 0) {
     const shared = (id) => id === 'plane' || id === 'ground' || id.startsWith('loot:');
+    // vêtement sur un vêtement porté (ex. un sac sur le sac), ou objet d'un conteneur sur un emplacement occupé : on remplace
+    if (src !== dst && (dst.startsWith('c:') || (dst.startsWith('s:') && shared(src)))) {
+      const occ = dst.startsWith('c:') ? this.inv.cl[dst.slice(2)] : this.inv.eq[dst.slice(2)];
+      if (occ && occ.u !== u) return this.invSwapSlot(src, u, dst);
+    }
     if (src === dst && !shared(src) && src.startsWith('g:')) {
       const f = this.invFind(u); const g = this.wearGrid(src.slice(2));
       if (!f || !g || !fitsAt(g.items, g.w, g.h, f.it, x, y, r, f.it)) return this.mergeStack(f?.it, g?.items, x, y);
@@ -406,6 +411,69 @@ export const InventoryMixin = {
     this.audio.clank();
     return true;
   },
+  // remplace ce qui occupe un emplacement (vêtement ou équipement) par l'objet glissé, d'où qu'il vienne.
+  // Le contenu de l'ancien vêtement passe dans le nouveau ; l'ancien objet reprend la place du nouveau,
+  // sinon il va dans les poches, sinon dans le conteneur d'origine, sinon au sol (avec ce qui n'a pas suivi).
+  invSwapSlot(src, u, dst) {
+    const shared = src === 'plane' || src === 'ground' || src.startsWith('loot:');
+    const C = shared && src !== 'ground' ? this.containerInfo(src) : null;
+    const f = shared ? null : this.invFind(u);
+    const orig = shared ? (src === 'ground' ? this.gItems.find((g) => g.u === u)?.it : C?.items.find((o) => o.u === u)) : f?.it;
+    if (!orig) return false;
+    const d = GEAR[orig.k], slot = dst.slice(2), wear = dst.startsWith('c:');
+    if (wear ? d.wear !== slot : !d.eq || d.eq !== slotType(slot)) return this.placePersonal(orig, dst);   // refus expliqué
+    const snapshot = clone(this.inv);
+    const from = f && { where: f.where, x: orig.x, y: orig.y, r: orig.r };
+    const it = shared ? clone(orig) : this.invRemove(u);
+    const old = wear ? this.inv.cl[slot] : this.inv.eq[slot];
+    if (wear) {
+      this.inv.cl[slot] = it;
+      if (d.grid && !it.c) it.c = [];
+      if (old?.c?.length && d.grid) { const keep = []; for (const o of old.c) if (gridAdd(it.c, d.grid[0], d.grid[1], o)) keep.push(o); old.c = keep; }
+    } else { it.x = 0; it.y = 0; it.r = 0; this.inv.eq[slot] = it; }
+    if (shared) {
+      const ok = this.act('cx', { s: src, u });
+      if (ok === false) { this.inv = snapshot; this.invChanged(); return false; }
+      if (this.session && !this.session.isHost) this.pendingCx[this.mySeq] = { remove: it.u };
+    }
+    // l'ancien objet
+    const full = !!old.c?.length;
+    let placed = false;
+    if (!full) {
+      if (from && (from.where.startsWith('g:') || from.where.startsWith('s:'))) placed = this.placePersonal(old, from.where, from.x, from.y, from.r || 0) === true;
+      if (!placed) { const n = old.n || 1, left = this.invPut(old, { toSlot: false }); placed = left === 0; if (!placed && left < n) old.n = left; }
+    }
+    if (!placed && C && findSpot(C.items.filter((o) => o.u !== u), C.w, C.h, old)) {
+      placed = this.act('cx', { d: src, it: clone(old) }) !== false;
+      if (placed) this.ui.toast(`${GEAR[old.k].name} rangé`, C.title, '', 1600);
+    }
+    if (!placed) {
+      this.dropItem(old);
+      this.ui.toast(`${GEAR[old.k].name} posé au sol`, full ? `Avec ${old.c.length > 1 ? `${old.c.length} objets qui n'ont pas suivi` : 'un objet qui n\'a pas suivi'}.` : 'Plus de place dans les poches.', full ? 'bad' : '', 2200);
+    }
+    this.syncHeld();
+    this.invChanged();
+    this.audio.clank();
+    return true;
+  },
+  // Maj + clic : transfert rapide (poches ↔ conteneur ouvert, sol → poches, emplacement → poches, sinon poche suivante)
+  invShift(c, u) {
+    const shared = c === 'plane' || c === 'ground' || c.startsWith('loot:');
+    if (shared) return this.invMove(c, u, 'auto');
+    if (this.invCtx && this.invCtx !== 'ground') return this.invMove(c, u, this.invCtx);
+    const f = this.invFind(u);
+    if (!f) return false;
+    if (!f.list) return this.invMove(c, u, 'grid');
+    const gs = this.playerGrids(), i = gs.findIndex((g) => g.id === f.where);
+    for (let k = 1; k < gs.length; k++) {
+      const g = gs[(i + k) % gs.length];
+      if (g.it !== f.it && findSpot(g.items, g.w, g.h, f.it)) return this.invMove(c, u, g.id);
+    }
+    this.ui.toast('Nulle part où le ranger', 'Les autres poches sont pleines.', 'bad', 1400);
+    return false;
+  },
+  // Ctrl + clic ou Suppr : jeter au sol
+  invDrop(c, u) { return c === 'ground' ? false : this.invMove(c, u, 'ground'); },
   dropSpot() { const w = this.playerWorld(); const f = this.player.forward(); const x = w.x + f.x * 0.9, z = w.z + f.z * 0.9; return [+x.toFixed(2), +Math.max(this.groundAt(x, z, w.y + 1), -0.3).toFixed(2), +z.toFixed(2)]; },
   // empile un objet sur une pile identique à la case visée
   mergeStack(it, items, x, y) {
@@ -497,6 +565,8 @@ export const InventoryMixin = {
       move: (src, u, dst, x, y, r) => { const ok = this.invMove(src, u, dst, x, y, r); this.syncHeld(); return ok; },
       actions: (c, u) => this.invActions(c, u),
       quick: (c, u) => { this.invQuick(c, u); this.syncHeld(); },
+      shift: (c, u) => { this.invShift(c, u); this.syncHeld(); },
+      drop: (c, u) => { this.invDrop(c, u); this.syncHeld(); },
       info: (it) => (it === 'oil' ? this.oil : this.itemInfo(it)),
       onClose: () => this.toggleInventory(false),
     };
@@ -541,22 +611,22 @@ export const InventoryMixin = {
     if (shared) {
       const it = c === 'ground' ? this.gItems.find((g) => g.u === u)?.it : this.containerInfo(c)?.items.find((o) => o.u === u);
       if (!it) return out;
-      out.push({ label: 'Prendre', fn: () => this.invMove(c, u, 'auto') });
+      out.push({ label: 'Prendre', key: 'Maj+clic', fn: () => this.invMove(c, u, 'auto') });
       if (GEAR[it.k].wear) out.push({ label: 'Porter', fn: () => this.invMove(c, u, `c:${GEAR[it.k].wear}`) });
-      if (c !== 'ground') out.push({ label: 'Poser au sol', fn: () => this.invMove(c, u, 'ground') });
+      if (c !== 'ground') out.push({ label: 'Poser au sol', key: 'Ctrl+clic', fn: () => this.invMove(c, u, 'ground') });
       return out;
     }
     const f = this.invFind(u);
     if (!f) return out;
     const it = f.it, d = GEAR[it.k];
     if (d.use === 'heal') out.push({ label: 'Utiliser', fn: () => this.useHeal(it.k, u) });
-    if (d.eq && f.where.startsWith('g:')) out.push({ label: 'Équiper', fn: () => this.invQuick(c, u) });
-    if (d.wear && f.where.startsWith('g:')) out.push({ label: 'Porter', fn: () => this.invMove(c, u, `c:${d.wear}`) });
-    if (f.where.startsWith('s:') || f.where.startsWith('c:')) out.push({ label: f.where.startsWith('c:') ? 'Retirer' : 'Ranger', fn: () => this.invMove(c, u, 'grid') });
+    if (d.eq && f.where.startsWith('g:')) out.push({ label: 'Équiper', key: 'double-clic', fn: () => this.invQuick(c, u) });
+    if (d.wear && f.where.startsWith('g:')) out.push({ label: 'Porter', key: 'double-clic', fn: () => this.invMove(c, u, `c:${d.wear}`) });
+    if (f.where.startsWith('s:') || f.where.startsWith('c:')) out.push({ label: f.where.startsWith('c:') ? 'Retirer' : 'Ranger', key: this.invCtx && this.invCtx !== 'ground' ? '' : 'Maj+clic', fn: () => this.invMove(c, u, 'grid') });
     if ((it.n || 1) > 1 && f.list) out.push({ label: 'Diviser', fn: () => this.splitStack(u) });
     if (GUNS[it.k] && it.mag > 0) out.push({ label: 'Décharger', fn: () => { const n = it.mag; it.mag = 0; this.giveItem(d.ammo, n, {}, { toSlot: false }); } });
-    if (this.invCtx && this.invCtx !== 'ground') out.push({ label: this.invCtx === 'plane' ? 'Mettre au coffre' : 'Déposer', fn: () => this.invMove(c, u, this.invCtx) });
-    out.push({ label: 'Jeter', fn: () => this.invMove(c, u, 'ground') });
+    if (this.invCtx && this.invCtx !== 'ground') out.push({ label: this.invCtx === 'plane' ? 'Mettre au coffre' : 'Déposer', key: 'Maj+clic', fn: () => this.invMove(c, u, this.invCtx) });
+    out.push({ label: 'Jeter', key: 'Ctrl+clic', fn: () => this.invMove(c, u, 'ground') });
     return out;
   },
   invQuick(c, u) {

@@ -55,9 +55,19 @@ const SHOP = [
   { id: 'talkie', icon: '📻', name: 'Talkie-walkie', desc: 'Parler à tout l\'équipage', cost: 5, personal: true, give: ['talkie', 1] },
   { id: 'flares', icon: '🎆', name: '6 fusées', desc: 'Pistolet de détresse', cost: 3, personal: true, give: ['a_flare', 6], gun: 'flare' },
   { id: 'harps', icon: '🔱', name: '4 harpons', desc: 'Fusil-harpon', cost: 4, personal: true, give: ['a_harpoon', 4], gun: 'harpoon' },
-  { id: 'p9', icon: '🔫', name: '24 balles de 9 mm', desc: 'Pistolet', cost: 4, personal: true, give: ['a_p9', 24], gun: 'pistol' },
+  { id: 'p9', icon: '🔫', name: '24 balles de 9 mm', desc: 'Pistolet, pistolet-mitrailleur', cost: 4, personal: true, give: ['a_p9', 24], gun: ['pistol', 'smg'] },
   { id: 'buck', icon: '💥', name: '12 cartouches', desc: 'Fusil à pompe', cost: 5, personal: true, give: ['a_buck', 12], gun: 'shotgun' },
   { id: 'r556', icon: '🎯', name: '48 balles de 5,56', desc: 'Carabine', cost: 7, personal: true, give: ['a_r556', 48], gun: 'rifle' },
+  { id: 'm357', icon: '🔘', name: '12 balles .357', desc: 'Revolver', cost: 5, personal: true, give: ['a_357', 12], gun: 'revolver', min: 2 },
+  { id: 'm762', icon: '🔹', name: '10 balles de 7,62', desc: 'Fusil de précision', cost: 6, personal: true, give: ['a_762', 10], gun: 'sniper', min: 3 },
+  { id: 'gren', icon: '🧨', name: '3 grenades 40 mm', desc: 'Lance-grenades', cost: 7, personal: true, give: ['a_grenade', 3], gun: 'launcher', min: 3 },
+  // armes (une par joueur) : aussi à trouver sur les îles
+  { id: 'w_sledge', icon: '🔨', name: 'Masse', desc: 'Balaye tout l\'arc devant soi', cost: 6, personal: true, give: ['sledge', 1], weapon: true },
+  { id: 'w_revolver', icon: '🤠', name: 'Revolver', desc: '6 coups de .357, très puissant', cost: 9, personal: true, give: ['revolver', 1], weapon: true, min: 2 },
+  { id: 'w_katana', icon: '🗡️', name: 'Katana', desc: 'Rapide, tranchant, longue allonge', cost: 10, personal: true, give: ['katana', 1], weapon: true, min: 2 },
+  { id: 'w_smg', icon: '⚡', name: 'Pistolet-mitrailleur', desc: 'Automatique · balles de 9 mm', cost: 14, personal: true, give: ['smg', 1], weapon: true, min: 2 },
+  { id: 'w_sniper', icon: '🔭', name: 'Fusil de précision', desc: 'Lunette ×4 · traverse les rangs', cost: 18, personal: true, give: ['sniper', 1], weapon: true, min: 3 },
+  { id: 'w_launcher', icon: '💣', name: 'Lance-grenades', desc: 'Explosions · gare au souffle', cost: 22, personal: true, give: ['launcher', 1], weapon: true, min: 3 },
   { id: 'chute', icon: '🪂', name: 'Parachute', desc: 'Sauter de l\'avion en vol', cost: 6, personal: true, give: ['parachute', 1], min: 2 },
   { id: 'bandage', icon: '🩹', name: '3 bandages', desc: '+45 santé chacun (H)', cost: 2, personal: true, give: ['bandage', 3] },
   { id: 'stakes', icon: '📍', name: '3 pieux d\'ancrage', desc: 'Ancrage du treuil', cost: 2, personal: true, give: ['stake', 3] },
@@ -294,8 +304,10 @@ export const InteractMixin = {
 
     this.vehicleInteractions(add, me);
     this.lootInteractions(add, me);
+    this.vweldInteractions(add, me);
     this.c3Interactions(add, me);
     this.c4Interactions(add, me);
+    this.jetInteractions?.(add, me);
     // ── île 1 ──
     const cab = this.island.cabin;
     if (!this.flags.doorOpen) {
@@ -695,7 +707,7 @@ export const InteractMixin = {
     // à Port-Cendre et à Hélios, le Coucou ne vole plus : pas d'améliorations pour lui
     const items = () => SHOP.filter((s) => (where >= 2 || !['tank', 'engine'].includes(s.id)) && (!s.min || where >= s.min) && !(where >= 3 && s.up)).map((s) => ({
       ...s,
-      owned: s.up ? this.upgrades.has(s.id) : false,
+      owned: s.up ? this.upgrades.has(s.id) : s.weapon ? this.hasItem(s.give[0]) : false,
     }));
     const withSell = () => [{ id: 'sell', icon: '🐟', name: 'Vendre ma pêche', desc: this.fishCount() ? `${this.fishCount()} poissons dans la bourriche` : 'Bourriche vide', gain: this.fishValue(), sell: true }, ...items()];
     this.ui.shop({
@@ -707,10 +719,13 @@ export const InteractMixin = {
         if (id === 'sell') return this.sellFish();
         const s = SHOP.find((q) => q.id === id);
         if (this.scrap < s.cost) { this.audio.error(); return false; }
-        if (s.gun && !this.hasItem(s.gun)) { this.audio.error(); this.ui.toast('Pas d\'arme', 'Il faut l\'arme d\'abord.', 'bad', 1600); return false; }
+        if (s.gun && ![].concat(s.gun).some((g) => this.hasItem(g))) { this.audio.error(); this.ui.toast('Pas d\'arme', 'Il faut l\'arme d\'abord.', 'bad', 1600); return false; }
+        if (s.weapon && this.hasItem(s.give[0])) { this.audio.error(); return false; }
         this.act('shop', { cost: s.cost, up: s.up ? s.id : null });
+        // arme : rangée dans son emplacement, chargée, prise en main
+        if (s.weapon) { this.giveEquip(s.give[0]); this.lootHint(s.give[0]); this.audio.success(); return true; }
         // les achats vont dans l'inventaire (au sol s'il n'y a plus de place)
-        if (s.give) { this.giveItem(s.give[0], s.give[1], {}, { toSlot: !GEAR[s.give[0]].cat.match(/ammo|misc/) }); this.ui.toast(s.name, GEAR[s.give[0]].wear ? 'Enfilez-le dans l\'inventaire (<kbd>I</kbd>).' : '', 'good', 2000); }
+        if (s.give) { this.giveItem(s.give[0], s.give[1], {}, { toSlot: !GEAR[s.give[0]].cat.match(/ammo|misc/) }); this.ui.toast(s.name, GEAR[s.give[0]].wear ? 'Enfilez-le dans l\'inventaire (<kbd>A</kbd>).' : '', 'good', 2000); }
         if (s.id === 'medkit') this.hp = CFG.player.health;
         if (s.id === 'rod') this.selectKey('rod');
         if (s.up) this.ui.toast(s.name, 'Installé dans le Coucou.', 'good', 2000);
@@ -727,6 +742,7 @@ export const InteractMixin = {
     if (this.carrying && this.carrying.def.weight >= 2) { this.audio.error(); return; }
     if (this.nozzle === this.myId()) this.act('nozzle', { on: false });
     if (this.iron === this.myId()) this.dropIron();
+    if (this.vweld) this.dropVWeld();
     this.aboard = true;
     this.lying = false;
     if (local) { this.player.pos.set(local.x, FLOOR, local.z); this.player.yaw -= this.plane.root.rotation.y; }

@@ -231,6 +231,38 @@ export function createViewmodel() {
   rifle.add(box(0.012, 0.03, 0.012, '#ffd166', 0, 0.05, -0.8));
   leftHand(rifle, -0.4);
   rig.add(rifle);
+  const revolver = new THREE.Group(); hand(revolver);
+  revolver.add(box(0.045, 0.06, 0.34, '#8d9299', 0, 0.015, -0.17));
+  revolver.add(box(0.085, 0.085, 0.11, '#5d6470', 0, 0.0, -0.02));
+  revolver.add(box(0.055, 0.17, 0.075, '#6d4b37', 0, -0.1, 0.05));
+  revolver.add(box(0.015, 0.025, 0.02, '#ffd166', 0, 0.055, -0.32));
+  rig.add(revolver);
+  const smg = new THREE.Group(); hand(smg, 0.02, -0.1, 0.08);
+  smg.add(box(0.06, 0.09, 0.42, '#2b2f36', 0, 0, -0.18));
+  smg.add(box(0.035, 0.035, 0.16, '#1a1d22', 0, 0.01, -0.46));
+  smg.add(box(0.04, 0.22, 0.06, '#3a3f48', 0, -0.15, -0.2));
+  smg.add(box(0.05, 0.14, 0.07, '#2b2f36', 0, -0.09, 0.0));
+  smg.add(box(0.03, 0.03, 0.22, '#1a1d22', 0, 0.0, 0.16));
+  smg.add(box(0.012, 0.025, 0.012, '#ffd166', 0, 0.06, -0.36));
+  leftHand(smg, -0.32);
+  rig.add(smg);
+  const sniper = new THREE.Group(); hand(sniper, 0.02, -0.12, 0.14);
+  sniper.add(box(0.06, 0.1, 0.55, '#4a3a2a', 0, -0.01, -0.15));
+  sniper.add(box(0.03, 0.03, 0.62, '#1a1d22', 0, 0.02, -0.72));
+  const scope = new THREE.Mesh(prep(new THREE.CylinderGeometry(0.035, 0.035, 0.32, 8).rotateX(Math.PI / 2), '#10162b'), flatMat); scope.position.set(0, 0.11, -0.18); sniper.add(scope);
+  sniper.add(box(0.02, 0.05, 0.02, '#10162b', 0, 0.065, -0.1)); sniper.add(box(0.02, 0.05, 0.02, '#10162b', 0, 0.065, -0.26));
+  sniper.add(box(0.06, 0.11, 0.28, '#4a3a2a', 0, -0.04, 0.24));
+  sniper.add(box(0.06, 0.015, 0.015, '#c9ccd2', 0.05, 0.04, -0.02));
+  leftHand(sniper, -0.45);
+  rig.add(sniper);
+  const launcher = new THREE.Group(); hand(launcher, 0.02, -0.12, 0.12);
+  const tube = new THREE.Mesh(prep(new THREE.CylinderGeometry(0.07, 0.07, 0.55, 10).rotateX(Math.PI / 2), '#4a5a32'), flatMat); tube.position.set(0, 0.03, -0.32); launcher.add(tube);
+  launcher.add(box(0.1, 0.1, 0.04, '#2b2f36', 0, 0.03, -0.6));
+  launcher.add(box(0.06, 0.16, 0.08, '#2b2f36', 0, -0.1, -0.02));
+  launcher.add(box(0.06, 0.09, 0.28, '#4a5a32', 0, -0.02, 0.2));
+  launcher.add(box(0.012, 0.03, 0.012, '#ffd166', 0, 0.11, -0.5));
+  leftHand(launcher, -0.42);
+  rig.add(launcher);
   const machete = new THREE.Group(); hand(machete, 0, 0, 0.02);
   machete.add(box(0.04, 0.05, 0.16, '#3a2a1e', 0, 0.0, -0.08));
   const blade = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.09, 0.6), new THREE.MeshLambertMaterial({ color: '#c9ccd2', emissive: '#222' })); blade.position.set(0, 0.015, -0.48); machete.add(blade);
@@ -244,6 +276,16 @@ export function createViewmodel() {
   axe.add(box(0.03, 0.2, 0.14, '#d8322a', 0, 0.06, -0.68));
   axe.add(box(0.032, 0.22, 0.03, '#c9ccd2', 0, 0.07, -0.76));
   rig.add(axe);
+  const katana = new THREE.Group(); hand(katana, 0, 0, 0.02);
+  katana.add(box(0.035, 0.04, 0.22, '#1a1d22', 0, 0, -0.02));
+  katana.add(box(0.07, 0.08, 0.015, '#d8a53a', 0, 0, -0.14));
+  const kBlade = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.05, 0.78), new THREE.MeshLambertMaterial({ color: '#e4e8ee', emissive: '#2a2a2a' })); kBlade.position.set(0, 0.01, -0.54); kBlade.rotation.x = 0.04; katana.add(kBlade);
+  rig.add(katana);
+  const sledge = new THREE.Group(); hand(sledge, 0, 0, 0.02);
+  sledge.add(box(0.04, 0.04, 0.82, '#8a6a4a', 0, 0, -0.36));
+  sledge.add(box(0.15, 0.28, 0.15, '#5d6470', 0, 0.02, -0.78));
+  sledge.add(box(0.16, 0.03, 0.16, '#3d434d', 0, 0.16, -0.78));
+  rig.add(sledge);
   const talkie = new THREE.Group(); hand(talkie, 0, -0.12, 0.04);
   talkie.add(box(0.08, 0.2, 0.05, '#2b2f36', 0, 0.02, -0.02));
   talkie.add(box(0.012, 0.14, 0.012, '#10162b', 0.025, 0.18, -0.02));
@@ -283,8 +325,8 @@ export function createViewmodel() {
     },
     resize(aspect) { camera.aspect = aspect; camera.updateProjectionMatrix(); },
     attack(kind) {
-      if (kind === 'flare' || kind === 'harpoon' || kind === 'pistol' || kind === 'shotgun' || kind === 'rifle') { recoil = kind === 'rifle' ? 0.6 : 1; return; }
-      if (kind === 'wrench' || kind === 'machete' || kind === 'bat' || kind === 'axe') { swingT = 0; heavySwing = kind === 'axe' ? 0.7 : kind === 'machete' ? 1.3 : 1; }
+      if (['flare', 'harpoon', 'pistol', 'shotgun', 'rifle', 'revolver', 'smg', 'sniper', 'launcher'].includes(kind)) { recoil = kind === 'rifle' || kind === 'smg' ? 0.6 : 1; return; }
+      if (['wrench', 'machete', 'bat', 'axe', 'katana', 'sledge'].includes(kind)) { swingT = 0; heavySwing = kind === 'axe' ? 0.7 : kind === 'sledge' ? 0.55 : kind === 'machete' ? 1.3 : kind === 'katana' ? 1.45 : 1; }
       else { punchT = 0; punchSide *= -1; }
     },
     reload(kind, dur) { reloadT = dur; reloadDur = dur; },
@@ -349,7 +391,7 @@ export function createViewmodel() {
       const swing = Math.sin(Math.max(0, Math.min(1, sw)) * Math.PI / 2);
       wrench.position.set(0.3 + bx - swing * 0.14, -0.27 + by + swing * 0.05, -0.6 - swing * 0.2);
       wrench.rotation.set(0.35 - swing * 1.3, 0.25, -0.25 - swing * 0.6);
-      for (const [g, id] of [[machete, 8], [bat, 9], [axe, 10]]) {
+      for (const [g, id] of [[machete, 8], [bat, 9], [axe, 10], [katana, 21], [sledge, 22]]) {
         g.visible = handsFree && s.slot === id;
         if (!g.visible) continue;
         g.position.set(0.3 + bx - swing * 0.2, -0.3 + by + swing * 0.12, -0.5 - swing * 0.25);
@@ -359,12 +401,13 @@ export function createViewmodel() {
       reloadT = Math.max(0, reloadT - dt);
       const rl = reloadT > 0 ? Math.sin(Math.min(1, (reloadDur - reloadT) / reloadDur) * Math.PI) : 0;
       const rkg = Math.sin(Math.min(1, recoil) * Math.PI / 2);
-      for (const [g, id, x, y, z] of [[pistol, 11, 0.24, -0.24, -0.5], [shotgun, 12, 0.2, -0.22, -0.6], [rifle, 13, 0.2, -0.21, -0.58]]) {
-        g.visible = handsFree && s.slot === id;
+      for (const [g, id, x, y, z] of [[pistol, 11, 0.24, -0.24, -0.5], [shotgun, 12, 0.2, -0.22, -0.6], [rifle, 13, 0.2, -0.21, -0.58], [revolver, 18, 0.24, -0.24, -0.5], [smg, 19, 0.22, -0.23, -0.55], [sniper, 20, 0.2, -0.21, -0.6], [launcher, 23, 0.2, -0.22, -0.58]]) {
+        // à la lunette, le fusil de précision s'efface : on voit à travers
+        g.visible = handsFree && s.slot === id && !(id === 20 && s.aim);
         if (!g.visible) continue;
         const aim = s.aim ? 1 : 0;
         g.position.set(x * (1 - aim * 0.9) + bx, y + by * (1 - aim) + rkg * 0.03 - rl * 0.25, z + rkg * (id === 12 ? 0.1 : 0.05));
-        g.rotation.set(rkg * (id === 12 ? 0.35 : 0.2) - rl * 0.7, 0.03 * (1 - aim), rl * 0.4);
+        g.rotation.set(rkg * (id === 12 || id === 20 || id === 23 ? 0.35 : id === 18 ? 0.45 : 0.2) - rl * 0.7, 0.03 * (1 - aim), rl * 0.4);
       }
       pump.position.z = -0.5 + (recoil > 0.3 && recoil < 0.8 ? 0.1 : 0);
       // talkie : devant le visage quand on parle

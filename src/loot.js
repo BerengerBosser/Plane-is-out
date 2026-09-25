@@ -22,6 +22,27 @@ function model(kind) {
   else if (kind === 'handgun') { g.add(box(0.05, 0.05, 0.2, '#2b2f36', 0, 0.03, 0)); g.add(box(0.05, 0.12, 0.05, '#3d434d', 0, 0.03, 0.08)); g.children[1].rotation.x = 1.3; g.rotation.y = 0.5; }
   else if (kind === 'bat') { const b = new THREE.Mesh(prep(new THREE.CylinderGeometry(0.06, 0.03, 0.85, 7), '#b98b5e'), flatMat); b.rotation.z = 1.2; b.position.y = 0.2; g.add(b); for (let i = 0; i < 4; i++) g.add(box(0.012, 0.1, 0.012, '#8d9299', 0.2 + i * 0.05, 0.3, 0)); }
   else if (kind === 'axe') { g.add(box(0.9, 1.5, 0.12, '#f4efe4', 0, 1.25, 0.02)); g.add(box(0.8, 1.4, 0.04, '#c9352b', 0, 1.25, -0.06)); g.add(box(0.07, 1.1, 0.07, '#b98b5e', 0, 1.2, -0.12)); g.add(box(0.42, 0.3, 0.06, '#d8dde3', 0.12, 1.65, -0.13)); const l = label('HACHE D\'INCENDIE', '#c9352b', '#fff4e0', 0.8, 0.18); l.position.set(0, 2.1, -0.02); l.rotation.y = Math.PI; g.add(l); }
+  else if (kind === 'sledge') { g.add(box(0.05, 0.05, 0.9, '#8a6a4a', 0, 0.05, 0)); g.add(box(0.32, 0.17, 0.17, '#5d6470', 0, 0.09, -0.48)); g.rotation.y = 0.6; }
+  else if (kind === 'katana') {
+    g.add(box(0.7, 0.1, 0.24, '#3a2a1e', 0, 0.05, 0));
+    for (const x of [-0.22, 0.22]) g.add(box(0.05, 0.3, 0.05, '#3a2a1e', x, 0.2, 0));
+    g.add(box(0.72, 0.025, 0.035, '#e4e8ee', 0.1, 0.37, 0)); g.add(box(0.22, 0.04, 0.045, '#1a1d22', -0.38, 0.37, 0)); g.add(box(0.02, 0.08, 0.07, '#d8a53a', -0.26, 0.37, 0));
+  }
+  else if (kind === 'revolver' || kind === 'smg') {
+    // mallette ouverte, mousse rouge, arme posée dessus
+    g.add(box(0.62, 0.12, 0.42, '#2b2f36', 0, 0.06, 0)); g.add(box(0.58, 0.02, 0.38, '#7a1f1f', 0, 0.125, 0));
+    const lid = box(0.62, 0.42, 0.04, '#2b2f36', 0, 0.33, 0.23); lid.rotation.x = -0.25; g.add(lid);
+    if (kind === 'revolver') { g.add(box(0.28, 0.04, 0.05, '#8d9299', 0.02, 0.16, 0)); g.add(box(0.08, 0.07, 0.07, '#5d6470', -0.1, 0.16, 0)); g.add(box(0.1, 0.05, 0.05, '#6d4b37', -0.2, 0.15, 0.04)); }
+    else { g.add(box(0.36, 0.06, 0.07, '#2b2f36', 0, 0.16, 0)); g.add(box(0.05, 0.05, 0.16, '#3a3f48', -0.05, 0.16, 0.08)); g.add(box(0.14, 0.03, 0.03, '#1a1d22', 0.24, 0.16, 0)); }
+  }
+  else if (kind === 'sniper' || kind === 'launcher') {
+    // caisse militaire ouverte
+    g.add(box(1.3, 0.2, 0.45, '#4a5a32', 0, 0.1, 0)); g.add(box(1.24, 0.02, 0.39, '#2a2f22', 0, 0.205, 0));
+    const lid = box(1.3, 0.45, 0.04, '#4a5a32', 0, 0.42, 0.26); lid.rotation.x = -0.3; g.add(lid);
+    if (kind === 'sniper') { g.add(box(1.1, 0.05, 0.06, '#4a3a2a', 0, 0.24, 0)); g.add(box(0.3, 0.06, 0.06, '#10162b', 0.05, 0.3, 0)); }
+    else { const t = new THREE.Mesh(prep(new THREE.CylinderGeometry(0.07, 0.07, 0.7, 8).rotateZ(Math.PI / 2), '#4a5a32'), flatMat); t.position.set(0.1, 0.3, 0); g.add(t); g.add(box(0.3, 0.08, 0.06, '#2b2f36', -0.35, 0.26, 0)); }
+    const l = label(kind === 'sniper' ? 'TIREUR D\'ÉLITE' : 'EXPLOSIFS', '#4a5a32', '#ffd166', 0.6, 0.12); l.position.set(0, 0.1, -0.23); l.rotation.y = Math.PI; g.add(l);
+  }
   else if (kind === 'ammo') { g.add(box(0.6, 0.35, 0.4, '#4a5a3a', 0, 0.17, 0)); g.add(box(0.62, 0.06, 0.42, '#3a4a2a', 0, 0.36, 0)); const l = label('MUNITIONS', '#4a5a3a', '#ffd166', 0.5, 0.12); l.position.set(0, 0.2, -0.205); l.rotation.y = Math.PI; g.add(l); }
   else if (kind === 'medkit') { g.add(box(0.45, 0.3, 0.2, '#f4f1ea', 0, 0.15, 0)); g.add(box(0.2, 0.06, 0.21, '#d8322a', 0, 0.16, 0)); g.add(box(0.06, 0.2, 0.21, '#d8322a', 0, 0.16, 0)); }
   // conteneurs à fouiller
@@ -64,6 +85,7 @@ export const LootMixin = {
     box3('keeper', 'locker', cb.x - 1.9, h1(cb.x, cb.z) + 0.02, cb.z + 1.5, Math.PI / 2, { name: 'Armoire du gardien', table: 'locker', rolls: [2, 3], guaranteed: ['c_raincoat'], grid: [4, 4], needs: 'doorOpen' });
     { const x = bc.x + 9, z = bc.z - 3; box3('beach_case', 'case', x, h1(x, z), z, 0.8, { name: 'Valise échouée', table: 'suitcase', rolls: [2, 3], grid: [4, 3] }); }
     { const x = ru.x + 2.2, z = ru.z + 1.4; box3('ruins', 'crate', x, h1(x, z), z, 0.3, { name: 'Caisse des ruines', table: 'crate', rolls: [2, 3], grid: [4, 3] }); }
+    { const x = ru.x - 1.8, z = ru.z + 2.4; add('sledge', 'sledge', x, h1(x, z), z, 0, { weapon: 'sledge' }); }
     { const x = lh.x + 3.2, z = lh.z + 2.4; box3('lighthouse', 'crate', x, h1(x, z), z, -0.4, { name: 'Coffre du phare', table: 'locker', rolls: [2, 2], grid: [4, 3] }); }
     // ── île 2 (coordonnées locales) ──
     const w2 = (x, y, z) => new THREE.Vector3(I2g.cx + x, y, I2g.cz + z);
@@ -74,6 +96,8 @@ export const LootMixin = {
     { const p = w2(R.x + 3, FLAT + 0.1, R.z + R.d / 2 - 1.2); add('ammo2', 'ammo', p.x, p.y, p.z, 0, { ammo: true }); }
     { const p = w2(I2.terminal.x + 14, FLAT, I2.terminal.z + 4.6); add('ammo2b', 'ammo', p.x, p.y, p.z, 0, { ammo: true }); }
     { const p = w2(I2.terminal.x - 6, FLAT, I2.terminal.z + 5); add('med2', 'medkit', p.x, p.y + 0.02, p.z, 0, { bandage: 2 }); }
+    { const p = w2(I2.tower.x + 2.2, FLAT, I2.tower.z - 6.2); add('revolver', 'revolver', p.x, p.y, p.z, 0.3, { weapon: 'revolver', ammo: 12 }); }
+    { const H = I2.hangar, p = w2(H.x + 5, FLAT, H.z + 7); add('smg', 'smg', p.x, p.y, p.z, -0.4, { weapon: 'smg', ammo: 30, needs: 'hangarOpen' }); }
     { const p = w2(I2.terminal.x + 12, FLAT, I2.terminal.z - 2); box3('i2_lost', 'locker', p.x, p.y, p.z, 0, { name: 'Objets trouvés', table: 'suitcase', rolls: [1, 2], guaranteed: ['c_backpack'], grid: [5, 4] }); }
     { const p = w2(-3, FLAT, 24.5); box3('i2_case1', 'case', p.x, p.y, p.z, 0.3, { name: 'Valise', table: 'suitcase', rolls: [2, 3] }); }
     { const p = w2(11, FLAT, 25.2); box3('i2_case2', 'case', p.x, p.y, p.z, -0.5, { name: 'Valise', table: 'suitcase', rolls: [1, 3] }); }
@@ -87,6 +111,7 @@ export const LootMixin = {
     { const p = w3(F.x - F.w / 2 + 6, FLAT3, F.z + F.d / 2 - 0.35); add('axe', 'axe', p.x, p.y, p.z, 0, { weapon: 'axe' }); }
     { const p = w3(F.x - F.w / 2 + 8, FLAT3, F.z + F.d / 2 - 0.6); add('med3', 'medkit', p.x, p.y + 0.02, p.z, 0, { bandage: 3 }); }
     { const p = w3(T.x - T.w / 2 + 4, FLAT3 + 0.1, T.z + 6); add('rifle', 'pistol', p.x, p.y, p.z, Math.PI / 2, { weapon: 'rifle', ammo: 48 }); }
+    { const p = w3(T.x - T.w / 2 + 8.5, FLAT3, T.z + 5.5); add('sniper', 'sniper', p.x, p.y, p.z, 0, { weapon: 'sniper', ammo: 10 }); }
     { const p = w3(T.x - T.w / 2 + 6, FLAT3, T.z + 7); add('ammo3', 'ammo', p.x, p.y, p.z, 0, { ammo: true }); }
     { const p = w3(F.x + 4, FLAT3, F.z + 5); add('ammo3b', 'ammo', p.x, p.y, p.z, 0, { ammo: true }); }
     { const p = w3(F.x - F.w / 2 + 11, FLAT3, F.z + F.d / 2 - 0.6); box3('i3_fire', 'locker', p.x, p.y, p.z, Math.PI, { name: 'Casiers des pompiers', table: 'locker', rolls: [1, 2], guaranteed: ['c_firehat'], grid: [4, 4] }); }
@@ -106,6 +131,8 @@ export const LootMixin = {
       { const p = w4(T4.x - 20, T4.z - 4.5); box3('i4_lost', 'locker', p.x, p.y, p.z, 0, { name: 'Objets trouvés', table: 'suitcase', rolls: [2, 3], grid: [5, 4] }); }
       { const p = w4(F4.x + 9, F4.z - 4); box3('i4_fret', 'crate', p.x, p.y, p.z, 0.2, { name: 'Caisse de fret', table: 'crate', rolls: [2, 3], guaranteed: ['stake'] }); }
       { const p = w4(26, -9); box3('i4_police', 'military', p.x, p.y, p.z, 0, { name: 'Caisse du barrage', table: 'military', rolls: [2, 3], guaranteed: [['c_tacvest', 'c_milpack']], grid: [6, 4] }); }
+      { const p = w4(T4.x - 12, T4.z - 4.5); add('katana', 'katana', p.x, p.y, p.z, 0, { weapon: 'katana' }); }
+      { const p = w4(23.2, -11); add('launcher', 'launcher', p.x, p.y, p.z, 0.4, { weapon: 'launcher', ammo: 4 }); }
       { const p = w4(28.8, -4); add('med4b', 'medkit', p.x, p.y + 0.02, p.z, 0, { bandage: 3 }); }
       { const p = w4(-8, -44); add('ammo4b', 'ammo', p.x, p.y, p.z, 0, { ammo: true }); }
       { const p = w4(-47, 19); box3('i4_bus', 'bag', p.x, p.y, p.z, 0.4, { name: 'Sac oublié', table: 'suitcase', rolls: [1, 3] }); }
@@ -153,10 +180,10 @@ export const LootMixin = {
   markLoot(id) { this.lootTaken[id] = this.stats.days; },
   takeAmmoCrate(l) {
     if (this.lootUsed(l.id)) { this.audio.error(); return; }
-    const guns = ['pistol', 'shotgun', 'rifle', 'flare'].filter((k) => this.hasItem(k));
+    const guns = ['pistol', 'shotgun', 'rifle', 'revolver', 'smg', 'sniper', 'flare', 'launcher'].filter((k) => this.hasItem(k));
     if (!guns.length) { this.ui.toast('Munitions', 'Aucune arme pour elles.', 'bad', 1600); return; }
     const got = [];
-    for (const k of guns) { const n = k === 'flare' ? 3 : Math.round(GUNS[k].mag * 1.5); this.giveItem(this.ammoFor(k), n, {}, { toSlot: false, silent: true }); got.push(`+${n} ${GEAR[this.ammoFor(k)].name.toLowerCase()}`); }
+    for (const k of guns) { const n = k === 'flare' ? 3 : k === 'launcher' ? 2 : Math.round(GUNS[k].mag * (k === 'sniper' ? 1 : 1.5)); this.giveItem(this.ammoFor(k), n, {}, { toSlot: false, silent: true }); got.push(`+${n} ${GEAR[this.ammoFor(k)].name.toLowerCase()}`); }
     this.markLoot(l.id); this.audio.pickup();
     this.ui.toast('Munitions', got.join(' · '), 'good', 2000);
   },
@@ -168,6 +195,12 @@ export const LootMixin = {
       bat: 'Une batte cloutée. Elle repousse loin et assomme.',
       axe: 'La hache des pompiers. Lente mais redoutable.',
       rifle: 'Carabine automatique : maintenez le clic. Le bruit attire les morts de loin.',
+      revolver: 'Un revolver .357. Six coups, mais chacun compte : une balle dans la tête couche presque n\'importe quoi.',
+      smg: 'Pistolet-mitrailleur : il crache du 9 mm comme le pistolet. Parfait quand ils sont trop nombreux.',
+      sniper: 'Fusil de précision : clic droit pour la lunette. La balle traverse plusieurs morts alignés.',
+      katana: 'Un katana… Rapide, longue allonge. Idéal pour garder la horde à distance.',
+      sledge: 'Une masse : lente, mais elle balaye tout l\'arc devant vous et renverse les morts.',
+      launcher: 'Lance-grenades ! Tir en cloche, explosion à l\'impact. Ne tirez jamais à vos pieds.',
     }[key];
     if (t) this.radioOnce(`weapon_${key}`, t);
   },

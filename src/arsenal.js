@@ -20,6 +20,13 @@ export const EQUIP = [
   { id: 15, key: 'medkit', name: 'Trousse de soins', short: 'Trousse', kind: 'use', icon: 'M5 10h22v15H5zM12 10V7h8v3M16 13v9M11.5 17.5h9' },
   { id: 16, key: 'parachute', name: 'Parachute', kind: 'tool', icon: 'M4 15a12 9 0 0 1 24 0zM4 15l12 12 12-12M10 15l6 12 6-12M16 15v12' },
   { id: 17, key: 'iron', name: 'Fer à souder', short: 'Fer', kind: 'tool', icon: 'M4 26l8-8M12 18l3 3M13 17l9-9 3 3-9 9zM22 8l4-4' },
+  // armes supplémentaires (butin et comptoirs)
+  { id: 18, key: 'revolver', name: 'Revolver', kind: 'gun', icon: 'M4 10h17v4H12v3H9l-2 8H3l2-8V10zM11 12a2 2 0 1 0 4 0 2 2 0 1 0-4 0' },
+  { id: 19, key: 'smg', name: 'Pistolet-mitrailleur', short: 'PM', kind: 'gun', icon: 'M3 12h22v4H3zM10 16h4v8h-4zM18 16h3v5h-3zM25 13h4' },
+  { id: 20, key: 'sniper', name: 'Fusil de précision', short: 'Précision', kind: 'gun', icon: 'M1 14h28v3H1zM8 10h9v4H8zM10 17h3v6h-3zM1 14v6h4l2-3' },
+  { id: 21, key: 'katana', name: 'Katana', kind: 'melee', icon: 'M5 27l3-3M6 22l4 4M9 23L27 5' },
+  { id: 22, key: 'sledge', name: 'Masse', kind: 'melee', icon: 'M8 27L20 11M15 5l10 8-4 5-10-8z' },
+  { id: 23, key: 'launcher', name: 'Lance-grenades', short: 'Lance-gr.', kind: 'proj', ammo: 'launcher', icon: 'M3 13h20v6H3zM23 12h5v8h-5zM9 19h4v6H9zM3 13l-1 7' },
 ];
 export const EQ = Object.fromEntries(EQUIP.map((e) => [e.key, e.id]));
 
@@ -30,6 +37,9 @@ export const MELEE = {
   machete: { dmg: 46, range: 2.4, cd: 0.55, knock: 3, stun: 0.3, blade: true },
   bat: { dmg: 36, range: 2.6, cd: 0.72, knock: 11, stun: 0.8 },
   axe: { dmg: 72, range: 2.4, cd: 1.0, knock: 6, stun: 0.6, blade: true },
+  katana: { dmg: 58, range: 2.7, cd: 0.46, knock: 3, stun: 0.3, blade: true },
+  // cleave : frappe tous les ennemis de l'arc devant soi
+  sledge: { dmg: 88, range: 2.6, cd: 1.25, knock: 15, stun: 1.1, cleave: true },
 };
 
 // armes à feu (tir instantané) : chargeur, munitions, dispersion, recul, bruit (attire les zombies)
@@ -37,6 +47,12 @@ export const GUNS = {
   pistol: { dmg: 34, pellets: 1, spread: 0.012, cd: 0.26, mag: 12, ammo: 'p9', reload: 1.3, range: 90, kick: 0.035, noise: 55, auto: false, snd: 'pistol' },
   shotgun: { dmg: 15, pellets: 8, spread: 0.075, cd: 0.85, mag: 6, ammo: 'buck', reload: 0.5, perShell: true, range: 32, kick: 0.11, noise: 75, auto: false, snd: 'shotgun' },
   rifle: { dmg: 29, pellets: 1, spread: 0.016, cd: 0.11, mag: 24, ammo: 'r556', reload: 1.9, range: 130, kick: 0.028, noise: 85, auto: true, snd: 'rifle' },
+  revolver: { dmg: 72, pellets: 1, spread: 0.008, cd: 0.55, mag: 6, ammo: 'm357', reload: 2.0, range: 110, kick: 0.075, noise: 65, auto: false, snd: 'revolver' },
+  smg: { dmg: 17, pellets: 1, spread: 0.03, cd: 0.075, mag: 30, ammo: 'p9', reload: 1.6, range: 60, kick: 0.018, noise: 50, auto: true, snd: 'smg' },
+  // pierce : la balle traverse jusqu'à N ennemis alignés
+  sniper: { dmg: 150, pellets: 1, spread: 0.002, cd: 1.3, mag: 5, ammo: 'm762', reload: 2.6, range: 240, kick: 0.12, noise: 110, auto: false, snd: 'sniper', pierce: 3 },
 };
-export const AMMO_NAMES = { p9: 'balles de 9 mm', buck: 'cartouches', r556: 'balles de 5,56', flare: 'fusées', harpoon: 'harpons' };
-export const AMMO_MAX = { p9: 120, buck: 48, r556: 180, flare: 12, harpoon: 8 };
+// visée (clic droit maintenu) : grossissement de la caméra selon l'arme en main
+export const AIM_ZOOM = { pistol: 1.4, shotgun: 1.25, rifle: 2.2, harpoon: 1.7, flare: 1.3, revolver: 1.5, smg: 1.35, sniper: 4.0, launcher: 1.4 };
+export const AMMO_NAMES = { p9: 'balles de 9 mm', buck: 'cartouches', r556: 'balles de 5,56', m357: 'balles de .357', m762: 'balles de 7,62', flare: 'fusées', harpoon: 'harpons', launcher: 'grenades' };
+export const AMMO_MAX = { p9: 120, buck: 48, r556: 180, m357: 36, m762: 30, flare: 12, harpoon: 8, launcher: 12 };

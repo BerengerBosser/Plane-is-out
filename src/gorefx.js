@@ -1,4 +1,5 @@
-// Effets de combat : gerbes de sang, flaques au sol, traçantes, éclairs de bouche, nuages de gaz, poussière d'impact
+// Effets de combat : gerbes de sang, flaques au sol, traçantes, éclairs de bouche, nuages de gaz, poussière d'impact,
+// terre soulevée (zombies qui sortent du sol), explosions
 import * as THREE from 'three';
 import { heightAt } from './terrain.js';
 
@@ -6,14 +7,19 @@ export function createGoreFx(scene) {
   // ── particules (gouttes) ──
   const N = 220;
   const geo = new THREE.BoxGeometry(0.07, 0.07, 0.07);
-  const mats = { blood: new THREE.MeshLambertMaterial({ color: '#8a0f0f' }), goo: new THREE.MeshLambertMaterial({ color: '#5a8a2a' }), dust: new THREE.MeshLambertMaterial({ color: '#b8a888' }), spark: new THREE.MeshBasicMaterial({ color: '#ffd27a', toneMapped: false }) };
+  const mats = { blood: new THREE.MeshLambertMaterial({ color: '#8a0f0f' }), goo: new THREE.MeshLambertMaterial({ color: '#5a8a2a' }), dust: new THREE.MeshLambertMaterial({ color: '#b8a888' }), spark: new THREE.MeshBasicMaterial({ color: '#ffd27a', toneMapped: false }), dirt: new THREE.MeshLambertMaterial({ color: '#5a4632' }), fire: new THREE.MeshBasicMaterial({ color: '#ff8a2a', toneMapped: false }) };
   const parts = [];
   const im = {};
   for (const k of Object.keys(mats)) { im[k] = new THREE.InstancedMesh(geo, mats[k], N); im[k].count = 0; im[k].frustumCulled = false; scene.add(im[k]); }
   // ── flaques (décals posés au sol) ──
   const decals = [];
   const decalGeo = new THREE.CircleGeometry(1, 10).rotateX(-Math.PI / 2);
-  const decalMat = { blood: new THREE.MeshBasicMaterial({ color: '#5a0a0a', transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), goo: new THREE.MeshBasicMaterial({ color: '#3f6a1f', transparent: true, opacity: 0.75, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }) };
+  const decalMat = { blood: new THREE.MeshBasicMaterial({ color: '#5a0a0a', transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), goo: new THREE.MeshBasicMaterial({ color: '#3f6a1f', transparent: true, opacity: 0.75, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), dirt: new THREE.MeshBasicMaterial({ color: '#3b2d20', transparent: true, opacity: 0.85, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }), scorch: new THREE.MeshBasicMaterial({ color: '#15110e', transparent: true, opacity: 0.8, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }) };
+  // ── boules de feu (explosions) ──
+  const blasts = [];
+  const blastGeo = new THREE.IcosahedronGeometry(1, 1);
+  const blastMat = new THREE.MeshBasicMaterial({ color: '#ffb347', transparent: true, opacity: 0.95, toneMapped: false, depthWrite: false });
+  const smokeMat = new THREE.MeshLambertMaterial({ color: '#3a3632', transparent: true, opacity: 0.6, depthWrite: false });
   // ── traçantes et éclairs ──
   const tracers = [];
   const tracerMat = new THREE.MeshBasicMaterial({ color: '#ffe8a8', transparent: true, opacity: 0.9, toneMapped: false, depthWrite: false });
@@ -75,10 +81,35 @@ export function createGoreFx(scene) {
       scene.add(m);
       clouds.push({ m, t: 0, life, r, p: p.clone() });
     },
+    // un zombie s'arrache du sol : mottes de terre projetées, trou sombre au sol
+    dirt(p, scale = 1) {
+      const q0 = p.clone().setY(Math.max(heightAt(p.x, p.z), 0) + 0.1);
+      spray('dirt', q0, null, Math.round(16 * scale), 3.2 * Math.sqrt(scale));
+      spray('dust', q0, null, Math.round(6 * scale), 2);
+      decal('dirt', p.x, p.z, 0.8 * scale);
+    },
+    // explosion : boule de feu, fumée, éclats, éclair, trace noire
+    explosion(p, r = 5) {
+      const fb = new THREE.Mesh(blastGeo, blastMat.clone());
+      fb.position.copy(p); fb.scale.setScalar(0.3); scene.add(fb);
+      blasts.push({ m: fb, t: 0, life: 0.45, r: r * 0.55, fire: true });
+      for (let i = 0; i < 4; i++) {
+        const sm = new THREE.Mesh(blastGeo, smokeMat.clone());
+        sm.position.copy(p).add(new THREE.Vector3((Math.random() - 0.5) * r * 0.5, 0.4 + Math.random() * 0.8, (Math.random() - 0.5) * r * 0.5));
+        sm.scale.setScalar(0.4); scene.add(sm);
+        blasts.push({ m: sm, t: -i * 0.05, life: 2.2 + Math.random(), r: r * (0.35 + Math.random() * 0.2), rise: 1.2 + Math.random() });
+      }
+      spray('fire', p, null, 26, 9);
+      spray('spark', p, null, 18, 12);
+      spray('dirt', p, null, 22, 7);
+      decal('scorch', p.x, p.z, r * 0.45);
+      const L = flashLights.reduce((a, b) => (a.t < b.t ? a : b));
+      L.l.position.copy(p).setY(p.y + 1); L.l.intensity = 40; L.l.distance = r * 6; L.t = 0.25;
+    },
     gasAt(p) { return clouds.some((c) => c.t < c.life && Math.hypot(c.p.x - p.x, c.p.z - p.z) < c.r); },
-    clear() { [...decals, ...tracers, ...clouds].forEach((o) => scene.remove(o.m)); decals.length = 0; tracers.length = 0; clouds.length = 0; parts.length = 0; },
+    clear() { [...decals, ...tracers, ...clouds, ...blasts].forEach((o) => scene.remove(o.m)); decals.length = 0; tracers.length = 0; clouds.length = 0; parts.length = 0; blasts.length = 0; },
     update(dt) {
-      const counts = { blood: 0, goo: 0, dust: 0, spark: 0 };
+      const counts = Object.fromEntries(Object.keys(im).map((k) => [k, 0]));
       for (let i = parts.length - 1; i >= 0; i--) {
         const s = parts[i];
         s.t += dt;
@@ -105,7 +136,16 @@ export function createGoreFx(scene) {
         t.m.material.opacity = Math.max(0, 1 - t.t / t.life);
         if (t.t > t.life) { scene.remove(t.m); t.m.material.dispose(); tracers.splice(i, 1); }
       }
-      for (const L of flashLights) { L.t -= dt; if (L.t <= 0) L.l.intensity = 0; }
+      for (const L of flashLights) { L.t -= dt; if (L.t <= 0) { L.l.intensity = 0; L.l.distance = 14; } }
+      for (let i = blasts.length - 1; i >= 0; i--) {
+        const b = blasts[i]; b.t += dt;
+        if (b.t < 0) { b.m.visible = false; continue; }
+        b.m.visible = true;
+        const k = Math.min(1, b.t / b.life);
+        if (b.fire) { b.m.scale.setScalar(b.r * (0.3 + 0.9 * Math.sqrt(k))); b.m.material.opacity = 0.95 * (1 - k); b.m.material.color.setHSL(0.09 - k * 0.07, 1, 0.6 - k * 0.3); }
+        else { b.m.scale.setScalar(b.r * (0.5 + 0.8 * Math.sqrt(k))); b.m.position.y += b.rise * dt; b.m.material.opacity = 0.6 * (1 - k); }
+        if (b.t > b.life) { scene.remove(b.m); b.m.material.dispose(); blasts.splice(i, 1); }
+      }
       for (let i = clouds.length - 1; i >= 0; i--) {
         const c = clouds[i]; c.t += dt;
         const k = Math.min(1, c.t * 3);

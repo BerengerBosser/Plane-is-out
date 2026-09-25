@@ -237,6 +237,7 @@ export const MPMixin = {
         if (this.pilotId === id) this.pilotId = null;
         if (this.nozzle === id) this.nozzle = null;
         this.bPilotLost?.(id);
+        this.jetPilotLost?.(id);
         this.dirtyWorld = true;
       }
     });
@@ -315,7 +316,9 @@ export const MPMixin = {
       m: MODES.indexOf(this.mode),
       p: [wp.x, wp.y, wp.z].map((v) => +v.toFixed(2)),
       bs: this.bseat ? this.bseat.i : -1,
+      bw: this.bseat?.walk ? [p.pos.x, p.pos.y, p.pos.z].map((v) => +v.toFixed(2)) : 0,
       bf: this.bPresence?.() || 0,
+      jt: this.jetPresence?.() || 0,
       ab: this.aboard ? 1 : 0,
       y: +p.yaw.toFixed(2),
       st: this.seat?.id || (this.mode === 'flight' ? 'pilot' : this.driving ? 'veh' : 0),
@@ -417,12 +420,13 @@ export const MPMixin = {
       m.driving = !!st.vh;
       // position monde
       const lp = new THREE.Vector3(st.p[0], st.p[1], st.p[2]);
-      if (m.aboard || mode === 'flight') { this.plane.root.updateMatrixWorld(true); m.tpos.copy(this.plane.root.localToWorld(lp)); m.tyaw = st.y + this.flight.yaw; }
+      if (m.aboard || mode === 'flight') { this.plane.root.updateWorldMatrix(true, false); m.tpos.copy(this.plane.root.localToWorld(lp)); m.tyaw = st.y + this.flight.yaw; }
       else { m.tpos.copy(lp); m.tyaw = st.y; }
       if (m.first || m.pos.distanceTo(m.tpos) > 8 || m.aboard) { m.pos.copy(m.tpos); m.yaw = m.tyaw; m.first = false; }
       else { m.pos.lerp(m.tpos, Math.min(1, dt * 12)); let dy = m.tyaw - m.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); m.yaw += dy * Math.min(1, dt * 12); }
       const vis = (mode === 'explore' || mode === 'flight' || mode === 'dead') && this.inGame();
-      m.av.root.visible = vis;
+      m.av.root.visible = vis && !st.jt;
+      if (st.jt) this.applyJetPresence?.(st.jt, id);
       m.av.root.position.copy(m.pos);
       if (mode === 'flight') { const sp = this.plane.root.localToWorld(new THREE.Vector3(-0.62, FLOOR, -3.45)); m.av.root.position.copy(sp); m.seat = 'pilot'; }
       m.av.root.rotation.set(0, m.yaw, 0);
@@ -433,6 +437,13 @@ export const MPMixin = {
         m.av.root.position.copy(this.boeingLocal(new THREE.Vector3(s.x, s.cush - 0.36, s.z)));
         m.av.root.quaternion.copy(this.boeing.root.quaternion);
         m.seat = 'boeing';
+      }
+      // debout dans la cabine du Boeing en vol : position dans le repère de l'avion
+      if (m.bseat !== null && st.bw && this.boeing) {
+        m.av.root.position.copy(this.boeingLocal(new THREE.Vector3(st.bw[0], st.bw[1], st.bw[2])));
+        m.av.root.quaternion.copy(this.boeing.root.quaternion).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), st.y));
+        m.pos.copy(m.av.root.position);
+        m.seat = null;
       }
       if (m.driving) {
         const v = this.vehicles[st.vh[0]];

@@ -8,7 +8,7 @@ import { createGoreFx } from './gorefx.js';
 
 const tmpV = new THREE.Vector3();
 // munitions de chaque arme (objets d'inventaire)
-const AMMO_ITEM = { pistol: 'a_p9', shotgun: 'a_buck', rifle: 'a_r556', flare: 'a_flare', harpoon: 'a_harpoon' };
+const AMMO_ITEM = { pistol: 'a_p9', shotgun: 'a_buck', rifle: 'a_r556', flare: 'a_flare', harpoon: 'a_harpoon', revolver: 'a_357', smg: 'a_p9', sniper: 'a_762', launcher: 'a_grenade' };
 
 export const ArmsMixin = {
   armsInit() {
@@ -25,7 +25,7 @@ export const ArmsMixin = {
   // ── ce qu'on a en main ──
   held() { return EQUIP[EQ[this.heldKey()]] || EQUIP[0]; },
   // où trouver un objet : « touche 3 » s'il est équipé, sinon l'inventaire
-  keyHint(key) { const i = ['primary', 'secondary', 'u1', 'u2', 'u3', 'u4'].findIndex((s) => this.inv.eq[s]?.k === key); return i >= 0 ? `Touche <kbd>${i + 1}</kbd>` : 'Inventaire <kbd>I</kbd>'; },
+  keyHint(key) { const i = ['primary', 'secondary', 'u1', 'u2', 'u3', 'u4'].findIndex((s) => this.inv.eq[s]?.k === key); return i >= 0 ? `Touche <kbd>${i + 1}</kbd>` : 'Inventaire <kbd>A</kbd>'; },
   // nouvel objet (arme, outil) : rangé dans son emplacement s'il est libre, puis pris en main
   giveEquip(key, { ammo = 0, silent = false } = {}) {
     const G = GUNS[key];
@@ -54,7 +54,7 @@ export const ArmsMixin = {
     const E = this.held();
     if (E.kind === 'gun') { this.gunTrigger(E.key); return; }
     if (!this.input.hit('Mouse0') || this.attackCd > 0) return;
-    if (E.key === 'flare' || E.key === 'harpoon') { this.fireWeapon(E.key); return; }
+    if (E.kind === 'proj') { this.fireWeapon(E.key); return; }
     if (E.kind === 'use') { this.useHeal(E.key); this.attackCd = 0.5; return; }
     if (E.kind !== 'melee') return;
     const C = MELEE[E.key];
@@ -71,13 +71,17 @@ export const ArmsMixin = {
       const flat = new THREE.Vector3(dir.x, 0, dir.z).normalize();
       // un coéquipier devant soi ?
       if (this.hitMate(origin, flat, C.range, C.dmg, C.knock)) return;
-      const e = this.probe(origin, flat, C.range);
-      if (!e) return;
-      this.dealDamage(e, C.dmg, flat, C.knock, { stun: C.stun });
-      this.ui.hitmark?.(e.dead || e.hp <= 0);
-      const hp = new THREE.Vector3(e.pos.x, e.pos.y + e.T.h * 0.7, e.pos.z);
-      this.gore.blood(hp, flat, !!C.blade, !!e.T.goo);
-      this.session?.send('gore', { p: [hp.x, hp.y, hp.z].map((v) => +v.toFixed(2)), d: [flat.x, flat.z].map((v) => +v.toFixed(2)), b: C.blade ? 1 : 0, g: e.T.goo ? 1 : 0 });
+      // la masse balaye tout l'arc ; les autres armes frappent l'ennemi le plus proche
+      const targets = C.cleave ? this.probeAll(origin, flat, C.range) : [this.probe(origin, flat, C.range)].filter(Boolean);
+      if (!targets.length) return;
+      if (C.cleave) { this.player.shake = Math.max(this.player.shake, 0.5); this.audio.thud?.(); }
+      for (const e of targets) {
+        this.dealDamage(e, C.dmg, flat, C.knock, { stun: C.stun });
+        this.ui.hitmark?.(e.dead || e.hp <= 0);
+        const hp = new THREE.Vector3(e.pos.x, e.pos.y + e.T.h * 0.7, e.pos.z);
+        this.gore.blood(hp, flat, !!C.blade || !!C.cleave, !!e.T.goo);
+        this.session?.send('gore', { p: [hp.x, hp.y, hp.z].map((v) => +v.toFixed(2)), d: [flat.x, flat.z].map((v) => +v.toFixed(2)), b: C.blade || C.cleave ? 1 : 0, g: e.T.goo ? 1 : 0 });
+      }
     }, E.key === 'fists' ? 90 : 150);
   },
   // dégâts à un ennemi : l'hôte applique, l'invité envoie
@@ -176,13 +180,15 @@ export const ArmsMixin = {
     this.player.pitch = Math.min(1.4, this.player.pitch + G.kick * (0.7 + Math.random() * 0.6));
     this.player.yaw += (Math.random() - 0.5) * G.kick * 0.4;
     this.spreadK = Math.min(1, this.spreadK + (G.auto ? 0.25 : 0.5));
-    this.player.shake = Math.max(this.player.shake, key === 'shotgun' ? 0.45 : 0.18);
+    this.player.shake = Math.max(this.player.shake, key === 'shotgun' || key === 'sniper' ? 0.45 : key === 'revolver' ? 0.3 : 0.18);
     const hits = new Map();
     const net = [];
     for (let k = 0; k < G.pellets; k++) {
       const d = dir.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2 * spread, (Math.random() - 0.5) * 2 * spread, (Math.random() - 0.5) * 2 * spread)).normalize();
       const block = this.rayBlock(o, d, G.range);
-      const r = this.enemies.raycast(o, d, block);
+      // balle perforante : on continue derrière chaque ennemi touché (dégâts réduits à chaque traversée)
+      const pierced = new Set();
+      let r = this.enemies.raycast(o, d, block), fall = 1;
       const m = this.mateRay(o, d, Math.min(block, r ? r.t : 1e9));
       let end;
       if (m) {
@@ -190,21 +196,28 @@ export const ArmsMixin = {
         if (!this.flags?.noFF) { const cur = hits.get(`m:${m.mate.id}`) || { mate: m.mate, dmg: 0, dir: d }; cur.dmg += G.dmg * (m.head ? 1.8 : 1); hits.set(`m:${m.mate.id}`, cur); }
         this.gore.blood(end, d, false);
       } else if (r) {
-        end = r.point;
-        const cur = hits.get(r.e.id) || { e: r.e, dmg: 0, head: false, dir: d };
-        cur.dmg += G.dmg * (r.head ? (r.e.T.boss ? 1.3 : 2.2) : 1); cur.head = cur.head || r.head;
-        hits.set(r.e.id, cur);
-        this.gore.blood(end, d, r.head, !!r.e.T.goo);
+        while (r) {
+          end = r.point;
+          const cur = hits.get(r.e.id) || { e: r.e, dmg: 0, head: false, dir: d };
+          cur.dmg += G.dmg * fall * (r.head ? (r.e.T.boss ? 1.3 : 2.2) : 1); cur.head = cur.head || r.head;
+          hits.set(r.e.id, cur);
+          this.gore.blood(end, d, r.head || !!G.pierce, !!r.e.T.goo);
+          pierced.add(r.e);
+          if (!G.pierce || pierced.size >= G.pierce) break;
+          fall *= 0.75;
+          r = this.enemies.raycast(o, d, block, pierced);
+        }
       } else {
         end = o.clone().addScaledVector(d, block);
         if (block < G.range) this.gore.impact(end);
       }
       this.gore.tracer(muzzle, end);
-      net.push([end.x, end.y, end.z].map((v) => +v.toFixed(1)).concat(r && !m ? [1] : []));
+      net.push([end.x, end.y, end.z].map((v) => +v.toFixed(1)).concat(pierced.size && !m ? [1] : []));
     }
     for (const h of hits.values()) {
       if (h.mate) { this.session?.send('pvp', { dmg: Math.round(h.dmg), d: [h.dir.x, h.dir.z], k: 3, by: this.profile.name }, h.mate.id); continue; }
-      this.dealDamage(h.e, h.dmg, new THREE.Vector3(h.dir.x, 0, h.dir.z).normalize(), key === 'shotgun' ? 6 : 2, { head: h.head, stun: key === 'shotgun' ? 0.5 : 0.2 });
+      const heavy = key === 'shotgun' || key === 'sniper' || key === 'revolver';
+      this.dealDamage(h.e, h.dmg, new THREE.Vector3(h.dir.x, 0, h.dir.z).normalize(), heavy ? 6 : 2, { head: h.head, stun: heavy ? 0.5 : 0.2 });
       this.ui.hitmark?.(h.e.dead || h.e.hp <= 0);
     }
     // le bruit attire les morts
@@ -277,6 +290,7 @@ export const ArmsMixin = {
     if (E.kind === 'gun') return `${this.heldItem()?.mag ?? 0} / ${this.invCount(AMMO_ITEM[E.key])}${this.reloadT > 0 ? ' · recharge…' : ''}`;
     if (E.key === 'flare') return `${this.invCount('a_flare')} fusées`;
     if (E.key === 'harpoon') return `${this.invCount('a_harpoon')} harpons`;
+    if (E.key === 'launcher') return `${this.invCount('a_grenade')} grenades`;
     return '';
   },
   vmHeld() { return this.held().key; },

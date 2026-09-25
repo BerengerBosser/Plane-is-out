@@ -100,7 +100,7 @@ export const Chapter3Mixin = {
     b.root.updateMatrixWorld(true);
     this.boeingDirty = true;
   },
-  boeingLocal(v) { this.boeing.root.updateMatrixWorld(true); return this.boeing.root.localToWorld(v.clone()); },
+  boeingLocal(v) { this.boeing.root.updateWorldMatrix(true, false); return this.boeing.root.localToWorld(v.clone()); },
   boeingOutZone() { const I = this.island3; return this.c3.bp.z - I.cz < 101; },
   stairsDocked() {
     const v = this.vehicles.stairs3; if (!v || !this.boeing || this.c3?.fly) return false;
@@ -110,7 +110,7 @@ export const Chapter3Mixin = {
   // dans la cabine (repère de l'avion, qu'il soit garé ou en vol)
   inBoeing(p = this.playerWorld()) {
     if (!this.boeing) return false;
-    this.boeing.root.updateMatrixWorld(true);
+    this.boeing.root.updateWorldMatrix(true, false);
     const l = this.boeing.root.worldToLocal(p.clone()), B = BOEING.cabin;
     return l.y > FLOOR_B - 0.6 && l.y < FLOOR_B + 4 && l.x > B.minX - 0.4 && l.x < B.maxX + 0.4 && l.z > B.minZ && l.z < B.maxZ;
   },
@@ -276,6 +276,8 @@ export const Chapter3Mixin = {
 
   // ── interactions à pied ──
   c3Interactions(add, me) {
+    // le Boeing a ses commandes partout où il est garé (Port-Cendre, Hélios, ailleurs)
+    this.boeingInteractions(add, me);
     const I = this.island3, f = this.flags, P = I.points;
     if (!I || Math.hypot(me.x - I.cx, me.z - I.cz) > 420) return;
     add(P.shop, 3.2, { prompt: '<kbd>E</kbd> boutique hors taxes · comptoir d\'échange', press: () => this.openShop(3) });
@@ -290,7 +292,10 @@ export const Chapter3Mixin = {
         add(door, 3.2, dry ? { prio: 3, prompt: '<kbd>E</kbd> maintenir : décharger la caisse Hélios', hold: { seconds: 1.5, done: () => this.act('unloadCrate', { x: out.x, z: out.z, r: this.flight.yaw }) } } : { prompt: '<span class="warn">Sur l\'eau : amenez le Coucou au sec (rampe à l\'est de la piste)</span>' });
       }
     }
-    if (!this.boeing) return;
+  },
+  boeingInteractions(add, me) {
+    const f = this.flags;
+    if (!this.boeing || !this.c3) return;
     // batterie sous le nez
     const hatch = this.boeingLocal(BOEING.hatch);
     if (!f.boeingBattery && !this.inBoeing(me)) add(hatch, 2.8, this.carrying?.id === 'battery' ? { prio: 4, prompt: '<kbd>E</kbd> installer la batterie dans la trappe avionique', press: () => { this.act('battery', {}); this.audio.success(); } } : { prompt: 'Trappe avionique : <span class="warn">batterie de démarrage manquante</span> (tour de contrôle)' });

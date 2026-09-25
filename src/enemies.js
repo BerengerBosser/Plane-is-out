@@ -1,6 +1,7 @@
-// Ennemis : crabes mutés (plages, le jour) et zombies (sortent de terre la nuit), boss Crabe-Roi et Colosse
+// Ennemis : crabes mutés (plages, le jour) et zombies (sortent de terre la nuit), méga-zombies, boss Crabe-Roi et Colosse
 import * as THREE from 'three';
 import { heightAt } from './terrain.js';
+import { makeColGrid } from './colgrid.js';
 import { CFG } from './config.js';
 
 function lam(col) { return new THREE.MeshLambertMaterial({ color: col, flatShading: true }); }
@@ -65,7 +66,7 @@ function buildZombie(variant = 'walker') {
   const pants = lam(['#3b4150', '#4a3d33', '#2f3a48'][k % 3]);
   const dark = lam('#2a2a2a');
   const blood = lam('#7a1f1f');
-  const eyeM = new THREE.MeshBasicMaterial({ color: variant === 'brute' || variant === 'screamer' ? '#ff4d2e' : variant === 'bloater' ? '#b6ff4d' : '#ffe14d', toneMapped: false });
+  const eyeM = new THREE.MeshBasicMaterial({ color: variant === 'brute' || variant === 'screamer' || variant === 'mega' ? '#ff4d2e' : variant === 'bloater' ? '#b6ff4d' : '#ffe14d', toneMapped: false });
   const box = (w, h, d, m, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); return o; };
   const body = new THREE.Group();
   g.add(body);
@@ -130,6 +131,20 @@ function buildZombie(variant = 'walker') {
     headG.add(box(0.34, 0.12, 0.34, plate, 0, 0.3, 0));
     for (const sx of [-1, 1]) { const h = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.28, 5), dark); h.position.set(sx * 0.12, 0.42, 0); h.rotation.z = -sx * 0.4; headG.add(h); }
   }
+  if (variant === 'mega') {
+    // méga-zombie : buste énorme, côtes à nu, échine hérissée d'os, avant-bras massifs
+    const bone = lam('#e9e0c8'), flesh = lam('#8a3a3a');
+    torso.scale.set(1.45, 1.1, 1.3);
+    torso.add(box(0.36, 0.3, 0.02, flesh, 0, 0.34, -0.15));
+    for (let i = 0; i < 4; i++) torso.add(box(0.34, 0.03, 0.03, bone, 0, 0.22 + i * 0.075, -0.165));
+    for (let i = 0; i < 5; i++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.22 - i * 0.02, 5), bone); sp.position.set(0, 0.62 - i * 0.12, 0.17); sp.rotation.x = 0.9; torso.add(sp); }
+    for (const sx of [-1, 1]) { const sh = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.24, 5), bone); sh.position.set(sx * 0.3, 0.7, 0); sh.rotation.z = -sx * 0.7; torso.add(sh); }
+    arms.forEach((a) => { a.children[1].scale.set(1.7, 1.15, 1.7); a.children[2].scale.set(2.0, 1.4, 2.0); a.children[2].position.y = -0.76; });
+    headG.scale.setScalar(0.8);
+    headG.add(box(0.2, 0.08, 0.04, lam('#3a0808'), 0, 0.02, -0.15));        // mâchoire béante
+    for (const sx of [-0.06, 0.06]) headG.add(box(0.025, 0.05, 0.02, bone, sx, 0.06, -0.165));
+    legs.forEach((l) => { l.children[0].scale.set(1.35, 1, 1.35); });
+  }
   g.userData = { zombie: true, variant, arms, legs, eyes, body, headG, torso, hips, mats: [skin, shirt, pants], walk: Math.random() * 6 };
   return g;
 }
@@ -169,9 +184,18 @@ const TYPES = {
   bloater: { code: 6, name: 'Gonflé', hp: 95, speed: 1.6, aggro: 40, reach: 1.7, dmg: 14, cd: 1.6, radius: 0.62, h: 1.95, wind: 0.6, build: () => { const v = buildZombie('bloater'); v.scale.setScalar(1.1); return v; } },
   screamer: { code: 7, name: 'Hurleur', hp: 48, speed: 3.2, aggro: 55, reach: 1.5, dmg: 8, cd: 1.2, radius: 0.38, h: 1.95, wind: 0.3, build: () => buildZombie('screamer') },
   brute: { code: 8, name: 'Cogneur', hp: 260, speed: 2.25, aggro: 55, reach: 2.1, dmg: 27, cd: 1.7, radius: 0.62, h: 2.4, wind: 0.65, armor: 0.45, build: () => { const v = buildZombie('brute'); v.scale.setScalar(1.3); return v; } },
+  // méga-zombie : mini-boss (barre de vie), coup de masse qui frappe tout autour, bond sur les fuyards
+  mega: { code: 9, name: 'Méga-zombie', elite: true, hp: 900, speed: 2.5, aggro: 70, reach: 2.9, dmg: 34, cd: 2.0, radius: 0.95, h: 3.9, wind: 0.8, slam: 3.6, build: () => { const v = buildZombie('mega'); v.scale.setScalar(2.05); return v; } },
 };
+// les zombies frappent plus fort, plus souvent et se déplacent plus vite (réglages dans config.js)
+for (const [k, T] of Object.entries(TYPES)) {
+  if (k === 'crab' || k === 'kingcrab') continue;
+  T.dmg = Math.round(T.dmg * CFG.combat.zombieDmg);
+  T.speed *= CFG.combat.zombieSpeed;
+  T.cd *= CFG.combat.zombieRate;
+}
 const BY_CODE = Object.fromEntries(Object.entries(TYPES).map(([k, v]) => [v.code, k]));
-const ZOMBIES = new Set(['voile', 'runner', 'warden', 'crawler', 'bloater', 'screamer', 'brute']);
+const ZOMBIES = new Set(['voile', 'runner', 'warden', 'crawler', 'bloater', 'screamer', 'brute', 'mega']);
 const isVoile = (type) => ZOMBIES.has(type);
 export { TYPES as ENEMY_TYPES };
 
@@ -191,6 +215,13 @@ function pickZombie(ctx) {
   return 'voile';
 }
 
+// un ennemi n'atteint un joueur que s'ils sont à peu près au même niveau : pas de coups à travers
+// les étages (joueur en haut d'une tour, sur un toit, sur l'escalier d'un camion…)
+function vReach(e, p) {
+  const dy = p.pos.y - e.pos.y;
+  return dy < e.T.h * 0.85 + 0.2 && dy > -1.6;
+}
+
 export function createEnemies(scene, colliders, hooks) {
   const list = [];
   let spawnT = 0, nextId = 1;
@@ -206,7 +237,7 @@ export function createEnemies(scene, colliders, hooks) {
     scene.add(mesh);
     const e = {
       id: opts.id ?? nextId++, type, T, mesh, pos: new THREE.Vector3(x, heightAt(x, z), z), home: new THREE.Vector3(x, 0, z),
-      vel: new THREE.Vector2(), hp: T.hp * (T.boss ? hpScale : 1), maxHp: T.hp * (T.boss ? hpScale : 1), cd: 0, flash: 0, stagger: 0, dead: false, deadT: 0,
+      vel: new THREE.Vector2(), hp: T.hp * (T.boss || T.elite ? hpScale : 1), maxHp: T.hp * (T.boss || T.elite ? hpScale : 1), cd: 0, flash: 0, stagger: 0, dead: false, deadT: 0,
       wander: new THREE.Vector2(x, z), wanderT: 0, yaw: Math.random() * 6.28, t: Math.random() * 10, appear: isVoile(type) ? 0 : 1,
       state: T.boss ? (type === 'kingcrab' ? 'sleep' : 'chase') : 'chase', stT: 0, chargeCd: 4, summonT: 10, stun: 0, half: false,
       siege: !!opts.siege, target: new THREE.Vector3(x, 0, z), attackT: 0, moving: false,
@@ -221,9 +252,11 @@ export function createEnemies(scene, colliders, hooks) {
     for (const L of lights) if (Math.hypot(x - L.p.x, z - L.p.z) < L.r + pad) return L;
     return null;
   }
+  const grid = makeColGrid(colliders), near = [];
   function collide(e) {
     const r = e.T.radius;
-    for (const c of colliders) {
+    near.length = 0;
+    for (const c of grid.query(e.pos.x, e.pos.z, r + 0.5, near)) {
       if (c.disabled) continue;
       if (c.type === 'circle') {
         const dx = e.pos.x - c.x, dz = e.pos.z - c.z, d = Math.hypot(dx, dz), m = c.r + r;
@@ -249,6 +282,7 @@ export function createEnemies(scene, colliders, hooks) {
   // multiplicateur de dégâts (carapace, lumière)
   function dmgMul(e, lights, head) {
     if (e.type === 'brute') return head ? 1.3 : e.T.armor;
+    if (e.type === 'mega') return head ? 1.4 : 0.7;
     if (e.type === 'kingcrab') return e.state === 'stun' ? 2.5 : e.state === 'sleep' ? 1 : 0.35;
     if (e.type === 'warden') return inLight(e.pos.x, e.pos.z, lights || []) ? 1 : 0.15;
     return 1;
@@ -258,13 +292,13 @@ export function createEnemies(scene, colliders, hooks) {
     const mul = dmgMul(e, lights, opts.head);
     e.hp -= dmg * mul;
     e.flash = 0.15;
-    if (!e.T.boss) e.stagger = Math.max(e.stagger, (opts.stun ?? 0.35) * (e.type === 'brute' ? 0.4 : 1));
-    if (e.state === 'tele' && !e.T.boss && (opts.stun ?? 0.35) >= 0.3) { e.state = 'chase'; e.cd = e.T.cd * 0.6; }   // coup interrompu
+    if (!e.T.boss) e.stagger = Math.max(e.stagger, (opts.stun ?? 0.35) * (e.type === 'brute' ? 0.4 : e.T.elite ? 0.15 : 1));
+    if (e.state === 'tele' && !e.T.boss && (opts.stun ?? 0.35) >= (e.T.elite ? 0.8 : 0.3)) { e.state = 'chase'; e.cd = e.T.cd * 0.6; }   // coup interrompu
     if (e.state === 'sleep' && e.type !== 'kingcrab') e.state = 'chase';
     e.dormant = false;
     if (dir) {
       const len = Math.hypot(dir.x, dir.z) || 1;
-      const k = e.T.boss ? knock * 0.15 : knock;
+      const k = e.T.boss ? knock * 0.15 : e.T.elite ? knock * 0.2 : knock;
       e.vel.set(dir.x / len * k, dir.z / len * k);
     }
     if (e.type === 'kingcrab' && e.state === 'sleep') { e.state = 'chase'; hooks.onBossWake?.(e); }
@@ -298,7 +332,7 @@ export function createEnemies(scene, colliders, hooks) {
       }
     } else {
       // zombie : démarche traînante, bras tendus, sort de terre en apparaissant
-      u.walk += dt * (moving ? (e.type === 'runner' || e.lunge > 0 ? 11 : e.type === 'bloater' ? 3.5 : 5.5) : 0);
+      u.walk += dt * (moving ? (e.type === 'runner' || e.lunge > 0 ? 11 : e.type === 'bloater' ? 3.5 : e.type === 'mega' ? 3.2 : 5.5) * CFG.combat.zombieSpeed : 0);
       const sw = moving ? Math.sin(u.walk) : 0;
       u.legs[0].rotation.x = sw * 0.6; u.legs[1].rotation.x = -sw * 0.6;
       const reach = e.state === 'tele' ? -2.4 : e.attackT > 0 ? -1.9 : -1.35 + Math.sin(e.t * 2.2) * 0.12;
@@ -315,7 +349,18 @@ export function createEnemies(scene, colliders, hooks) {
       }
       if (u.variant === 'screamer' && e.scream > 0) { u.headG.rotation.x = -0.6; u.arms.forEach((a, k) => { a.rotation.x = -2.6; a.rotation.z = (k ? -1 : 1) * 0.6; }); }
       if (e.state === 'sleep') { u.torso.rotation.x = 0.7; u.arms.forEach((a) => { a.rotation.x = -0.2; }); u.headG.rotation.x = 0.5; }
-      m.position.y += (e.appear - 1) * 1.9;         // émerge du sol
+      if (e.appear < 1) {
+        // sort de terre : les mains d'abord, puis il s'arrache du sol en se tortillant
+        const a = e.appear;
+        if (!e.emergeFx) { e.emergeFx = true; hooks.onEmerge?.(e); }
+        u.arms.forEach((ar, k) => { ar.rotation.x = -2.9 + Math.sin(e.t * 14 + k * 2) * 0.35 * (1 - a); ar.rotation.z = (k ? -1 : 1) * (0.25 + Math.sin(e.t * 9 + k) * 0.15); });
+        u.torso.rotation.x = 0.1 + (1 - a) * 0.5;
+        u.headG.rotation.x = -0.4 * (1 - a);
+        u.body.rotation.z = Math.sin(e.t * 11) * 0.14 * (1 - a);
+        u.legs.forEach((l) => { l.rotation.x = 0; });
+        m.position.y -= (1 - a * a * (3 - 2 * a)) * (e.T.h + 0.35);
+        m.rotation.x = Math.sin(e.t * 7) * 0.06 * (1 - a);
+      }
       u.eyes.forEach((ey) => { ey.visible = Math.sin(e.t * 0.7 + e.pos.x) > -0.97; });
     }
     if (e.attackT > 0) e.attackT -= dt;
@@ -350,6 +395,8 @@ export function createEnemies(scene, colliders, hooks) {
     },
     clearVoiles() { list.filter((e) => isVoile(e.type)).forEach(remove); kills = []; },
     clearAll() { list.slice().forEach(remove); kills = []; },
+    // fin d'une zone à tenir : les assaillants retournent à la poussière
+    dismiss(p, r, filter) { for (const e of list) if (!e.dead && (!filter || filter(e)) && Math.hypot(e.pos.x - p.x, e.pos.z - p.z) < r) kill(e, true); },
     aliveCount(type) { return list.filter((e) => e.type === type && !e.dead).length; },
     byId(id) { return list.find((e) => e.id === id); },
     bosses() { return list.filter((e) => e.T.boss && !e.dead && e.state !== 'sleep'); },
@@ -373,11 +420,11 @@ export function createEnemies(scene, colliders, hooks) {
       return best ? damage(best, dmg, dir, knock, lights) : null;
     },
     // tir instantané : premier ennemi traversé par le rayon (cylindre vertical) → { e, t, head, point }
-    raycast(o, d, maxT) {
+    raycast(o, d, maxT, skip) {
       let best = null;
       const dxz = Math.hypot(d.x, d.z);
       for (const e of list) {
-        if (e.dead || e.appear < 0.6) continue;
+        if (e.dead || e.appear < 0.6 || skip?.has(e)) continue;
         const r = e.T.radius * (e.T.boss ? 1 : 0.95) + 0.08, h = e.T.h * (e.type === 'warden' ? 1 : 1);
         const cx = e.pos.x, cz = e.pos.z, y0 = e.pos.y, y1 = e.pos.y + h;
         let t;
@@ -410,11 +457,11 @@ export function createEnemies(scene, colliders, hooks) {
       const L2 = seg.lengthSq() || 1e-6;
       for (const e of list) {
         if (e.dead || e.appear < 0.6) continue;
-        const h = e.type === 'kingcrab' ? 1.2 : e.type === 'warden' ? 2.4 : e.type === 'crab' ? 0.4 : 1.2;
+        const h = e.type === 'kingcrab' ? 1.2 : e.type === 'warden' ? 2.4 : e.type === 'crab' ? 0.4 : e.type === 'mega' ? 2.0 : 1.2;
         const c = new THREE.Vector3(e.pos.x, e.pos.y + h, e.pos.z);
         const t = Math.max(0, Math.min(1, tmp.subVectors(c, p0).dot(seg) / L2));
         const q = p0.clone().addScaledVector(seg, t);
-        const rad = e.T.radius + pad + (e.T.boss ? h * 0.5 : 0.35);
+        const rad = e.T.radius + pad + (e.T.boss || e.T.elite ? h * 0.5 : 0.35);
         if (q.distanceTo(c) < rad && t < bt) { bt = t; best = e; }
       }
       return best;
@@ -487,11 +534,13 @@ export function createEnemies(scene, colliders, hooks) {
           const a = Math.random() * Math.PI * 2, d = dMin + Math.random() * (dMax - dMin);
           const x = P.x + Math.cos(a) * d, z = P.z + Math.sin(a) * d;
           if (heightAt(x, z) < 0.2 || inLight(x, z, ctx.lights, 4) || cleared(x, z)) continue;
-          const n = Math.min(room, 1 + (Math.random() < extra ? 1 + Math.floor(Math.random() * 2) : 0));
+          const n = Math.min(room, 1 + (Math.random() < extra ? 1 + Math.floor(Math.random() * 3) : 0));
+          const lvl = (ctx.day ?? 1) + (ctx.chapter ?? 1) - 2;
+          const mega = lvl >= 1 && (ctx.depth ?? 0) > 0.5 && !list.some((q) => q.type === 'mega' && !q.dead) && Math.random() < C.megaNight * (1 + lvl * 0.5);
           for (let k = 0; k < n; k++) {
             const ox = (Math.random() - 0.5) * 3, oz = (Math.random() - 0.5) * 3;
             if (heightAt(x + ox, z + oz) < 0.2) continue;
-            add(pickZombie(ctx), x + ox, z + oz, opts);
+            add(mega && k === 0 ? 'mega' : pickZombie(ctx), x + ox, z + oz, opts);
           }
           hooks.onSpawn?.('voile');
           return;
@@ -526,7 +575,7 @@ export function createEnemies(scene, colliders, hooks) {
           if (ctx.night < 0.3 && !e.siege && !e.indoor && !e.dayz) { kill(e, true); continue; }   // l'aube les consume (sauf à l'abri des bâtiments)
           // les errants de jour laissés loin derrière retournent sous terre
           if (e.dayz) { const np = nearestPlayer(e.pos.x, e.pos.z); if (!np || np.d > 90) { remove(e); continue; } }
-          e.appear = Math.min(1, e.appear + dt * 0.7);
+          e.appear = Math.min(1, e.appear + dt / (CFG.combat.emergeTime * (e.T.elite ? 1.8 : 1)));
           if (e.appear < 1) { e.moving = false; animate(e, dt); continue; }
         }
         const np = nearestPlayer(e.pos.x, e.pos.z);
@@ -561,7 +610,7 @@ export function createEnemies(scene, colliders, hooks) {
           } else if (e.state === 'charge') {
             want.copy(e.chargeDir); speed = 15;
             for (const p of active) {
-              if (!e.hitSet.has(p.id) && Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z) < e.T.radius + 0.9) { e.hitSet.add(p.id); hooks.onPlayerHit?.(30, e, p.id, e.chargeDir); }
+              if (!e.hitSet.has(p.id) && Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z) < e.T.radius + 0.9 && vReach(e, p)) { e.hitSet.add(p.id); hooks.onPlayerHit?.(30, e, p.id, e.chargeDir); }
             }
             const ahead = heightAt(e.pos.x + e.chargeDir.x * 2.5, e.pos.z + e.chargeDir.y * 2.5);
             if (e.stT <= 0 || ahead < -0.6 || e.blocked) { e.state = 'stun'; e.stT = 3.2; e.blocked = false; hooks.onBossStun?.(e); }
@@ -586,13 +635,13 @@ export function createEnemies(scene, colliders, hooks) {
               e.stT -= dt;
               if (e.stT <= 0) {
                 e.state = 'chase'; e.cd = e.T.cd * 1.5;
-                for (const p of active) if (Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z) < 4.8) hooks.onPlayerHit?.(28, e, p.id, null);
+                for (const p of active) if (Math.hypot(p.pos.x - e.pos.x, p.pos.z - e.pos.z) < 4.8 && vReach(e, p)) hooks.onPlayerHit?.(28, e, p.id, null);
                 if (ctx.siege?.active && Math.hypot(ctx.siege.pos.x - e.pos.x, ctx.siege.pos.z - e.pos.z) < 5) hooks.onSiegeHit?.(25);
                 hooks.onSlam?.(e);
               }
             } else if (tx !== null) {
               want.copy(toP).normalize();
-              if (dist < e.T.reach * 0.9) { want.set(0, 0); if (e.cd <= 0) { e.state = 'tele'; e.stT = 1.0; } }
+              if (dist < e.T.reach * 0.9) { want.set(0, 0); if (e.cd <= 0 && (targetId === 'siege' || (np && vReach(e, np.p)))) { e.state = 'tele'; e.stT = 1.0; } }
             }
             if (!e.half && e.hp < e.maxHp * 0.5) { e.half = true; hooks.onBossHalf?.(e); }
           } else {
@@ -608,7 +657,15 @@ export function createEnemies(scene, colliders, hooks) {
                 e.stT -= dt;
                 if (e.stT <= 0) {
                   e.state = 'chase'; e.cd = e.T.cd; e.attackT = 0.3;
-                  if (np && np.d < e.T.reach + 0.55) hooks.onPlayerHit?.(e.T.dmg, e, np.p.id, e.type === 'brute' ? toP.clone().normalize() : null);
+                  if (e.T.slam) {
+                    // méga-zombie : l'onde de choc touche tous les joueurs autour de lui
+                    for (const p of active) {
+                      const dx = p.pos.x - e.pos.x, dz = p.pos.z - e.pos.z, d = Math.hypot(dx, dz);
+                      if (d < e.T.slam && vReach(e, p)) hooks.onPlayerHit?.(Math.round(e.T.dmg * (d < e.T.reach ? 1 : 0.55)), e, p.id, new THREE.Vector2(dx, dz).normalize());
+                    }
+                    if (ctx.siege?.active && Math.hypot(ctx.siege.pos.x - e.pos.x, ctx.siege.pos.z - e.pos.z) < e.T.slam + 1) hooks.onSiegeHit?.(e.T.dmg * 0.4 / CFG.combat.zombieDmg);
+                    hooks.onMegaSlam?.(e);
+                  } else if (np && np.d < e.T.reach + 0.55 && vReach(e, np.p)) hooks.onPlayerHit?.(e.T.dmg, e, np.p.id, e.type === 'brute' ? toP.clone().normalize() : null);
                 }
               } else {
                 const chase = tx !== null && (dist < e.T.aggro || e.siege || targetId === 'siege');
@@ -636,11 +693,16 @@ export function createEnemies(scene, colliders, hooks) {
                   e.lungeCd = (e.lungeCd || 0) - dt;
                   if (chase && dist < 4.8 && dist > 1.6 && e.lungeCd <= 0) { e.lunge = 0.42; e.lungeCd = 3.2; }
                 }
-                if (e.lunge > 0) { e.lunge -= dt; speed *= 2.3; }
+                if (e.type === 'mega') {
+                  // bond : il comble la distance d'un coup quand on essaie de le semer
+                  e.lungeCd = (e.lungeCd ?? 4) - dt;
+                  if (chase && targetId !== 'siege' && dist < 15 && dist > 6 && e.lungeCd <= 0) { e.lunge = 0.7; e.lungeCd = 7 + Math.random() * 3; hooks.onMegaLeap?.(e); }
+                }
+                if (e.lunge > 0) { e.lunge -= dt; speed *= e.type === 'mega' ? 3.0 : 2.3; }
                 if (chase && targetId !== 'siege' && dist < e.T.reach * 0.8 && e.type !== 'screamer') want.set(0, 0);
                 if (targetId === 'siege' && dist < 2.8) want.set(0, 0);
                 // coup annoncé : bras levés, on a le temps d'esquiver ou d'interrompre
-                if (chase && targetId !== 'siege' && np && np.d < e.T.reach && e.cd <= 0 && e.stagger <= 0 && e.type !== 'screamer') { e.state = 'tele'; e.stT = e.T.wind || 0.4; want.set(0, 0); }
+                if (chase && targetId !== 'siege' && np && np.d < e.T.reach && vReach(e, np.p) && e.cd <= 0 && e.stagger <= 0 && e.type !== 'screamer') { e.state = 'tele'; e.stT = e.T.wind || 0.4; want.set(0, 0); }
                 // contournement d'obstacle
                 e.avoidT = Math.max(0, (e.avoidT || 0) - dt);
                 if (e.avoidT > 0 && want.lengthSq() > 0) { const a = e.avoidSide * 1.15, c = Math.cos(a), sn = Math.sin(a); want.set(want.x * c - want.y * sn, want.x * sn + want.y * c); }
@@ -672,8 +734,8 @@ export function createEnemies(scene, colliders, hooks) {
         e.cd -= dt;
         const canHit = e.state !== 'sleep' && e.state !== 'stun' && e.state !== 'tele' && e.state !== 'charge' && e.stagger <= 0 && e.cd <= 0;
         if (canHit && e.type !== 'warden') {
-          if (targetId === 'siege' && dist < 3) { e.cd = e.T.cd; e.attackT = 0.3; hooks.onSiegeHit?.(e.T.dmg * 0.5); }
-          else if (!isVoile(e.type) && np && np.d < e.T.reach + (e.T.boss ? 0.6 : 0)) {
+          if (targetId === 'siege' && dist < 3 + (e.T.elite ? 1 : 0)) { e.cd = e.T.cd; e.attackT = 0.3; hooks.onSiegeHit?.(e.T.dmg * 0.5 / CFG.combat.zombieDmg); }   // le générateur garde sa résistance d'origine
+          else if (!isVoile(e.type) && np && np.d < e.T.reach + (e.T.boss ? 0.6 : 0) && vReach(e, np.p)) {
             const pl = np.p;
             e.cd = e.T.cd; e.attackT = 0.35; hooks.onPlayerHit?.(e.T.dmg, e, pl.id, null);
           }

@@ -155,6 +155,10 @@ export function createAudio() {
       if (!ctx) return;
       if (kind === 'shotgun') { burst({ dur: 0.45, freq: 900, vol: 1.0 * v }); burst({ dur: 0.12, freq: 4000, type: 'highpass', vol: 0.5 * v }); tone({ f0: 120, f1: 40, dur: 0.35, vol: 0.45 * v }); }
       else if (kind === 'rifle') { burst({ dur: 0.18, freq: 2200, vol: 0.8 * v }); burst({ dur: 0.08, freq: 6000, type: 'highpass', vol: 0.4 * v }); tone({ f0: 160, f1: 60, dur: 0.14, vol: 0.3 * v }); }
+      else if (kind === 'smg') { burst({ dur: 0.1, freq: 2600, vol: 0.6 * v }); burst({ dur: 0.05, freq: 6500, type: 'highpass', vol: 0.3 * v }); tone({ f0: 200, f1: 90, dur: 0.08, vol: 0.2 * v }); }
+      else if (kind === 'revolver') { burst({ dur: 0.35, freq: 1200, vol: 1.0 * v }); burst({ dur: 0.1, freq: 4500, type: 'highpass', vol: 0.5 * v }); tone({ f0: 140, f1: 45, dur: 0.26, vol: 0.42 * v }); }
+      else if (kind === 'sniper') { burst({ dur: 0.6, freq: 1000, vol: 1.0 * v }); burst({ dur: 0.12, freq: 7000, type: 'highpass', vol: 0.6 * v }); tone({ f0: 110, f1: 35, dur: 0.5, vol: 0.5 * v }); tone({ f0: 900, f1: 700, dur: 0.06, type: 'square', vol: 0.05 * v, delay: 0.45 }); }
+      else if (kind === 'launcher') { burst({ dur: 0.25, freq: 400, vol: 0.9 * v }); tone({ f0: 90, f1: 50, dur: 0.2, vol: 0.45 * v }); }
       else { burst({ dur: 0.22, freq: 1600, vol: 0.85 * v }); burst({ dur: 0.07, freq: 5000, type: 'highpass', vol: 0.45 * v }); tone({ f0: 180, f1: 70, dur: 0.16, vol: 0.3 * v }); }
     },
     splat() { burst({ dur: 0.18, freq: 500, type: 'lowpass', vol: 0.5 }); tone({ f0: 90, f1: 50, dur: 0.12, vol: 0.2 }); },

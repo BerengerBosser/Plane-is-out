@@ -82,8 +82,8 @@ export const AdminMixin = {
         // équipement militaire complet (grands sacs pour tout ranger), armes et munitions
         const wearKit = { hat: 'c_helmet', top: 'c_miljacket', vest: 'c_tacvest', back: 'c_milpack', bottom: 'c_milpants' };
         for (const [p, k] of Object.entries(wearKit)) if (!this.inv.cl[p] || GEAR[this.inv.cl[p].k].base || p === 'back') { const old = this.inv.cl[p]; this.inv.cl[p] = makeItem(k); if (old?.c?.length) old.c.forEach((o) => this.invPut(o)); }
-        for (const key of ['shotgun', 'pistol', 'lantern', 'talkie', 'wrench', 'diable', 'flare', 'harpoon', 'rod', 'machete', 'bat', 'axe', 'rifle']) { if (!this.hasItem(key)) this.giveItem(key, 1, GUNS[key] ? { mag: GUNS[key].mag } : {}, { silent: true }); }
-        for (const [k2, n] of [['a_buck', 24], ['a_p9', 60], ['a_r556', 60], ['a_flare', 6], ['a_harpoon', 4], ['bandage', 5], ['stake', 3], ['medkit', 1]]) this.giveItem(k2, n, {}, { toSlot: false, silent: true });
+        for (const key of ['shotgun', 'pistol', 'lantern', 'talkie', 'wrench', 'diable', 'flare', 'harpoon', 'rod', 'machete', 'bat', 'axe', 'rifle', 'revolver', 'smg', 'sniper', 'katana', 'sledge', 'launcher']) { if (!this.hasItem(key)) this.giveItem(key, 1, GUNS[key] ? { mag: GUNS[key].mag } : {}, { silent: true }); }
+        for (const [k2, n] of [['a_buck', 24], ['a_p9', 60], ['a_r556', 60], ['a_flare', 6], ['a_harpoon', 4], ['a_357', 18], ['a_762', 20], ['a_grenade', 6], ['bandage', 5], ['stake', 3], ['medkit', 1]]) this.giveItem(k2, n, {}, { toSlot: false, silent: true });
         this.syncHeld();
         toast('Arsenal complet', 'Tenue militaire, armes et munitions.'); break;
       }
@@ -92,8 +92,8 @@ export const AdminMixin = {
       case 'god': this.godMode = !this.godMode; toast('Invincible', this.godMode ? 'activé' : 'désactivé'); break;
       case 'horde': {
         const p = this.playerWorld();
-        for (const t of ['voile', 'voile', 'runner', 'crawler', 'bloater', 'screamer', 'brute']) this.enemies.spawnAround(t, p.x, p.z, 1, 14, 22);
-        toast('Horde', '7 zombies à une vingtaine de mètres.'); break;
+        for (const t of ['voile', 'voile', 'runner', 'crawler', 'bloater', 'screamer', 'brute', 'mega']) this.enemies.spawnAround(t, p.x, p.z, 1, 14, 22);
+        toast('Horde', '8 zombies (dont un méga-zombie) à une vingtaine de mètres.'); break;
       }
       case 'clear': this.enemies.list.filter((e) => e.type !== 'crab' && !e.dead).forEach((e) => this.enemies.damage(e, 99999, null, 0, [])); toast('Zombies éliminés'); break;
       case 'ff': this.act('flag', { noFF: !this.flags.noFF }); toast('Tir ami', this.flags.noFF ? 'désactivé' : 'activé'); break;

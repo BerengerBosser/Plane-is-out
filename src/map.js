@@ -71,8 +71,15 @@ export function createMap() {
       g.font = `800 ${Math.round(S / 56)}px "Bricolage Grotesque", sans-serif`; g.lineWidth = 3; g.strokeStyle = '#10162b'; g.textAlign = 'center';
       g.strokeText(`🐚 ${s.label}`, x + 8, y - 32); g.fillStyle = '#ffd166'; g.fillText(`🐚 ${s.label}`, x + 8, y - 32);
     }
-    // véhicules
-    for (const v of data.vehicles || []) { const [x, y] = P(v.x, v.z); g.fillStyle = '#5ef2c2'; g.strokeStyle = '#10162b'; g.lineWidth = 2; g.fillRect(x - 4, y - 4, 8, 8); g.strokeRect(x - 4, y - 4, 8, 8); }
+    // postes à souder (réparation des véhicules)
+    for (const s of data.welds || []) {
+      const [x, y] = P(s.x, s.z);
+      g.fillStyle = '#ffb020'; g.strokeStyle = '#10162b'; g.lineWidth = 2;
+      g.beginPath(); g.arc(x, y, 9, 0, Math.PI * 2); g.fill(); g.stroke();
+      g.font = `${Math.round(S / 60)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#10162b'; g.fillText('🔧', x, y + 1); g.textBaseline = 'alphabetic';
+    }
+    // véhicules (rouge : en panne)
+    for (const v of data.vehicles || []) { const [x, y] = P(v.x, v.z); g.fillStyle = v.broken ? '#ff6b5b' : '#5ef2c2'; g.strokeStyle = '#10162b'; g.lineWidth = 2; g.fillRect(x - 4, y - 4, 8, 8); g.strokeRect(x - 4, y - 4, 8, 8); }
     // objectif
     if (data.objective) {
       const [x, y] = P(data.objective.x, data.objective.z);

@@ -5,10 +5,17 @@ import { heightAt, LAYOUT, prep, flatMat } from './terrain.js';
 import { createProjectiles, WEAPONS } from './weapons.js';
 import { I2 } from './island2.js';
 
-const SCRAP = { crab: 1, voile: 1, runner: 1, kingcrab: 12, warden: 20 };
+const SCRAP = { crab: 1, voile: 1, runner: 1, kingcrab: 12, warden: 20, mega: 8 };
 const BOSS_HINT = {
   kingcrab: 'Carapace trop dure : esquivez sa charge, puis frappez pendant qu\'il est sonné',
   warden: 'Blindé dans le noir : attirez-le sous les projecteurs ou éblouissez-le aux fusées',
+  mega: 'Visez la tête · reculez quand il lève les bras : son coup frappe tout autour de lui',
+};
+// munitions et messages des armes à projectiles
+const PROJ_AMMO = {
+  flare: ['a_flare', 'Plus de fusées', 'Comptoirs, caisses.'],
+  harpoon: ['a_harpoon', 'Plus de harpons', 'Ramassez-les, ou comptoir.'],
+  launcher: ['a_grenade', 'Plus de grenades', 'Caisses militaires, comptoirs.'],
 };
 
 // coquillages (la monnaie d'échange de l'archipel)
@@ -80,7 +87,7 @@ export const CombatMixin = {
     return L;
   },
   onEnemyHitPlayer(dmg, e, pid, dir) {
-    const d = dir ? { x: dir.x, z: dir.y ?? dir.z, k: e.type === 'brute' ? 14 : 4 } : null;
+    const d = dir ? { x: dir.x, z: dir.y ?? dir.z, k: e.type === 'mega' ? 20 : e.type === 'brute' ? 14 : 4 } : null;
     if (pid === this.myId()) this.hurt(dmg, e.type, d);
     else this.session?.send('hurt', { dmg, type: e.type, dir: d }, pid);
   },
@@ -104,20 +111,33 @@ export const CombatMixin = {
     return best;
   },
 
+  // toutes les cibles dans l'arc devant soi (masse)
+  probeAll(origin, dir, range) {
+    const out = [];
+    for (const e of this.enemies.list) {
+      if (e.dead || e.appear < 0.6) continue;
+      const dx = e.pos.x - origin.x, dz = e.pos.z - origin.z, d = Math.hypot(dx, dz);
+      if (d > range + e.T.radius) continue;
+      if ((dx * dir.x + dz * dir.z) / (d || 1) < 0.35 && d > 0.9 + e.T.radius) continue;
+      out.push(e);
+    }
+    return out;
+  },
+
   fireWeapon(kind) {
-    const W = WEAPONS[kind];
-    if (!this.invTake(kind === 'flare' ? 'a_flare' : 'a_harpoon', 1)) { this.audio.error(); this.attackCd = 0.4; this.ui.toast(kind === 'flare' ? 'Plus de fusées' : 'Plus de harpons', kind === 'flare' ? 'Comptoirs, caisses.' : 'Ramassez-les, ou comptoir.', 'bad', 1800); return; }
+    const W = WEAPONS[kind], A = PROJ_AMMO[kind];
+    if (!this.invTake(A[0], 1)) { this.audio.error(); this.attackCd = 0.4; this.ui.toast(A[1], A[2], 'bad', 1800); return; }
     this.attackCd = W.cooldown;
     this.vm.attack(kind);
     const dir = new THREE.Vector3();
     this.camera.getWorldDirection(dir);
     const pos = this.camera.position.clone().addScaledVector(dir, 0.7).add(new THREE.Vector3(0, -0.12, 0));
-    if (kind === 'flare') dir.y += 0.06;
+    if (kind === 'flare' || kind === 'launcher') dir.y += 0.06;
     this.projectiles.fire(kind, pos, dir, 'local');
     this.tryHitFish(30, true);
     this.session?.send('shot', { k: kind, p: [pos.x, pos.y, pos.z].map((v) => +v.toFixed(2)), d: [dir.x, dir.y, dir.z].map((v) => +v.toFixed(3)) });
-    if (kind === 'flare') { this.audio.whoosh(); this.audio.spark(); } else { this.audio.clank(); this.audio.whoosh(); }
-    this.player.shake = Math.max(this.player.shake, kind === 'harpoon' ? 0.5 : 0.3);
+    if (kind === 'flare') { this.audio.whoosh(); this.audio.spark(); } else if (kind === 'launcher') { this.audio.gun?.('launcher'); this.audio.whoosh(); } else { this.audio.clank(); this.audio.whoosh(); }
+    this.player.shake = Math.max(this.player.shake, kind === 'flare' ? 0.3 : 0.5);
   },
 
   updateProjectiles(dt) {
@@ -136,6 +156,7 @@ export const CombatMixin = {
         }
       },
       onBurst: (kind, p, owner) => {
+        if (kind === 'launcher') { this.explode(p, owner === 'local'); return; }
         if (kind !== 'flare') return;
         const W = WEAPONS.flare;
         if (this.isAuthority()) this.enemies.stunAround(p, W.radius, W.stun);
@@ -143,6 +164,30 @@ export const CombatMixin = {
         if (p.distanceTo(this.camera.position) < 60) this.audio.spark();
       },
     });
+  },
+
+  // explosion de grenade : visuel et son partout ; dégâts calculés par le tireur (hôte : direct, invité : messages « hit »)
+  explode(p, mine) {
+    const W = WEAPONS.launcher;
+    this.gore.explosion?.(p, W.blast);
+    if (p.distanceTo(this.camera.position) < 200) this.audio.explosion();
+    const me = this.playerWorld();
+    const dme = Math.hypot(me.x - p.x, me.z - p.z);
+    if (dme < 14) this.player.shake = Math.max(this.player.shake, 1.2 * (1 - dme / 14));
+    // souffle sur soi-même (chacun le calcule pour lui)
+    if (dme < W.blast * 0.7 && Math.abs(me.y - p.y) < 3) this.hurt(Math.round(45 * (1 - dme / (W.blast * 0.7))) + 8, 'explosion', { x: me.x - p.x, z: me.z - p.z, k: 10 });
+    if (!mine) return;
+    for (const e of this.enemies.list) {
+      if (e.dead || e.appear < 0.3) continue;
+      const d = Math.hypot(e.pos.x - p.x, e.pos.z - p.z) - e.T.radius * 0.5;
+      if (d > W.blast || Math.abs(e.pos.y - p.y) > 4) continue;
+      const k = Math.max(0.25, 1 - Math.max(0, d) / W.blast);
+      const dir = new THREE.Vector3(e.pos.x - p.x, 0, e.pos.z - p.z).normalize();
+      this.dealDamage(e, Math.round(W.dmg * k), dir, 12 * k, { stun: 0.9 * k });
+      this.gore.blood(new THREE.Vector3(e.pos.x, e.pos.y + e.T.h * 0.5, e.pos.z), dir, true, !!e.T.goo);
+      this.ui.hitmark?.(e.dead || e.hp <= 0);
+    }
+    if (this.isAuthority()) this.enemies.noise(p, 70); else this.session?.send('noise', { p: [p.x, p.z], r: 70 }, this.session.hostId);
   },
 
   onKill(e) {
@@ -201,6 +246,15 @@ export const CombatMixin = {
         if (this.isAuthority()) for (const e of this.enemies.list) if (!e.dead && e.pos.distanceTo(p) < 3.5 && e.type !== 'bloater') this.enemies.damage(e, 60, { x: e.pos.x - p.x, z: e.pos.z - p.z }, 8, []);
         break;
       }
+      case 'megaSlam': {
+        const p = new THREE.Vector3(...data.p);
+        const d = p.distanceTo(this.playerWorld());
+        this.gore.dirt(p, 2.6);
+        if (d < 60) this.audio.thud();
+        if (d < 22) this.player.shake = Math.max(this.player.shake, 1.1 * (1 - d / 22));
+        break;
+      }
+      case 'megaRoar': if (Math.hypot(this.playerWorld().x - data.p[0], this.playerWorld().z - data.p[1]) < 60) { this.audio.groan(); this.audio.thud(); if (!this.said.has('mega')) { this.said.add('mega'); this.ui.toast('Méga-zombie !', 'Il bondit sur les fuyards. Visez la tête, reculez quand il lève les bras.', 'bad', 4500); } } break;
       case 'scream': if (Math.hypot(this.playerWorld().x - data.p[0], this.playerWorld().z - data.p[1]) < 90) { this.audio.scream(); this.player.shake = Math.max(this.player.shake, 0.3); if (!this.said.has('scream')) { this.said.add('scream'); this.ui.toast('Un Hurleur !', 'Il appelle les autres. Abattez-le en priorité.', 'bad', 4000); } } break;
       case 'storm':
         this.audio.siren();
@@ -208,7 +262,7 @@ export const CombatMixin = {
         this.radioOnce('storm', 'La tempête est là. Personne ne décolle avant 21 h. Sans courant, pas de projecteurs, et sans projecteurs, les morts vous submergent : postez-vous à la centrale, à l\'ouest du terminal, et gardez le générateur en vie jusqu\'à ce que le vent tombe.');
         break;
       case 'siege': this.ui.toast('Ils arrivent !', 'Défendez le générateur de la centrale jusqu\'à 21 h.', 'bad', 6000); this.audio.siren(); break;
-      case 'wave': this.ui.toast(`Vague ${data.n}/3`, data.n === 3 ? 'Quelque chose d\'énorme sort de terre…' : 'Les zombies convergent vers la centrale.', 'bad', 5000); this.audio.hiss(); break;
+      case 'wave': this.ui.toast(`Vague ${data.n}/3`, data.n === 3 ? 'Quelque chose d\'énorme sort de terre…' : data.n === 2 ? 'Un méga-zombie approche !' : 'Les zombies convergent vers la centrale.', 'bad', 5000); this.audio.hiss(); break;
       case 'genHit': if (near(this.island2.points.generator.x, this.island2.points.generator.z, 40)) this.audio.hitShell(); break;
       case 'genDown': this.audio.explosion(); this.island2.setPower(false); this.ui.toast('Générateur en panne !', 'Réparez-le à la clé (E).', 'bad', 4000); break;
       case 'genUp': this.island2.setPower(true); this.audio.powerUp(); this.ui.toast('Générateur relancé', 'Les projecteurs se rallument.', 'good'); break;
@@ -239,9 +293,11 @@ export const CombatMixin = {
     const waves = [19.05, 19.6, 20.2];
     if (S.wave < 3 && h >= waves[S.wave]) {
       S.wave++;
-      const n = 3 + S.wave + 2 * (N - 1);
-      this.enemies.spawnAround('voile', G.x, G.z, n, 28, 42, { siege: true });
-      if (S.wave >= 2) this.enemies.spawnAround('runner', G.x, G.z, 1 + N, 30, 40, { siege: true });
+      const n = 6 + 2 * S.wave + 3 * (N - 1);
+      this.enemies.spawnAround('voile', G.x, G.z, n, 22, 38, { siege: true });
+      this.enemies.spawnAround('crawler', G.x, G.z, 1 + S.wave, 20, 34, { siege: true });
+      if (S.wave >= 2) this.enemies.spawnAround('runner', G.x, G.z, 2 + N, 26, 38, { siege: true });
+      if (S.wave >= 2) this.enemies.spawnAround('mega', G.x, G.z, S.wave === 3 ? Math.ceil(N / 2) : 1, 26, 36, { siege: true });
       if (S.wave === 3 && !f.wardenDead) { this.enemies.setHpScale(1 + 0.6 * (N - 1)); this.enemies.spawnAround('warden', G.x, G.z, 1, 34, 40, { siege: true }); }
       this.fx('wave', { n: S.wave });
       this.dirtyWorld = true;
@@ -250,6 +306,7 @@ export const CombatMixin = {
     if (S.genHp >= 60 && !this.island2.power && f.power) this.fx('genUp');
     if (h >= 21 || h < 6) {
       S.active = false;
+      this.enemies.dismiss(G, 120, (e) => e.siege);
       this.act('flag', { stormOver: true });
       this.fx('stormOver');
       if (!this.island2.power && f.power) this.fx('genUp');
@@ -257,10 +314,37 @@ export const CombatMixin = {
     }
   },
 
+  // zone à tenir active (centrale de Saint-Escale, sas de décontamination d'Hélios) : { pos, wave }
+  activeHoldZone() {
+    if (this.siege.active) return { pos: this.island2.points.generator, wave: this.siege.wave };
+    if (this.c4?.deconOn && this.island4) return { pos: this.island4.points.pad, wave: this._deconWave || 0 };
+    return null;
+  },
+  // hôte : tant qu'on tient une zone, les morts sortent de terre en continu tout autour (en plus des vagues)
+  updateHoldTrickle(dt) {
+    if (!this.isAuthority()) return;
+    const Z = this.activeHoldZone();
+    if (!Z) { this._holdT = 3; return; }
+    this._holdT = (this._holdT ?? 3) - dt;
+    if (this._holdT > 0) return;
+    const C = CFG.combat, N = this.playerCount();
+    this._holdT = C.holdEvery * (0.7 + Math.random() * 0.6) / (1 + 0.25 * (N - 1));
+    const alive = this.enemies.list.filter((e) => e.siege && !e.dead && Math.hypot(e.pos.x - Z.pos.x, e.pos.z - Z.pos.z) < 90).length;
+    const want = C.holdMin + C.holdPerPlayer * (N - 1) + 2 * Z.wave;
+    if (alive >= want) return;
+    const pool = ['voile', 'voile', 'voile', 'runner', 'crawler', ...(Z.wave >= 2 ? ['runner', 'bloater'] : []), ...(Z.wave >= 3 ? ['brute', 'screamer'] : [])];
+    const n = Math.min(want - alive, 2 + Math.floor(Math.random() * 3));
+    for (let k = 0; k < n; k++) this.enemies.spawnAround(pool[Math.floor(Math.random() * pool.length)], Z.pos.x, Z.pos.z, 1, 18, 30, { siege: true });
+    // à partir de la 3e vague, un méga-zombie peut rejoindre la mêlée
+    const megas = this.enemies.list.filter((e) => e.type === 'mega' && !e.dead).length;
+    if (Z.wave >= 3 && megas < Math.ceil(N / 2) && Math.random() < C.holdMegaChance) this.enemies.spawnAround('mega', Z.pos.x, Z.pos.z, 1, 24, 34, { siege: true });
+  },
+
   updateBossHud() {
     const me = this.playerWorld();
-    const b = this.enemies.list.find((e) => e.T.boss && !e.dead && e.state !== 'sleep' && e.pos.distanceTo(me) < 90);
-    this.ui.boss(b ? { name: b.T.boss, hp: b.hp / b.maxHp, hint: BOSS_HINT[b.type] } : null);
+    const b = this.enemies.list.find((e) => e.T.boss && !e.dead && e.state !== 'sleep' && e.pos.distanceTo(me) < 90)
+      || this.enemies.list.find((e) => e.T.elite && !e.dead && e.appear >= 1 && e.pos.distanceTo(me) < 45);
+    this.ui.boss(b ? { name: b.T.boss || b.T.name, hp: b.hp / b.maxHp, hint: BOSS_HINT[b.type] } : null);
     const lbl = document.querySelector('#genBar span');
     const c4 = this.c4, near4 = this.island4 && this.nearIsland(me) === 4;
     if (this.siege.active) { lbl.textContent = 'Générateur'; this.ui.gen({ hp: this.siege.genHp, info: `Tenez jusqu'à 21:00 · il est ${this.clock()} · vague ${this.siege.wave}/3` }); }

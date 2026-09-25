@@ -230,7 +230,7 @@ export class Flight {
     const cam = this.camera;
     if (this.cockpitView) {
       const p = new THREE.Vector3(-0.62, FLOOR + 1.25, -3.45);
-      this.plane.root.updateMatrixWorld(true);
+      this.plane.root.updateWorldMatrix(true, false);
       this.plane.root.localToWorld(p);
       cam.position.copy(p);
       cam.quaternion.copy(this.plane.root.quaternion).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.12, 0, 0)));

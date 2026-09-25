@@ -11,13 +11,21 @@ export function createUI() {
   };
 
   let lastPrompt = '';
+  // cache des dernières valeurs écrites : on ne touche au DOM (et donc à la mise en page) que si ça change
+  const last = {};
+  const setOnce = (k, v, write) => { if (last[k] !== v) { last[k] = v; write(v); } };
+  let compassW = 0;
+  addEventListener('resize', () => { compassW = 0; });
   const api = {
     el,
     show(id, on) { (el[id] || (el[id] = $(id))).classList.toggle('hidden', !on); },
     visible(id) { const e = el[id] || (el[id] = $(id)); return !!e && !e.classList.contains('hidden'); },
     prompt(html) { if (html !== lastPrompt) { el.prompt.innerHTML = html; lastPrompt = html; } el.crosshair.classList.toggle('active', !!html); },
-    hold(p) { el.hold.style.display = p > 0 ? 'block' : 'none'; el.hold.firstChild.style.width = `${Math.min(1, p) * 100}%`; },
-    carry(title, sub) { el.carry.innerHTML = title ? `${title}${sub ? `<small>${sub}</small>` : ''}` : ''; },
+    hold(p) {
+      setOnce('holdOn', p > 0, (on) => { el.hold.style.display = on ? 'block' : 'none'; });
+      if (p > 0) setOnce('holdW', Math.round(Math.min(1, p) * 200), (w) => { el.hold.firstChild.style.width = `${w / 2}%`; });
+    },
+    carry(title, sub) { setOnce('carry', title ? `${title}${sub ? `<small>${sub}</small>` : ''}` : '', (h) => { el.carry.innerHTML = h; }); },
     toast(title, text = '', kind = '', ms = 4200) {
       if (kind === true) kind = 'bad';
       const d = document.createElement('div');
@@ -28,7 +36,7 @@ export function createUI() {
       setTimeout(() => d.remove(), ms);
     },
     tox(v) { $('tox').classList.toggle('on', v > 0.5); $('toxBar').style.width = `${v}%`; },
-    keys(html) { if (el.keys.innerHTML !== html) el.keys.innerHTML = html; },
+    keys(html) { setOnce('keys', html, (h) => { el.keys.innerHTML = h; }); },
     subtitle(html) { el.subtitle.innerHTML = html; },
     // bandes de cinéma + texte tapé à la machine
     letterbox(on) { $('cine').classList.toggle('on', !!on); if (!on) this.cineText(''); },
@@ -98,7 +106,7 @@ export function createUI() {
       $('trSub').textContent = sub;
     },
     compass(on, yaw) {
-      el.compass.classList.toggle('hidden', !on);
+      setOnce('compassOn', !!on, (v) => el.compass.classList.toggle('hidden', !v));
       if (!on) return;
       const strip = $('compassStrip');
       if (!strip.childElementCount) {
@@ -111,12 +119,16 @@ export function createUI() {
       let heading = (-yaw) % (Math.PI * 2); if (heading < 0) heading += Math.PI * 2;
       const perStep = 40, steps = 16;
       const off = (heading / (Math.PI * 2)) * steps * perStep;
-      const w = el.compass.clientWidth;
-      strip.style.left = `${w / 2 - (steps * perStep + off) - perStep / 2}px`;
+      // largeur lue une seule fois (la relire à chaque image force un recalcul de la mise en page)
+      if (!compassW) compassW = el.compass.clientWidth;
+      setOnce('compassX', Math.round(compassW / 2 - (steps * perStep + off) - perStep / 2), (x) => { strip.style.left = `${x}px`; });
     },
     debug(text) { el.debug.textContent = text; },
-    fps(text) { el.fps.textContent = text; },
-    vitals(hp, st) { $('hpBar').style.width = `${Math.max(0, hp)}%`; $('stBar').style.width = `${Math.max(0, st)}%`; },
+    fps(text) { setOnce('fps', text, (t) => { el.fps.textContent = t; }); },
+    vitals(hp, st) {
+      setOnce('hp', Math.round(Math.max(0, hp) * 2), (v) => { $('hpBar').style.width = `${v / 2}%`; });
+      setOnce('st', Math.round(Math.max(0, st) * 2), (v) => { $('stBar').style.width = `${v / 2}%`; });
+    },
     hotbar(sel, owned, oil) {
       document.querySelectorAll('#hotbar .slot').forEach((d, i) => { d.classList.toggle('sel', i === sel); d.classList.toggle('locked', !owned[i]); });
       $('oilBar').style.width = `${Math.max(0, Math.min(100, oil))}%`;

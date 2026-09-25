@@ -64,6 +64,15 @@ export const CFG = {
     respawnDelay: 60,        // s avant qu'un zombie tué ne soit remplacé (tant qu'on reste dans le coin)
     respawnNear: 45,         // m : au-delà, en s'éloignant du lieu du kill, le remplacement redevient possible
     respawnClear: 28,        // m : pas de nouvelle sortie de terre autour d'un kill récent
+    zombieDmg: 1.6,          // multiplicateur des dégâts des zombies (et du méga-zombie)
+    zombieSpeed: 1.35,       // multiplicateur de vitesse de déplacement des zombies
+    zombieRate: 0.85,        // multiplicateur du temps entre deux coups (plus petit = frappent plus souvent)
+    emergeTime: 1.1,         // s pour sortir de terre (× 1,8 pour le méga-zombie)
+    holdMin: 10,             // zones à tenir : zombies présents en permanence autour de l'objectif (solo)
+    holdPerPlayer: 4,        // + par joueur supplémentaire
+    holdEvery: 2.6,          // s entre deux groupes de renforts
+    holdMegaChance: 0.12,    // chance qu'un méga-zombie accompagne un groupe (à partir de la 3e vague)
+    megaNight: 0.02,         // la nuit (à partir du 2e jour) : chance qu'un groupe soit mené par un méga-zombie
   },
 
   lantern: {

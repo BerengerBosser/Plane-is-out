@@ -19,6 +19,7 @@ export const ICONS = {
   harpoons: 'M3 13h22M25 10l5 3-5 3zM3 19h22M25 16l5 3-5 3z',
   fish: 'M4 16c5-7 13-7 18 0-5 7-13 7-18 0zM22 16l6-5v10zM9 15h1',
   stake: 'M16 3v20M12 7h8M16 23l-2 4h4z',
+  grenades: 'M10 12h8v12h-8zM10 12a4 4 0 0 1 8 0M20 14h4v10h-4zM20 14a2 2 0 0 1 4 0',
 };
 
 // ── catalogue ──
@@ -32,6 +33,12 @@ export const GEAR = {
   axe: { name: 'Hache de pompier', w: 3, h: 2, eq: 'primary', icon: ic('axe'), desc: 'Lente mais redoutable.' },
   shotgun: { name: 'Fusil à pompe', w: 4, h: 2, eq: 'primary', icon: ic('shotgun'), ammo: 'a_buck', desc: 'Dévastateur de près.' },
   rifle: { name: 'Carabine', w: 4, h: 2, eq: 'primary', icon: ic('rifle'), ammo: 'a_r556', desc: 'Automatique. Très bruyante.' },
+  revolver: { name: 'Revolver', w: 2, h: 1, eq: 'secondary', icon: ic('revolver'), ammo: 'a_357', desc: 'Six coups, gros calibre. Lent à recharger.' },
+  smg: { name: 'Pistolet-mitrailleur', w: 3, h: 1, eq: 'secondary', icon: ic('smg'), ammo: 'a_p9', desc: 'Automatique, balles de 9 mm. Arrose de près.' },
+  sniper: { name: 'Fusil de précision', w: 4, h: 2, eq: 'primary', icon: ic('sniper'), ammo: 'a_762', desc: 'Lunette ×4. Traverse plusieurs zombies alignés.' },
+  katana: { name: 'Katana', w: 4, h: 1, eq: 'primary', icon: ic('katana'), desc: 'Rapide, tranchant, longue allonge.' },
+  sledge: { name: 'Masse', w: 3, h: 2, eq: 'primary', icon: ic('sledge'), desc: 'Balaye tout l\'arc devant soi. Très lente.' },
+  launcher: { name: 'Lance-grenades', w: 4, h: 2, eq: 'primary', icon: ic('launcher'), ammo: 'a_grenade', desc: 'Explose à l\'impact. Gare au souffle.' },
   harpoon: { name: 'Fusil-harpon', w: 4, h: 1, eq: 'primary', icon: ic('harpoon'), ammo: 'a_harpoon', desc: 'Lent, puissant. Harpons à ramasser.' },
   rod: { name: 'Canne à pêche', w: 4, h: 1, eq: 'primary', icon: ic('rod'), desc: 'Lancer, ferrer, mouliner.' },
   diable: { name: 'Diable', w: 2, h: 4, eq: 'primary', icon: ic('diable'), desc: 'Roule les pièces lourdes.' },
@@ -47,6 +54,9 @@ export const GEAR = {
   a_p9: { name: 'Balles 9 mm', w: 1, h: 1, stack: 30, cat: 'ammo', icon: ICONS.bullets, desc: 'Pistolet.' },
   a_buck: { name: 'Cartouches', w: 1, h: 1, stack: 12, cat: 'ammo', icon: ICONS.shells, desc: 'Fusil à pompe.' },
   a_r556: { name: 'Balles 5,56', w: 1, h: 1, stack: 30, cat: 'ammo', icon: ICONS.bullets, desc: 'Carabine.' },
+  a_357: { name: 'Balles .357', w: 1, h: 1, stack: 18, cat: 'ammo', icon: ICONS.bullets, desc: 'Revolver.' },
+  a_762: { name: 'Balles 7,62', w: 1, h: 1, stack: 20, cat: 'ammo', icon: ICONS.bullets, desc: 'Fusil de précision.' },
+  a_grenade: { name: 'Grenades 40 mm', w: 1, h: 1, stack: 6, cat: 'ammo', icon: ICONS.grenades, desc: 'Lance-grenades.' },
   a_flare: { name: 'Fusées', w: 1, h: 1, stack: 6, cat: 'ammo', icon: ICONS.flares, desc: 'Pistolet de détresse.' },
   a_harpoon: { name: 'Harpons', w: 2, h: 1, stack: 4, cat: 'ammo', icon: ICONS.harpoons, desc: 'Fusil-harpon.' },
   // pêche
@@ -159,13 +169,13 @@ export const itemLabel = (it) => `${GEAR[it.k].name}${(it.n || 1) > 1 ? ` ×${it
 // Les vêtements de stockage sont rares : chaque île garantit au moins un sac (Jo, objets trouvés, police).
 export const LOOT_TABLES = {
   suitcase: [['c_jeanshirt', 7], ['c_jeans', 7], ['c_cap', 6], ['c_raincoat', 4], ['c_cargo', 3], ['c_satchel', 3], ['c_pilot', 1.5], ['c_backpack', 1.2], ['c_hiking', 0.35], ['bandage', 8], ['talkie', 1.2], ['a_p9', 1.5]],
-  locker: [['c_jeanshirt', 4], ['c_cargo', 4], ['c_pilot', 3], ['c_lifevest', 3], ['bandage', 8], ['medkit', 2], ['lantern', 1], ['talkie', 2], ['a_flare', 3], ['stake', 3], ['c_satchel', 2], ['c_backpack', 0.8]],
-  crate: [['stake', 6], ['a_flare', 4], ['a_harpoon', 3], ['bandage', 5], ['c_cargo', 2], ['c_lifevest', 3], ['medkit', 1], ['c_satchel', 1.5], ['parachute', 0.3]],
-  military: [['c_tacvest', 3], ['c_milpants', 4], ['c_miljacket', 4], ['c_helmet', 4], ['c_milpack', 0.5], ['a_p9', 5], ['a_r556', 4], ['a_buck', 4], ['medkit', 3], ['bandage', 4]],
+  locker: [['c_jeanshirt', 4], ['c_cargo', 4], ['c_pilot', 3], ['c_lifevest', 3], ['bandage', 8], ['medkit', 2], ['lantern', 1], ['talkie', 2], ['a_flare', 3], ['stake', 3], ['c_satchel', 2], ['c_backpack', 0.8], ['a_357', 1.5], ['revolver', 0.35]],
+  crate: [['stake', 6], ['a_flare', 4], ['a_harpoon', 3], ['bandage', 5], ['c_cargo', 2], ['c_lifevest', 3], ['medkit', 1], ['c_satchel', 1.5], ['parachute', 0.3], ['a_grenade', 0.7], ['sledge', 0.3]],
+  military: [['c_tacvest', 3], ['c_milpants', 4], ['c_miljacket', 4], ['c_helmet', 4], ['c_milpack', 0.5], ['a_p9', 5], ['a_r556', 4], ['a_buck', 4], ['a_357', 3], ['a_762', 2], ['a_grenade', 1.5], ['smg', 0.6], ['revolver', 0.6], ['medkit', 3], ['bandage', 4]],
   medical: [['bandage', 10], ['medkit', 2]],
   cockpit: [['parachute', 1], ['c_pilot', 2], ['talkie', 2], ['bandage', 4], ['c_cap', 3]],
 };
 export const RARITY_OF = (k) => {
-  const w = { c_hiking: 'rare', c_milpack: 'epic', c_tacvest: 'rare', c_helmet: 'rare', c_miljacket: 'rare', c_milpants: 'rare', c_backpack: 'uncommon', c_pilot: 'uncommon', c_cargo: 'uncommon', parachute: 'uncommon', medkit: 'uncommon', c_firehat: 'uncommon' };
+  const w = { revolver: 'rare', smg: 'rare', katana: 'rare', sledge: 'uncommon', sniper: 'epic', launcher: 'epic', a_grenade: 'uncommon', a_762: 'uncommon', c_hiking: 'rare', c_milpack: 'epic', c_tacvest: 'rare', c_helmet: 'rare', c_miljacket: 'rare', c_milpants: 'rare', c_backpack: 'uncommon', c_pilot: 'uncommon', c_cargo: 'uncommon', parachute: 'uncommon', medkit: 'uncommon', c_firehat: 'uncommon' };
   return w[k] || 'common';
 };

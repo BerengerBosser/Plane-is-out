@@ -21,6 +21,12 @@ function heldItems() {
   g.rifle = gun(0.75, '#3a4a3a', '#3a4a3a');
   g.flare = gun(0.22, '#ff6b5b');
   g.harpoon = gun(0.95, '#5d6470', '#8a6a4a');
+  g.revolver = gun(0.3, '#8d9299');
+  g.smg = gun(0.45, '#2b2f36', '#1a1d22');
+  g.sniper = gun(1.05, '#4a3a2a', '#4a3a2a'); g.sniper.add(box(0.05, 0.3, 0.05, '#10162b', 0, -0.35, -0.12));
+  g.launcher = gun(0.6, '#4a5a32', '#4a5a32'); g.launcher.add(box(0.13, 0.5, 0.13, '#4a5a32', 0, -0.3, -0.06));
+  g.katana = G(box(0.035, 0.04, 0.22, '#1a1d22', 0, 0, -0.02), box(0.07, 0.08, 0.015, '#d8a53a', 0, 0, -0.14), box(0.012, 0.05, 0.75, '#e4e8ee', 0, 0.01, -0.52));
+  g.sledge = G(box(0.05, 0.05, 0.85, '#8a6a4a', 0, 0, -0.35), box(0.16, 0.3, 0.16, '#5d6470', 0, 0.02, -0.78));
   g.wrench = G(box(0.05, 0.05, 0.4, '#8d9299', 0, 0, -0.18), box(0.1, 0.04, 0.1, '#8d9299', 0, 0, -0.4));
   g.machete = G(box(0.04, 0.05, 0.14, '#3a2a1e', 0, 0, -0.05), box(0.015, 0.09, 0.55, '#c9ccd2', 0, 0.01, -0.38));
   g.bat = G(box(0.07, 0.07, 0.8, '#b98b5e', 0, 0, -0.35), box(0.02, 0.1, 0.02, '#8d9299', 0, 0.05, -0.62), box(0.02, 0.1, 0.02, '#8d9299', 0, -0.05, -0.55));
@@ -34,7 +40,7 @@ function heldItems() {
   g.iron = G(box(0.05, 0.05, 0.2, '#33373f', 0, 0, -0.05), box(0.045, 0.045, 0.12, '#ffd166', 0, 0, -0.2), box(0.02, 0.02, 0.1, '#ff8a3d', 0, 0, -0.31));
   return g;
 }
-const SLOT_KEYS = ['fists', 'wrench', 'diable', 'lantern', 'flare', 'harpoon', 'rod', 'talkie', 'machete', 'bat', 'axe', 'pistol', 'shotgun', 'rifle', 'bandage', 'medkit', 'parachute', 'iron'];
+const SLOT_KEYS = ['fists', 'wrench', 'diable', 'lantern', 'flare', 'harpoon', 'rod', 'talkie', 'machete', 'bat', 'axe', 'pistol', 'shotgun', 'rifle', 'bandage', 'medkit', 'parachute', 'iron', 'revolver', 'smg', 'sniper', 'katana', 'sledge', 'launcher'];
 
 function label(text, color) {
   const cv = document.createElement('canvas');
@@ -342,13 +348,14 @@ export function buildAvatar(name, color, idx = 0, ci = 0, sig = '') {
       else torso.rotation.x = s.sprint && s.moving ? -0.18 : 0;
       const key = SLOT_KEYS[s.slot] || 'fists';
       for (const [k, o] of Object.entries(held)) o.visible = !s.carry && (!s.seat || s.armed) && !s.lying && !s.down && k === key && !s.hideHeld;
-      const gunLike = ['pistol', 'shotgun', 'rifle', 'flare', 'harpoon'].includes(key);
-      const melee = ['wrench', 'machete', 'bat', 'axe'].includes(key);
+      const gunLike = ['pistol', 'shotgun', 'rifle', 'flare', 'harpoon', 'revolver', 'smg', 'sniper', 'launcher'].includes(key);
+      const melee = ['wrench', 'machete', 'bat', 'axe', 'katana', 'sledge'].includes(key);
       if (s.carry) { arms[0].rotation.x = 1.2; arms[1].rotation.x = 1.2; }
       else if (s.push) { arms[0].rotation.x = arms[1].rotation.x = 1.45; torso.rotation.x = -0.35; }
       else if (gunLike) {
-        arms[1].rotation.x = 1.5; arms[0].rotation.x = key === 'pistol' ? 1.45 : 1.25;
-        arms[0].rotation.z = key === 'pistol' ? 0.45 : 0.3;
+        const oneHand = key === 'pistol' || key === 'revolver';
+        arms[1].rotation.x = 1.5; arms[0].rotation.x = oneHand ? 1.45 : 1.25;
+        arms[0].rotation.z = oneHand ? 0.45 : 0.3;
         if (s.attack > 0) arms[1].rotation.x = 1.62;
       } else if (melee) {
         arms[1].rotation.x = s.attack > 0 ? 2.5 : 0.55;

@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { Flight } from './flight.js';
 import { createIsland4, I4, FLAT4 } from './island4.js';
 import { setIsland4, heightAt } from './terrain.js';
-import { BOEING, BSEATS, FLOOR_B, FLOOR_C, animateBoeing, boeingColliders, boeingPlatform } from './boeing.js';
+import { BOEING, BSEATS, SLIDE, FLOOR_B, FLOOR_C, animateBoeing, boeingColliders, boeingPlatform } from './boeing.js';
 import { buildDuck } from './fun.js';
 import { FLAT3, I3 } from './island3.js';
 import { makePipes } from './interact.js';
@@ -64,6 +64,7 @@ export const Chapter4Mixin = {
     f.hitTest = () => this.bHitTest();
     this.bcam = new THREE.Vector3();
     this.c4 = this.defaultC4();
+    this.jetSetup?.();
   },
   defaultC4() { return { crank: [0, 0], deconOn: 0, decon: 0, synthLeft: 0 }; },
   resetC4() {
@@ -95,10 +96,11 @@ export const Chapter4Mixin = {
     const me = by === this.myId();
     switch (type) {
       case 'bfly': {
-        if (d.take) { c3.fly = by; if (me) { if (this.bseat) this.bseat.pilot = true; else this.enterBSeat(true); this.bseat.i = 0; this.ui.toast('Vous prenez les commandes', 'Le pilote a quitté l\'équipage.', 'bad', 4000); } this.dirtyWorld = true; return true; }
+        if (d.take) { c3.fly = by; if (me) { if (this.bseat) this.bseat.pilot = true; else this.enterBSeat(true); this.bseat.i = 0; this.bSitDown(); this.ui.toast('Vous prenez les commandes', 'Le pilote a quitté l\'équipage.', 'bad', 4000); } this.dirtyWorld = true; return true; }
         if (d.on) {
           if (auth && c3.fly && c3.fly !== by && (!this.session || this.session.players.has(c3.fly) || c3.fly === this.session.me)) return false;
           c3.fly = by;
+          f.slide = false;   // on ne décolle pas avec le toboggan déployé
           this.boeingCols = []; this.platforms = this.platforms.filter((p) => !p.boeing);
           if (me) { this.enterBSeat(true); this.bfStartFromParked(); }
           else this.enterBSeat(false);
@@ -193,19 +195,35 @@ export const Chapter4Mixin = {
     this.flashKeys();
     if (!pilot) this.ui.toast('Embarquement', 'Attachez vos ceintures. <kbd>C</kbd> : changer de vue.', 'good', 3500);
   },
+  // s'asseoir dans le Boeing garé : regard libre, E pour se relever
+  bSitParked(i) {
+    if (this.carrying) this.dropCarried();
+    this.bseat = { i, pilot: false, view: 'seat', parked: true };
+    const s = BSEATS[i];
+    this.player.pos.set(s.x, s.y, s.z); this.player.yaw = 0; this.player.pitch = 0; this.player.velY = 0;
+    this.aboard = false; this.seat = null;
+    this.ui.prompt(''); this.ui.carry(''); this.ui.hold(0);
+    this.audio.clank();
+    this.flashKeys();
+  },
   leaveBSeat() {
     const S = this.bseat; if (!S) return;
     const s = BSEATS[S.i];
     this.bseat = null;
     this.poseBoeing();
-    const front = S.i < 2;
-    const w = this.boeingLocal(front ? new THREE.Vector3(s.x * 0.4, FLOOR_C, -0.95) : new THREE.Vector3(0, FLOOR_B, s.z + 0.6));
+    const front = S.i < 2, P = this.player.pos;
+    // debout dans la cabine : on reste où l'on est ; assis : on se lève dans l'allée
+    const loc = S.walk ? new THREE.Vector3(P.x, P.y, P.z) : front ? new THREE.Vector3(s.x * 0.4, FLOOR_C, -0.95) : new THREE.Vector3(0, FLOOR_B, s.z + 0.6);
+    const w = this.boeingLocal(loc);
+    const yaw0 = S.walk ? this.player.yaw : 0;
     this.player.pos.copy(w);
-    this.player.pos.y = (this.c3.bp.y ?? FLAT3) + (front ? FLOOR_C : FLOOR_B);
-    this.player.yaw = this.c3.bp.yaw; this.player.pitch = 0; this.player.velY = 0; this.player.onGround = true;
+    this.player.pos.y = (this.c3.bp.y ?? FLAT3) + (loc.y > FLOOR_B + 0.2 ? FLOOR_C : FLOOR_B);
+    this.player.radius = undefined;
+    this.ui.prompt(''); this.ui.carry('');
+    this.player.yaw = this.c3.bp.yaw + yaw0; this.player.pitch = 0; this.player.velY = 0; this.player.onGround = true;
     this.ui.el.hud.dataset.mode = 'explore';
     this.ui.flight(false);
-    this.camera.fov = +document.getElementById('optFov').value || 72; this.camera.updateProjectionMatrix();
+    this.camera.fov = this.baseFov || 72; this.camera.updateProjectionMatrix();
   },
   // le pilote prend l'avion là où il est garé
   bfStartFromParked() {
@@ -231,6 +249,7 @@ export const Chapter4Mixin = {
   bCrash(why) {
     if ((this._bCrashT || 0) > this.t) return;
     this._bCrashT = this.t + 2;
+    if (this.bseat?.walk && this.bseat.i === 0) this.bSitDown();
     const f = this.bf, I4w = this.island4, I3w = this.island3;
     const d4 = Math.hypot(f.pos.x - I4w.cx, f.pos.z - I4w.cz), d3 = Math.hypot(f.pos.x - I3w.cx, f.pos.z - I3w.cz);
     this.ui.fade(1, '#000', 120); setTimeout(() => this.ui.fade(0, '#000', 900), 450);
@@ -251,12 +270,89 @@ export const Chapter4Mixin = {
   },
 
   // ── image par image, assis dans le Boeing ──
+  // se lever pendant le vol (pilote automatique enclenché) : on marche dans la cabine, dans le repère de l'avion
+  bStandUp() {
+    const S = this.bseat, f = this.bf;
+    if (!S || S.walk) return;
+    if (!f.airborne || !f.autopilot) { this.ui.toast('Restez assis', S.pilot ? 'Enclenchez le pilote automatique (<kbd>P</kbd>) pour quitter le siège.' : 'Le pilote doit enclencher le pilote automatique.', 'bad', 2400); this.audio.error(); return; }
+    const s = BSEATS[S.i];
+    S.walk = true;
+    // on se lève dans l'allée, à côté de son siège
+    this.player.pos.set(S.i < 2 ? s.x * 0.3 : 0, s.y, S.i < 2 ? s.z + 0.9 : s.z);
+    this.player.yaw = S.i < 2 ? Math.PI : 0; this.player.pitch = 0; this.player.velY = 0; this.player.onGround = true;
+    this.player.radius = 0.24;
+    this.ui.flight(false);
+    this.camera.fov = this.baseFov || 72; this.camera.updateProjectionMatrix();
+    this.ui.toast('Vous vous levez', S.i === 0 ? 'Le pilote automatique tient le cap. Revenez au poste (<kbd>E</kbd> sur le siège) pour reprendre la main.' : 'Baladez-vous dans la cabine · <kbd>E</kbd> sur votre siège pour vous rasseoir.', 'good', 3500);
+    this.flashKeys();
+  },
+  bSitDown() {
+    const S = this.bseat;
+    if (!S?.walk) return;
+    S.walk = false;
+    const s = BSEATS[S.i];
+    this.player.pos.set(s.x, s.y, s.z); this.player.yaw = 0; this.player.pitch = 0; this.player.velY = 0;
+    this.player.radius = undefined;
+    this.ui.prompt(''); this.ui.carry(''); this.ui.hold(0);
+    this.ui.el.hud.dataset.mode = 'flight';
+    this.flashKeys();
+  },
+  // cabine vue de l'intérieur (repère local) : parois, sièges, cloisons ; plancher et estrade du poste
+  bCabinEnv() {
+    const C = BOEING.cabin;
+    if (!this._bCabinCols) this._bCabinCols = boeingColliders({ x: 0, z: 0, y: 0, yaw: 0 }, { door: false }).filter((c) => c.maxY > FLOOR_B);
+    return {
+      cols: this._bCabinCols,
+      env: {
+        frame: this.boeing.root,
+        height: (x, z) => (z < -0.8 && Math.abs(x) < 2.15 ? FLOOR_C : FLOOR_B),
+        canGo: (x, z) => x > C.minX && x < C.maxX && z > C.minZ && z < C.maxZ,
+      },
+    };
+  },
+  updateBWalk(dt, blocked) {
+    const inp = this.input, ui = this.ui, S = this.bseat, f = this.bf;
+    const { cols, env } = this.bCabinEnv();
+    const mods = { canMove: !blocked, canSprint: !this.exhausted && this.stamina > 0, canJump: true, speedMul: 1 };
+    const mv = this.player.update(dt, inp, cols, mods, env);
+    if (!document.getElementById('optBob').checked) this.player.bob = 0;
+    this.moving = mv.moving; this.sprinting = mv.sprint && mv.moving && inp.down('ShiftLeft', 'ShiftRight');
+    this.stamina = clamp(this.stamina + (this.sprinting ? -CFG.player.sprintCost : CFG.player.staminaRegen) * dt, 0, CFG.player.stamina);
+    ui.vitals(this.hp, this.stamina);
+    const s = BSEATS[S.i], P = this.player.pos;
+    const nearSeat = Math.hypot(P.x - s.x, P.z - s.z) < 1.5;
+    if (nearSeat) ui.prompt(S.i === 0 ? '<kbd>E</kbd> reprendre les commandes' : '<kbd>E</kbd> se rasseoir');
+    else ui.prompt('');
+    if (!blocked && nearSeat && inp.hit('KeyE')) { this.bSitDown(); return; }
+    const alt = Math.round(f.pos.y - Math.max(heightAt(f.pos.x, f.pos.z), 0)), I = this.island4;
+    const dist = Math.round(Math.hypot(f.pos.x - I.cx, f.pos.z - I.cz));
+    ui.carry(f.autopilot ? 'HX-404 · pilote auto' : 'HX-404 · sans pilote auto !', `${Math.round(f.speed * 3.6)} km/h · alt. ${alt} m · Hélios ${dist > 999 ? `${(dist / 1000).toFixed(1)} km` : `${dist} m`}`);
+    this.tipKeys('bwalk', S.i === 0 ? 'Cabine en vol · retour au poste de pilotage (à l\'avant) : <kbd>E</kbd> sur le siège de gauche' : 'Cabine en vol · <kbd>E</kbd> sur votre siège pour vous rasseoir');
+  },
+
   updateBSeat(dt, blocked) {
     const inp = this.input, ui = this.ui, f = this.bf, S = this.bseat, b = this.boeing, r = b.root;
     const pilot = S.pilot && this.c3.fly === this.myId();
     ui.show('carnet', inp.down('Tab') && !this.chatting);
-    ui.el.hud.dataset.mode = 'flight';
+    ui.el.hud.dataset.mode = S.walk ? 'explore' : 'flight';
     ui.veil(0);
+    if (S.walk) {
+      // on se balade : le pilote automatique vole seul (côté pilote), la cabine suit l'avion
+      if (pilot) {
+        const ev = f.update(dt, NO_INPUT, false);
+        for (const e of ev) {
+          if (e === 'landed' || e === 'on_water') { this.bCrash('water'); return; }
+          if (e === 'crash') { this.bCrash(); return; }
+        }
+        if (f.surface === 'water') { this.bCrash('water'); return; }
+        this.audio.setEngine(0.3 + f.throttle * 0.4, f.throttle * 0.6);
+        this.audio.setWind(0.02, 0.8);
+      } else this.audio.setEngine(0.3 + f.throttle * 0.4, f.throttle * 0.6);
+      this.updateBWalk(dt, blocked);
+      ui.compass(this.flags.compass, this.playerYawWorld());
+      this.trailsB.update(dt, r, { active: f.airborne && f.speed > 45 });
+      return;
+    }
     if (pilot) {
       const ev = f.update(dt, blocked ? NO_INPUT : inp, !blocked);
       for (const e of ev) {
@@ -267,7 +363,7 @@ export const Chapter4Mixin = {
         else if (e === 'landed' || e === 'on_water') { this.bCrash('water'); return; }
         else if (e === 'crash') { this.bCrash(); return; }
         else if (e === 'bump') { this.audio.clank(); ui.toast('Choc', 'Un bâtiment ! Reculez l\'avion (rudder) et contournez.', 'bad', 1800); }
-        else if (e === 'ap_on') ui.toast('Pilote automatique', 'Cap et altitude tenus. <kbd>P</kbd> pour reprendre la main.', 'good', 2500);
+        else if (e === 'ap_on') ui.toast('Pilote automatique', 'Cap et altitude tenus. <kbd>E</kbd> se lever et se balader dans la cabine · <kbd>P</kbd> reprendre la main.', 'good', 3500);
       }
       if (f.surface === 'water') { this.bCrash('water'); return; }
       const I = this.island4;
@@ -275,7 +371,8 @@ export const Chapter4Mixin = {
       this.audio.setEngine(0.4 + f.throttle * 0.6, f.throttle * 0.8 + Math.min(f.speed / 70, 1) * 0.3);
       this.audio.setWind(clamp(f.speed / 70, 0.04, 0.22), 0.8);
       if (inp.hit('KeyE') && !blocked) {
-        if (f.airborne) { ui.toast('En plein vol', 'Posez-vous d\'abord, puis arrêtez l\'avion.', 'bad', 2000); this.audio.error(); }
+        if (f.airborne && f.autopilot) { this.bStandUp(); return; }
+        else if (f.airborne) { ui.toast('En plein vol', 'Enclenchez le pilote automatique (<kbd>P</kbd>) pour vous lever, ou posez-vous et arrêtez l\'avion.', 'bad', 2400); this.audio.error(); }
         else if (f.speed > 1.5) { ui.toast('Trop vite', 'Freinez (<kbd>Espace</kbd>) jusqu\'à l\'arrêt.', 'bad', 1800); this.audio.error(); }
         else {
           const p = r.position;
@@ -297,14 +394,18 @@ export const Chapter4Mixin = {
         this.camera.up.set(0, 1, 0);
         this.camera.lookAt(tgt.addScaledVector(f.forward(), 30));
       }
-      this.tipKeys('bpilot', document.getElementById('optHints').checked ? '<kbd>Z</kbd>/<kbd>S</kbd> gaz · <kbd>Q</kbd>/<kbd>D</kbd> palonnier · <kbd>Espace</kbd> frein au sol<br>Souris ou flèches : manche (tirer à 115 km/h pour décoller)<br><kbd>C</kbd> vue cockpit · <kbd>P</kbd> pilote auto · <kbd>E</kbd> à l\'arrêt : couper les réacteurs' : '');
+      this.tipKeys('bpilot', document.getElementById('optHints').checked ? '<kbd>Z</kbd>/<kbd>S</kbd> gaz · <kbd>Q</kbd>/<kbd>D</kbd> palonnier · <kbd>Espace</kbd> frein au sol<br>Souris ou flèches : manche (tirer à 115 km/h pour décoller)<br><kbd>C</kbd> vue cockpit · <kbd>P</kbd> pilote auto (puis <kbd>E</kbd> se lever) · <kbd>E</kbd> à l\'arrêt : couper les réacteurs' : '');
     } else {
       // passager : regard libre, vue du siège, du poste ou de l'extérieur
       if (!blocked) {
         this.player.yaw -= inp.mdx * CFG.player.mouseSensitivity * this.player.sens;
         this.player.pitch = clamp(this.player.pitch - inp.mdy * CFG.player.mouseSensitivity * this.player.sens, -1.2, 1.2);
         if (inp.hit('KeyC')) { S.view = S.view === 'seat' ? 'cockpit' : S.view === 'cockpit' ? 'outside' : 'seat'; this.flashKeys(); }
-        if (inp.hit('KeyE')) ui.toast('Restez assis', 'Le pilote coupe les réacteurs à l\'arrêt : vous pourrez alors vous lever.', '', 2200);
+        if (inp.hit('KeyE')) {
+          if (S.parked) { this.leaveBSeat(); return; }
+          if (f.airborne && f.autopilot) { this.bStandUp(); return; }
+          ui.toast('Restez assis', f.airborne ? 'Dès que le pilote automatique sera enclenché, vous pourrez vous lever.' : 'Le pilote coupe les réacteurs à l\'arrêt : vous pourrez alors vous lever.', '', 2200);
+        }
       }
       const s = BSEATS[S.i];
       if (S.view === 'seat') { this.player.pos.set(s.x, s.y, s.z); this.player.applyCamera(dt, false, r, S.i < 2 ? 1.28 : 1.2); }
@@ -312,14 +413,21 @@ export const Chapter4Mixin = {
         this.camera.position.copy(r.localToWorld(new THREE.Vector3(0, FLOOR_C + 1.55, -0.6)));
         this.camera.quaternion.copy(r.quaternion).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(this.player.pitch - 0.1, this.player.yaw, 0, 'YXZ')));
       } else {
-        const tgt = r.localToWorld(new THREE.Vector3(0, 6, 22)), a = this.player.yaw + this.bf.yaw, pt = clamp(0.25 - this.player.pitch * 0.6, -0.2, 1.2);
+        const tgt = r.localToWorld(new THREE.Vector3(0, 6, 22)), a = this.player.yaw + (S.parked ? this.c3.bp.yaw : this.bf.yaw), pt = clamp(0.25 - this.player.pitch * 0.6, -0.2, 1.2);
         this.camera.position.set(tgt.x + Math.sin(a) * Math.cos(pt) * 70, tgt.y + Math.sin(pt) * 70, tgt.z + Math.cos(a) * Math.cos(pt) * 70);
         this.camera.position.y = Math.max(this.camera.position.y, Math.max(heightAt(this.camera.position.x, this.camera.position.z), 0) + 2);
         this.camera.up.set(0, 1, 0);
         this.camera.lookAt(tgt);
       }
       this.player.pos.set(s.x, s.y, s.z);
-      this.tipKeys(`bpax:${S.view}`, `Souris : regarder · <kbd>C</kbd> vue (${S.view === 'seat' ? 'siège' : S.view === 'cockpit' ? 'poste de pilotage' : 'extérieur'}) · <kbd>Tab</kbd> carnet`);
+      if (S.parked) {
+        this.tipKeys(`bpark:${S.view}`, 'Souris : regarder · <kbd>C</kbd> vue · <kbd>E</kbd> se lever');
+        ui.flight(false);
+        ui.compass(this.flags.compass, this.playerYawWorld());
+        return;
+      }
+      const ap = f.airborne && f.autopilot;
+      this.tipKeys(`bpax:${S.view}${ap ? ':ap' : ''}`, `${ap ? '<kbd>E</kbd> se lever (pilote auto) · ' : ''}Souris : regarder · <kbd>C</kbd> vue (${S.view === 'seat' ? 'siège' : S.view === 'cockpit' ? 'poste de pilotage' : 'extérieur'}) · <kbd>Tab</kbd> carnet`);
       this.audio.setEngine(0.3 + f.throttle * 0.4, f.throttle * 0.6);
     }
     // cadrans
@@ -337,17 +445,17 @@ export const Chapter4Mixin = {
     if (!s || !c3?.fly || c3.fly === s.me || !this.bf) return;
     const a = s.players.get(c3.fly)?.s?.bf;
     if (!a) return;
-    const f = this.bf, [x, y, z, yaw, pitch, roll, speed, thr, surf] = a;
+    const f = this.bf, [x, y, z, yaw, pitch, roll, speed, thr, surf, ap] = a;
     const k = Math.min(1, dt * 10), p = new THREE.Vector3(x, y, z);
     if (f.pos.distanceTo(p) > 40) f.pos.copy(p); else f.pos.lerp(p, k);
     const ang = (q, t) => q + Math.atan2(Math.sin(t - q), Math.cos(t - q)) * k;
     f.yaw = ang(f.yaw, yaw); f.pitch = ang(f.pitch, pitch); f.roll = ang(f.roll, roll);
-    f.speed = speed; f.throttle = thr; f.surface = SURF[surf] || 'ground';
+    f.speed = speed; f.throttle = thr; f.surface = SURF[surf] || 'ground'; f.autopilot = !!ap;
     f.apply();
   },
   bPresence() {
     const f = this.bf;
-    return this.c3?.fly === this.myId() && this.bseat ? [f.pos.x, f.pos.y, f.pos.z, f.yaw, f.pitch, f.roll, f.speed, f.throttle].map((v) => +v.toFixed(3)).concat([SURF.indexOf(f.surface)]) : 0;
+    return this.c3?.fly === this.myId() && this.bseat ? [f.pos.x, f.pos.y, f.pos.z, f.yaw, f.pitch, f.roll, f.speed, f.throttle].map((v) => +v.toFixed(3)).concat([SURF.indexOf(f.surface), f.autopilot ? 1 : 0]) : 0;
   },
   // le pilote a quitté la partie en plein vol : l'hôte reprend les commandes
   bPilotLost(id) {
@@ -407,7 +515,8 @@ export const Chapter4Mixin = {
     I.group.visible = near || this.chapter() === 4;
     // sièges du vol : tout le monde est à bord pendant que le Boeing vole
     if (this.c3?.fly && !this.bseat && this.mode === 'explore' && (!this.session || this.gotWorld || this.isAuthority())) this.enterBSeat(this.c3.fly === this.myId());
-    else if (!this.c3?.fly && this.bseat) this.leaveBSeat();
+    else if (this.c3?.fly && this.bseat?.parked) { this.bseat.parked = false; if (this.c3.fly === this.myId()) this.enterBSeat(true); }
+    else if (!this.c3?.fly && this.bseat && !this.bseat.parked) this.leaveBSeat();
     if (!I.group.visible) return;
     I.setNight(this.brumeNow || 0);
     I.update(this.t, dt);
@@ -463,11 +572,13 @@ export const Chapter4Mixin = {
       while ((this._deconWave || 0) < DECON_WAVES.length && c.decon >= DECON_WAVES[this._deconWave]) {
         const w = ++this._deconWave;
         this.enemies.setHpScale(1 + 0.6 * (N - 1));
-        this.enemies.spawnAround('voile', pd.x, pd.z, 2 + w + N, 26, 40, { siege: true });
-        if (w >= 2) this.enemies.spawnAround('runner', pd.x, pd.z, 1 + Math.floor(N / 2), 30, 42, { siege: true });
-        if (w === 3) this.enemies.spawnAround('screamer', pd.x, pd.z, 1, 32, 40, { siege: true });
-        if (w === 4) this.enemies.spawnAround('bloater', pd.x, pd.z, 1 + Math.floor(N / 2), 30, 40, { siege: true });
-        if (w === 5) this.enemies.spawnAround('brute', pd.x, pd.z, 1, 34, 42, { siege: true });
+        this.enemies.spawnAround('voile', pd.x, pd.z, 5 + 2 * w + 2 * N, 22, 38, { siege: true });
+        this.enemies.spawnAround('crawler', pd.x, pd.z, 1 + Math.floor(w / 2), 20, 32, { siege: true });
+        if (w >= 2) this.enemies.spawnAround('runner', pd.x, pd.z, 2 + N, 26, 40, { siege: true });
+        if (w === 3) this.enemies.spawnAround('screamer', pd.x, pd.z, 1 + Math.floor(N / 2), 30, 38, { siege: true });
+        if (w >= 3) this.enemies.spawnAround('mega', pd.x, pd.z, 1, 26, 36, { siege: true });
+        if (w === 4) this.enemies.spawnAround('bloater', pd.x, pd.z, 2 + Math.floor(N / 2), 28, 38, { siege: true });
+        if (w === 5) { this.enemies.spawnAround('brute', pd.x, pd.z, 1 + Math.floor(N / 2), 30, 40, { siege: true }); this.enemies.spawnAround('mega', pd.x, pd.z, Math.ceil(N / 2), 28, 38, { siege: true }); }
         this.fx('deconWave', { n: w });
       }
       if (c.decon >= DECON_TIME) {
@@ -503,7 +614,20 @@ export const Chapter4Mixin = {
     if (!c || !c3 || !this.boeing) return;
     // Boeing garé : toboggan (dedans), soute (dehors, à Hélios)
     if (!c3.fly) {
-      if (this.inBoeing(me) && !f.slide) add(this.boeingLocal(new THREE.Vector3(-2.1, FLOOR_B + 1.2, 3.6)), 2.4, { prio: 3, prompt: '<kbd>E</kbd> déclencher le toboggan d\'évacuation', press: () => { this.act('flag', { slide: true }); this.audio.whoosh(); this.audio.splash(); } });
+      const inside = this.inBoeing(me), slidePt = this.boeingLocal(new THREE.Vector3(-2.1, FLOOR_B + 1.2, 3.6));
+      if (inside && !f.slide) add(slidePt, 2.4, { prio: 3, prompt: '<kbd>E</kbd> déclencher le toboggan d\'évacuation', press: () => { this.act('flag', { slide: true }); this.audio.whoosh(); this.audio.splash(); } });
+      if (inside && f.slide) add(slidePt, 2.4, { prio: 3, prompt: '<kbd>E</kbd> dégonfler et ranger le toboggan', press: () => { this.act('flag', { slide: false }); this.audio.clank(); } });
+      // de l'extérieur : la poignée de secours, sous la porte (pour remonter à bord une fois le toboggan rangé)
+      if (!inside && !f.slide && !this.stairsDocked()) {
+        const foot = this.boeingLocal(new THREE.Vector3(SLIDE.x1 + 2.5, 0, (SLIDE.z0 + SLIDE.z1) / 2));
+        foot.y = this.groundAt(foot.x, foot.z, 99) + 1;
+        add(foot, 5, { prio: 2, prompt: '<kbd>E</kbd> tirer la poignée de secours : déployer le toboggan', press: () => { this.act('flag', { slide: true }); this.audio.whoosh(); this.audio.splash(); } });
+      }
+      // sièges : on s'assoit même à l'arrêt (le siège du commandant, lui, sert à prendre les commandes)
+      if (inside) BSEATS.forEach((s, i) => {
+        if (i === 0 || this.mateList().some((m) => m.bseat === i)) return;
+        add(this.boeingLocal(new THREE.Vector3(s.x, s.cush + 0.3, s.z)), 1.4, { prio: 1, prompt: `<kbd>E</kbd> s'asseoir${i === 1 ? ' (copilote)' : ''}`, press: () => this.bSitParked(i) });
+      });
       if (f.boeingCrate && !f.crateOut && !this.inBoeing(me) && this.nearIsland(this.boeing.root.position) === 4) {
         const cg = this.boeingLocal(BOEING.cargo), out = this.boeingLocal(new THREE.Vector3(6.2, 0, 33));
         const dry = heightAt(out.x, out.z) > 0.3;
@@ -639,7 +763,7 @@ export const Chapter4Mixin = {
     }
   },
   applyFx4(type, data) {
-    if (type === 'deconWave') { this.ui.toast(`Vague ${data.n}/${DECON_WAVES.length}`, data.n === 5 ? 'Un cogneur arrive !' : 'Ils convergent vers le sas.', 'bad', 3500); this.audio.hiss(); return true; }
+    if (type === 'deconWave') { this.ui.toast(`Vague ${data.n}/${DECON_WAVES.length}`, data.n === 5 ? 'Cogneurs et méga-zombies : dernier effort !' : data.n >= 3 ? 'Un méga-zombie sort de terre !' : 'Ils convergent vers le sas.', 'bad', 3500); this.audio.hiss(); return true; }
     if (type === 'crateFished') { this.ui.toast('Caisse repêchée', 'Elle flottait : on l\'a remise sur la terre ferme.', '', 3000); return true; }
     return false;
   },
@@ -691,9 +815,14 @@ export const Chapter4Mixin = {
     this.c3.fly = 0;
     this.c3.bp = { x: I.cx - 120, z: I.cz + I4.runway.z, yaw: -Math.PI / 2, y: FLAT4 };
     this.poseBoeing();
-    this.bseat = null; this.aboard = false; this.seat = null;
-    const out = this.boeingLocal(new THREE.Vector3(-9, 0, 12));
-    this.player.place(out.x, out.z, this.c3.bp.yaw);
+    this.bseat = null; this.aboard = false; this.seat = null; this.lying = false;
+    // dans la cabine, comme après un vrai atterrissage : le toboggan se déclenche de l'intérieur
+    // (le camion-escalier est resté à Port-Cendre, on ne pourrait pas monter depuis la piste)
+    const k = this.mpIndex();
+    const inCab = this.boeingLocal(new THREE.Vector3(0, FLOOR_B, 14 + k * 1.1));
+    this.player.place(inCab.x, inCab.z, this.c3.bp.yaw);
+    this.player.pos.y = (this.c3.bp.y ?? FLAT4) + FLOOR_B;
+    this.player.pitch = 0; this.player.velY = 0; this.player.onGround = true;
     this.dirtyWorld = true;
     this.save();
     this.ui.toast('Admin · chapitre 4', 'Hélios : le Boeing est posé, la caisse est en soute.', 'good', 3500);
