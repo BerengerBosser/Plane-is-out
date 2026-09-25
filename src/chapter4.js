@@ -36,6 +36,8 @@ export const Chapter4Mixin = {
     this.colliders.push(...I.colliders);
     this.platforms.push(...I.platforms);
     this.ladders = (this.ladders || []).filter((l) => !l.i4).concat(I.ladders);
+    // bouées d'amarrage : bord de mer côté piste et embouchures du canal (seuls les points en eau profonde sont gardés)
+    this.placeMoorings('i4', [{ x: I.cx, z: I.cz + I4.runway.z + 40 }, { x: I.cx - 150, z: I.cz + I4.runway.z + 40 }, { x: I.cx + 150, z: I.cz + I4.runway.z + 40 }, { x: I.cx - 260, z: I.cz + I4.canal.z }, { x: I.cx + 260, z: I.cz + I4.canal.z }]);
     for (const [id, p] of Object.entries(I4.vehicles)) this.addVehicle(`${id}4`, id, I.cx + p.x, I.cz + p.z, p.yaw);
     // canards d'Hélios
     for (const d of I.points.ducks) {

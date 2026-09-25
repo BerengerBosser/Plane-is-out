@@ -571,7 +571,7 @@ export const WreckMixin = {
   },
   applyWreckFx(type) {
     if (type === 'stranded') {
-      this.ui.toast('Réparé, mais à sec', 'Treuil du nez : tirez-le vers l\'eau.', 'good', 5000);
+      this.ui.toast('Réparé, mais à sec', 'Treuil du nez vers l\'eau (bouées près des ports) · ou montez les roues amphibies.', 'good', 5000);
       this.radioOnce(`stranded${this.stats.days}`, 'Il est entier ! Mais sans roues, il ne décollera pas des cailloux. Le treuil du nez : accrochez le câble à un arbre ou un rocher côté mer, et laissez-le tirer.');
     }
   },
@@ -583,7 +583,7 @@ export const WreckMixin = {
       if (this.wreck.dents.length && this.planeLive) return [{ id: 'hull', optional: true, text: `Bonus · ressouder la coque (${hp} %)`, hint: 'Fer à souder, flanc droit', done: false }];
       return [];
     }
-    if (!this.flags.wrecked) return [{ id: 'wreck', text: 'Remorquer l\'avion jusqu\'à l\'eau', hint: 'Treuil du nez vers un arbre ou un rocher côté mer', done: false }];
+    if (!this.flags.wrecked) return [{ id: 'wreck', text: 'Remorquer l\'avion jusqu\'à l\'eau', hint: 'Treuil du nez vers une bouée, un arbre ou un rocher côté mer · ou roues amphibies', done: false }];
     const missing = PART_ORDER.filter((k) => !this.installed.has(k));
     const list = [{ id: 'wreck', text: `Réparer le Coucou (coque ${hp} %)`, hint: 'Fer à souder : flanc droit de l\'avion', done: false }];
     list.push({ sub: true, text: 'Décrocher le fer à souder', hint: 'Poste à souder, flanc droit', done: !!this.iron });
@@ -645,6 +645,21 @@ export const WreckMixin = {
   // câble dessiné comme un vrai tube, et moteur du treuil (simulé par l'hôte)
   updateWinch(dt) {
     const W = this.winch;
+    // réparé mais à sec : avec les roues amphibies, plus besoin de rejoindre l'eau, il repart du sol
+    // (vérifié à chaque image : couvre aussi les sauvegardes restées bloquées « à sec »)
+    if (this.wreckActive() && this.isAuthority() && !this._unstrand) {
+      const p = this.wreck.pos || { x: this.plane.root.position.x, z: this.plane.root.position.z, yaw: this.flight.yaw };
+      if (this.flags.wrecked) {
+        const fixed = PART_ORDER.every((k) => this.installed.has(k)) && this.wreck.holes.every((h) => h === 0 || h === 3);
+        if (fixed) { this._unstrand = true; this.checkWreckDone(true); }
+      } else if (this.flags.wheels || heightAt(p.x, p.z) < -0.8) {
+        this._unstrand = true;
+        this.act('winch', { stow: 1 });
+        this.act('refloat', { x: p.x, z: p.z, yaw: p.yaw });
+      }
+    }
+    if (!this.wreckActive()) this._unstrand = false;
+    else if (this._unstrand && this.flags.wrecked === false && this.wreck.stranded && !this.flags.wheels) this._unstrand = false;
     if (!this.wreckActive() && !this.canPushPlane() && W.hook) { W.hook = null; W.on = false; W.anchor = null; }
     this.updateStakeMesh();
     let end = null;
@@ -797,7 +812,7 @@ export const WreckMixin = {
     for (const lz of [-5, -2.5, 0, 2.5, 5, 7.5]) {
       const px = x + s * lz, pz = z + co * lz;
       for (const c of this.colliders) {
-        if (c.disabled) continue;
+        if (c.disabled || c.mooring) continue;
         if (c.type === 'circle') { const d = Math.hypot(px - c.x, pz - c.z); const m = c.r + 1.3; if (d < m) pen += m - d; }
         else { const cx = Math.max(c.minX, Math.min(px, c.maxX)), cz = Math.max(c.minZ, Math.min(pz, c.maxZ)); const d = Math.hypot(px - cx, pz - cz); if (d < 1.3) pen += 1.3 - d; }
       }
@@ -818,7 +833,7 @@ export const WreckMixin = {
     const pts = [[0, -6, 0.3], [0, -2, 0.3], [0, 3, 0.3], [0, 8, 0.8], [-5.5, -0.6, 3.8], [5.5, -0.6, 3.8], [-3, -0.6, 3.6], [3, -0.6, 3.6]]
       .map(([lx, lz, h]) => ({ x: pos.x + lx * co + lz * s, z: pos.z - lx * s + lz * co, h }));
     for (const c of this.colliders) {
-      if (c.disabled || c.plane) continue;
+      if (c.disabled || c.plane || c.mooring) continue;   // les bouées d'amarrage ne gênent pas l'avion
       const top = c.top ?? (c.type === 'circle' ? heightAt(c.x, c.z) + Math.max(2, c.r * 2) : Math.max(heightAt(c.minX, c.minZ), 0) + 6);
       if (pos.y > top + 0.5) continue;
       for (const p of pts) {

@@ -15,13 +15,56 @@ function buildStake() {
   return g;
 }
 
+// bouée d'amarrage : poteau planté dans l'eau, flotteur rouge et blanc, anneau pour le crochet du treuil
+function buildMooring() {
+  const g = new THREE.Group();
+  const m = (geo, col, y) => { const o = new THREE.Mesh(prep(geo, col), flatMat); o.position.y = y; o.castShadow = true; g.add(o); return o; };
+  m(new THREE.CylinderGeometry(0.1, 0.12, 3.6, 6), '#6f5038', -0.5);
+  m(new THREE.CylinderGeometry(0.42, 0.42, 0.35, 10), '#e8483b', 0.05);
+  m(new THREE.CylinderGeometry(0.43, 0.43, 0.2, 10), '#f3efe6', 0.32);
+  m(new THREE.CylinderGeometry(0.42, 0.3, 0.25, 10), '#e8483b', 0.54);
+  const ring = new THREE.Mesh(prep(new THREE.TorusGeometry(0.16, 0.035, 5, 12), '#ffd166'), flatMat);
+  ring.position.y = 1.2; ring.rotation.x = Math.PI / 2; g.add(ring);
+  return g;
+}
+
 export const PlanePushMixin = {
+  // bouées d'amarrage dans l'eau autour des ports (points d'ancrage du treuil), bien espacées pour ne pas gêner l'avion
+  // ports : [{ x, z }] en coordonnées monde ; key : île (reconstruite avec la graine)
+  placeMoorings(key, ports) {
+    this.moorings = this.moorings || {};
+    const old = this.moorings[key];
+    if (old) { this.scene.remove(old.group); old.cols.forEach((c) => { const i = this.colliders.indexOf(c); if (i >= 0) this.colliders.splice(i, 1); }); }
+    const group = new THREE.Group(), cols = [], spots = [];
+    const all = Object.values(this.moorings).filter((q) => q !== old).flatMap((q) => q.spots);
+    const deep = (x, z) => heightAt(x, z) < -2.2 && [[6, 0], [-6, 0], [0, 6], [0, -6]].every(([a, b]) => heightAt(x + a, z + b) < -1.6);
+    for (const P of ports) {
+      let n = 0;
+      for (const r of [24, 32, 40, 50, 60]) {
+        for (let k = 0; k < 24 && n < 5; k++) {
+          const a = k / 24 * Math.PI * 2 + r * 0.1;
+          const x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r;
+          if (!deep(x, z)) continue;
+          if (spots.concat(all).some((s) => Math.hypot(s.x - x, s.z - z) < 22)) continue;
+          if (ports.some((q) => Math.hypot(q.x - x, q.z - z) < 18)) continue;
+          const b = buildMooring(); b.position.set(x, 0, z); group.add(b);
+          const c = { type: 'circle', x, z, r: 0.45, mooring: true };
+          cols.push(c); this.colliders.push(c); spots.push({ x, z }); n++;
+        }
+      }
+    }
+    this.scene.add(group);
+    this.moorings[key] = { group, cols, spots };
+  },
   // l'avion est-il accessible à la poussée (au sol ou à l'eau, personne ne le fait rouler vite) ?
   canPushPlane() {
     return this.planeLive && !this.flight.airborne && !this.wreckActive() && !(this.pilotId && this.flight.speed > 1.2);
   },
+  // à pied, de n'importe quel côté (nez, queue, flancs, flotteurs) : E pousse, R tire vers soi.
+  // Marche aussi sur une épave (à sec ou pas) : on peut la ramener à la main.
+  canHandlePlane() { return this.canPushPlane() || (this.wreckActive() && !this.flight.airborne); },
   pushSpecs(add, me) {
-    if (!this.canPushPlane() || this.carrying || this.nozzle === this.myId() || this.player.onLadder) return;
+    if (!this.canHandlePlane() || this.carrying || this.nozzle === this.myId() || this.player.onLadder || this.aboard) return;
     const root = this.plane.root;
     const loc = root.worldToLocal(me.clone());
     // enveloppe approximative : fuselage + flotteurs
@@ -32,13 +75,14 @@ export const PlanePushMixin = {
     if (fw.dot(toC) < 0.2) return;
     add(me.clone().addScaledVector(fw, 1.2).setY(me.y + 1.1), 2.6, {
       prio: -0.5,
-      prompt: '<kbd>E</kbd> Pousser',
+      prompt: '<kbd>E</kbd> Pousser · <kbd>R</kbd> Tirer',
       hold: { tick: (dt) => this.pushPlane(dt, fw, me) },
+      holdAlt: (dt) => this.pushPlane(dt, fw.clone().negate(), me, true),
     });
   },
-  pushPlane(dt, fw, me) {
+  pushPlane(dt, fw, me, pull = false) {
     const helpers = this.mateList().filter((m) => m.pushing && m.pos.distanceTo(me) < 12).length;
-    const sp = 0.85 * (1 + 0.6 * helpers) * (this.swimming() ? 0.6 : 1);
+    const sp = (pull ? 0.65 : 0.85) * (1 + 0.6 * helpers) * (this.swimming() ? 0.6 : 1) * (this.wreckActive() ? 0.6 : 1);
     const d = new THREE.Vector3(fw.x, 0, fw.z).normalize().multiplyScalar(sp * dt);
     // pousser loin du centre fait pivoter l'avion
     const c = this.plane.root.position;
@@ -48,10 +92,15 @@ export const PlanePushMixin = {
     this.stamina = Math.max(0, this.stamina - 6 * dt);
     this._pushSnd = (this._pushSnd || 0) - dt;
     if (this._pushSnd <= 0) { this._pushSnd = 0.9; this.swimming() || heightAt(c.x, c.z) < -0.3 ? this.audio.splash?.() : this.audio.clank?.(); }
-    if (this.ownsPlane()) {
-      if (!this.nudgePlane(d.x, d.z, dyaw) && (!this._pushBlockT || this.t - this._pushBlockT > 3)) {
+    if (pull) {
+      // on recule en tirant : le joueur suit l'avion (sinon l'avion le repousse)
+      const n = this.player.pos.clone().addScaledVector(d, 1);
+      if (this.worldEnv().canGo(n.x, n.z, n.y)) { this.player.pos.x = n.x; this.player.pos.z = n.z; }
+    }
+    if (this.wreckActive() ? this.isAuthority() : this.ownsPlane()) {
+      if (!this.movePlaneBy(d.x, d.z, dyaw) && (!this._pushBlockT || this.t - this._pushBlockT > 3)) {
         this._pushBlockT = this.t;
-        this.ui.toast('Ça ne bouge pas', this.flight.wheels ? 'Terrain trop pentu.' : 'Sans roues : vers l\'eau.', 'bad', 1800);
+        this.ui.toast('Ça ne bouge pas', this.wreckActive() ? 'Un obstacle bloque.' : this.flight.wheels ? 'Terrain trop pentu.' : 'Sans roues : vers l\'eau.', 'bad', 1800);
       }
     } else {
       this._pushAcc = this._pushAcc || [0, 0, 0];
@@ -84,9 +133,21 @@ export const PlanePushMixin = {
     return true;
   },
   onPlanePush(d) {
-    if (!this.ownsPlane() || !this.canPushPlane() || !Array.isArray(d?.d)) return;
+    if (!Array.isArray(d?.d)) return;
+    if (this.wreckActive() ? !this.isAuthority() : (!this.ownsPlane() || !this.canPushPlane())) return;
     const [x, z, y] = d.d.map((v) => clamp(+v || 0, -0.4, 0.4));
-    this.nudgePlane(x, z, clamp(y, -0.05, 0.05));
+    this.movePlaneBy(x, z, clamp(y, -0.05, 0.05));
+  },
+  // déplacement à la main : avion en état de marche (nudgePlane) ou épave (pose de la carcasse, synchronisée par l'hôte)
+  movePlaneBy(dx, dz, dyaw) {
+    if (!this.wreckActive()) return this.nudgePlane(dx, dz, dyaw);
+    const c = this.plane.root.position;
+    const nx = c.x + dx, nz = c.z + dz, ny = this.flight.yaw + dyaw;
+    if (this.wreckBlocked(nx, nz, ny)) return false;
+    this.setWreckPose(nx, nz, ny);
+    this._handSend = (this._handSend || 0) + 1;
+    if (this._handSend > 6) { this._handSend = 0; this.act('wreckPos', { x: nx, z: nz, yaw: ny, st: this.wreck.stranded ? 1 : 0 }); }
+    return true;
   },
 
   // ── pieux d'ancrage ──

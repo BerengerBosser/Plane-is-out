@@ -22,6 +22,8 @@ export const Chapter3Mixin = {
     setIsland3({ cx: I.cx, cz: I.cz, R2: I.R2, height: I.height });
     this.colliders.push(...I.colliders);
     this.platforms.push(...I.platforms);
+    // bouées d'amarrage : rampe de l'aéroport et quai du port
+    this.placeMoorings('i3', [I.points.park, { x: I.cx + (I3.quay.x0 + I3.quay.x1) / 2, z: I.cz + (I3.quay.z0 + I3.quay.z1) / 2 }]);
     const W = (x, z) => ({ x: I.cx + x, z: I.cz + z });
     for (const [id, p] of Object.entries(I3.vehicles)) { const w = W(p.x, p.z); this.addVehicle(`${id}3`, id, w.x, w.z, p.yaw); }
     this.boeing = buildBoeing();

@@ -117,7 +117,7 @@ export const InteractMixin = {
         if (c.hold.tick) c.hold.tick(dt, before);
         if (c.hold.seconds) ui.hold(this.holdT / c.hold.seconds);
         if (c.hold.seconds && this.holdT >= c.hold.seconds) { this.holdT = 0; c.hold.done(); }
-      }
+      } else if (c.holdAlt && inp.down('KeyR')) { holding = true; c.holdAlt(dt); }
       c.show?.();
     }
     if (this.mode !== 'explore') return;
@@ -246,6 +246,7 @@ export const InteractMixin = {
     if (this.carrying && this.plane.ghosts[this.carrying.id]) this.installCandidate(add, this.carrying.id);
     // avion coincé : on le pousse, ou on le treuille vers un arbre / un pieu
     if (!this.wreckActive() && this.canPushPlane()) { this.pushSpecs(add, me); this.winchSpecs(add); }
+    else if (this.wreckActive()) this.pushSpecs(add, me);
     // épave : tôles sur les trous, treuil
     if (this.wreckActive()) {
       if (this.carrying && this.carrying.def.plate) {
@@ -378,8 +379,8 @@ export const InteractMixin = {
     const dist = Math.hypot(slot.x - me.x, slot.z - me.z);
     if (dist > CFG.carry.installDistance && !(k === 'dashboard' && this.aboard)) return;
     if (k === 'prop' && !this.installed.has('engineL')) { add(slot, 99, { prompt: '<span class="warn">Moteur gauche d\'abord</span>', kind: 'install' }); return; }
-    if (this.wreckActive()) {
-      // après un crash : on positionne la pièce, puis on la soude point par point
+    if (this.wreckActive() && k !== 'wheels') {
+      // après un crash : on positionne la pièce, puis on la soude point par point (les roues se montent normalement)
       add(slot.clone().setY(me.y + 1), 99, {
         kind: 'install',
         prompt: `<kbd>E</kbd> Positionner : ${this.carrying.def.name}`,

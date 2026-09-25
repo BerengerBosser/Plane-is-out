@@ -435,6 +435,15 @@ export const WorldMixin = {
       this.refreshWelds();
       this.refreshDamage();
     }
+    // anciennes versions : roues amphibies « soudées » sur une épave (comptées comme une pièce) → roues montées
+    if (this.installed.has('wheels') || (this.wreck.placed && 'wheels' in this.wreck.placed)) {
+      this.installed.delete('wheels');
+      delete this.wreck.placed.wheels;
+      this.flags.wheels = true; this.flight.wheels = true;
+      this.plane.parts.wheels.visible = true;
+      if (this.items.wheels) { this.items.wheels.state = 'installed'; this.items.wheels.mesh.visible = false; }
+      this.refreshWelds();
+    }
     this.applyInvWorld(w);
     const spt = new Set(w.sp || []);
     for (const q of this.scrapPiles || []) if (!q.dyn) { q.taken = spt.has(q.id); q.mesh.visible = !q.taken; }

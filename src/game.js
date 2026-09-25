@@ -280,6 +280,9 @@ export class Game {
     this.buildPhysPuzzles();
     this.colliders.push(...this.island2.colliders);
     this.platforms = [...(this.decor.platforms || []), ...this.island2.platforms];
+    // bouées d'amarrage (treuil) : île 1 (ponton, plage du crash) et Saint-Escale (ponton)
+    if (!this.moorings?.i1) this.placeMoorings('i1', [LAYOUT.dock, LAYOUT.crash]);
+    this.placeMoorings('i2', [this.island2.points.park, { x: this.island2.cx + (I2.dock.x0 + I2.dock.x1) / 2, z: this.island2.cz + I2.dock.z1 }]);
     const P = this.island2.points;
     this.fuseMeshes = { red: buildFuse('red'), blue: buildFuse('blue'), yellow: buildFuse('yellow') };
     this.fuseSpots = { red: P.fuseRed, blue: P.fuseBlue, yellow: P.fuseYellow };
@@ -505,7 +508,7 @@ export class Game {
     this.placeTools();
     this.setWreck();
     // le crash d'ouverture a aussi cabossé la carcasse
-    if (this.chapter() === 1 && !this.wreck.dents.length && this.installed.size < 6) { this.wreck.dents = [0, 4, 7, 11]; this.refreshDamage(); this.refreshWelds(); }
+    if (this.chapter() === 1 && !this.wreck.dents.length && this.installed.size < 6) { this.wreck.dents = [0, 3, 4, 7]; this.refreshDamage(); this.refreshWelds(); }
     this.startSmokes();
   }
 
