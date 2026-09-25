@@ -215,7 +215,7 @@ export const InteractMixin = {
     const doorOut = L(PLANE_POINTS.doorOut);
     if (this.flags.doorJam) add(doorOut, 3.0, this.lockSpec());
     // poste à souder (flanc droit) : toujours accessible, pour ressouder bosses, tôles et pièces
-    if (!this.flight.airborne && !this.carrying) this.welderSpecs(add);
+    if (!this.flight.airborne || this.wreckActive()) this.welderSpecs(add);
     // treuil
     if (!this.crateLoaded) {
       const winchPt = L(PLANE_POINTS.winch);
