@@ -646,13 +646,20 @@ export const WreckMixin = {
   updateWinch(dt) {
     const W = this.winch;
     // réparé mais à sec : avec les roues amphibies, plus besoin de rejoindre l'eau, il repart du sol
-    if (this.wreck.stranded && !this.flags.wrecked && this.flags.wheels && this.isAuthority() && !this._unstrand) {
+    // (vérifié à chaque image : couvre aussi les sauvegardes restées bloquées « à sec »)
+    if (this.wreckActive() && this.isAuthority() && !this._unstrand) {
       const p = this.wreck.pos || { x: this.plane.root.position.x, z: this.plane.root.position.z, yaw: this.flight.yaw };
-      this._unstrand = true;
-      this.act('winch', { stow: 1 });
-      this.act('refloat', { x: p.x, z: p.z, yaw: p.yaw });
+      if (this.flags.wrecked) {
+        const fixed = PART_ORDER.every((k) => this.installed.has(k)) && this.wreck.holes.every((h) => h === 0 || h === 3);
+        if (fixed) { this._unstrand = true; this.checkWreckDone(true); }
+      } else if (this.flags.wheels || heightAt(p.x, p.z) < -0.8) {
+        this._unstrand = true;
+        this.act('winch', { stow: 1 });
+        this.act('refloat', { x: p.x, z: p.z, yaw: p.yaw });
+      }
     }
-    if (!this.wreck.stranded) this._unstrand = false;
+    if (!this.wreckActive()) this._unstrand = false;
+    else if (this._unstrand && this.flags.wrecked === false && this.wreck.stranded && !this.flags.wheels) this._unstrand = false;
     if (!this.wreckActive() && !this.canPushPlane() && W.hook) { W.hook = null; W.on = false; W.anchor = null; }
     this.updateStakeMesh();
     let end = null;

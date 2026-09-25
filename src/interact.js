@@ -117,7 +117,7 @@ export const InteractMixin = {
         if (c.hold.tick) c.hold.tick(dt, before);
         if (c.hold.seconds) ui.hold(this.holdT / c.hold.seconds);
         if (c.hold.seconds && this.holdT >= c.hold.seconds) { this.holdT = 0; c.hold.done(); }
-      }
+      } else if (c.holdAlt && inp.down('KeyR')) { holding = true; c.holdAlt(dt); }
       c.show?.();
     }
     if (this.mode !== 'explore') return;
@@ -246,6 +246,7 @@ export const InteractMixin = {
     if (this.carrying && this.plane.ghosts[this.carrying.id]) this.installCandidate(add, this.carrying.id);
     // avion coincé : on le pousse, ou on le treuille vers un arbre / un pieu
     if (!this.wreckActive() && this.canPushPlane()) { this.pushSpecs(add, me); this.winchSpecs(add); }
+    else if (this.wreckActive()) this.pushSpecs(add, me);
     // épave : tôles sur les trous, treuil
     if (this.wreckActive()) {
       if (this.carrying && this.carrying.def.plate) {

@@ -508,7 +508,7 @@ export class Game {
     this.placeTools();
     this.setWreck();
     // le crash d'ouverture a aussi cabossé la carcasse
-    if (this.chapter() === 1 && !this.wreck.dents.length && this.installed.size < 6) { this.wreck.dents = [0, 4, 7, 11]; this.refreshDamage(); this.refreshWelds(); }
+    if (this.chapter() === 1 && !this.wreck.dents.length && this.installed.size < 6) { this.wreck.dents = [0, 3, 4, 7]; this.refreshDamage(); this.refreshWelds(); }
     this.startSmokes();
   }
 
