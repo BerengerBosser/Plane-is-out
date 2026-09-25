@@ -61,6 +61,9 @@ export const CFG = {
     maxVoiles: 4,            // solo
     horde3: 2.5,             // Port-Cendre : horde de nuit plus grosse et plus rapide
     day3: 1.5,               // Port-Cendre : errants de jour (× maxVoiles)
+    respawnDelay: 60,        // s avant qu'un zombie tué ne soit remplacé (tant qu'on reste dans le coin)
+    respawnNear: 45,         // m : au-delà, en s'éloignant du lieu du kill, le remplacement redevient possible
+    respawnClear: 28,        // m : pas de nouvelle sortie de terre autour d'un kill récent
   },
 
   lantern: {
