@@ -111,17 +111,19 @@ export const CombatMixin = {
     return best;
   },
 
-  // toutes les cibles dans l'arc devant soi (masse)
-  probeAll(origin, dir, range) {
+  // toutes les cibles dans l'arc devant soi (armes blanches), de la plus proche à la plus lointaine
+  probeAll(origin, dir, range, arc = 0.35) {
     const out = [];
     for (const e of this.enemies.list) {
       if (e.dead || e.appear < 0.6) continue;
       const dx = e.pos.x - origin.x, dz = e.pos.z - origin.z, d = Math.hypot(dx, dz);
       if (d > range + e.T.radius) continue;
-      if ((dx * dir.x + dz * dir.z) / (d || 1) < 0.35 && d > 0.9 + e.T.radius) continue;
+      if ((dx * dir.x + dz * dir.z) / (d || 1) < arc && d > 0.9 + e.T.radius) continue;
+      if (Math.abs(e.pos.y - origin.y) > 2.2 + (e.T.h || 1.8) * 0.5) continue;   // pas à travers un plancher
+      e._pd = d;
       out.push(e);
     }
-    return out;
+    return out.sort((a, b) => a._pd - b._pd);
   },
 
   fireWeapon(kind) {
@@ -234,16 +236,17 @@ export const CombatMixin = {
       case 'bossDead':
         this.audio.success();
         if (data.type === 'kingcrab') { this.ui.toast('Le Crabe-Roi est vaincu !', 'Dans sa crique, un râtelier de pêche apparaît : fusil-harpon.', 'good', 8000); this.radioOnce('kingdead', 'Vous l\'avez eu ! Il gardait un vieux fusil-harpon dans sa crique. Allez le chercher.'); }
-        else { this.ui.toast('Le Colosse s\'effondre', 'Les zombies autour de la centrale hésitent.', 'good', 8000); this.radioOnce('warddead', 'Le Colosse… à terre ? Je n\'aurais jamais cru ça possible. Tenez jusqu\'à 21 h !'); }
+        else { this.ui.toast('Le Colosse s\'effondre', 'Les zombies autour de la centrale hésitent.', 'good', 8000); this.radioOnce('warddead', 'Le Colosse… à terre ? Je n\'aurais jamais cru ça possible. Tenez jusqu\'à l\'accalmie !'); }
         break;
       case 'scrapDrop': this.addScrapPile(data.id, data.x, data.z, data.n, true); break;
       case 'bloat': {
         const p = new THREE.Vector3(...data.p);
-        this.gore.gas(p); this.gore.blood(p.clone().setY(p.y + 1), null, true, true);
+        // souffle plus violent, puis un nuage toxique qui stagne ~16 s (dégâts continus : voir updateGas)
+        this.gore.gas(p, 4.8, 16); this.gore.blood(p.clone().setY(p.y + 1), null, true, true);
         if (p.distanceTo(this.camera.position) < 80) this.audio.bloat();
-        const me = this.playerWorld();
-        if (this.mode === 'explore' && !this.aboard && me.distanceTo(p) < 3.8) this.hurt(22, 'bloater', { x: me.x - p.x, z: me.z - p.z, k: 10 });
-        if (this.isAuthority()) for (const e of this.enemies.list) if (!e.dead && e.pos.distanceTo(p) < 3.5 && e.type !== 'bloater') this.enemies.damage(e, 60, { x: e.pos.x - p.x, z: e.pos.z - p.z }, 8, []);
+        const me = this.playerWorld(), d = me.distanceTo(p);
+        if (this.mode === 'explore' && !this.aboard && d < 4.5) this.hurt(Math.round(40 - 14 * d / 4.5), 'bloater', { x: me.x - p.x, z: me.z - p.z, k: 10 });
+        if (this.isAuthority()) for (const e of this.enemies.list) if (!e.dead && e.pos.distanceTo(p) < 4 && e.type !== 'bloater') this.enemies.damage(e, 70, { x: e.pos.x - p.x, z: e.pos.z - p.z }, 8, []);
         break;
       }
       case 'megaSlam': {
@@ -258,40 +261,59 @@ export const CombatMixin = {
       case 'scream': if (Math.hypot(this.playerWorld().x - data.p[0], this.playerWorld().z - data.p[1]) < 90) { this.audio.scream(); this.player.shake = Math.max(this.player.shake, 0.3); if (!this.said.has('scream')) { this.said.add('scream'); this.ui.toast('Un Hurleur !', 'Il appelle les autres. Abattez-le en priorité.', 'bad', 4000); } } break;
       case 'storm':
         this.audio.siren();
-        this.ui.toast('Tempête sur Saint-Escale', 'Pas de décollage avant 21 h. Défendez la centrale.', 'bad', 6000);
-        this.radioOnce('storm', 'La tempête est là. Personne ne décolle avant 21 h. Sans courant, pas de projecteurs, et sans projecteurs, les morts vous submergent : postez-vous à la centrale, à l\'ouest du terminal, et gardez le générateur en vie jusqu\'à ce que le vent tombe.');
+        this.ui.toast('Tempête sur Saint-Escale', `Environ ${Math.round(CFG.storm.total)} h bloqués au sol. Rejoignez la centrale, à l'ouest du terminal.`, 'bad', 7000);
+        this.radioOnce('storm', 'Une tempête vous tombe dessus, elle en a pour deux bonnes heures. Écoutez bien : la mer va se creuser, impossible de décoller de l\'eau, ce sera la piste. Et sous ce ciel noir, la piste, vous ne la verrez qu\'avec son balisage, donc avec le générateur de la centrale. Le hic : son vacarme va attirer tous les morts de l\'île. Postez-vous là-bas, gardez-le en marche, réparez-le à la clé s\'il flanche. À l\'accalmie, pleins gaz sur la piste.');
         break;
-      case 'siege': this.ui.toast('Ils arrivent !', 'Défendez le générateur de la centrale jusqu\'à 21 h.', 'bad', 6000); this.audio.siren(); break;
+      case 'siege': this.ui.toast('Ils arrivent !', `Défendez le générateur : sans lui, plus de balisage pour décoller. Accalmie dans ${this.stormLeftText()}.`, 'bad', 6000); this.audio.siren(); break;
       case 'wave': this.ui.toast(`Vague ${data.n}/3`, data.n === 3 ? 'Quelque chose d\'énorme sort de terre…' : data.n === 2 ? 'Un méga-zombie approche !' : 'Les zombies convergent vers la centrale.', 'bad', 5000); this.audio.hiss(); break;
       case 'genHit': if (near(this.island2.points.generator.x, this.island2.points.generator.z, 40)) this.audio.hitShell(); break;
-      case 'genDown': this.audio.explosion(); this.island2.setPower(false); this.ui.toast('Générateur en panne !', 'Réparez-le à la clé (E).', 'bad', 4000); break;
+      case 'genDown': this.audio.explosion(); this.island2.setPower(false); this.ui.toast('Générateur en panne !', 'Balisage et projecteurs éteints : réparez-le à la clé (E maintenu).', 'bad', 4000); break;
       case 'genUp': this.island2.setPower(true); this.audio.powerUp(); this.ui.toast('Générateur relancé', 'Les projecteurs se rallument.', 'good'); break;
       case 'stormOver':
         this.audio.success();
-        this.ui.toast('21:00 · la tempête passe', 'Décollez depuis la piste !', 'good', 5000);
-        this.radioOnce('stormover', 'La tempête s\'éloigne ! Tout le monde à bord, et décollez depuis la piste. Cap sur Hélios : cette fois, le réservoir est plein.');
+        if (data.dark) {
+          this.ui.toast('La tempête passe… balisage éteint', 'Réparez le générateur à la clé, puis décollez depuis la piste.', 'bad', 6000);
+          this.radioOnce('stormover', 'Le vent tombe, mais votre piste est noire ! Relancez le générateur à la clé, sinon vous décollerez à l\'aveugle. La mer est encore trop forte : ce sera la piste, pas l\'eau.');
+        } else {
+          this.ui.toast('La tempête passe', 'Balisage allumé : décollez depuis la piste !', 'good', 5000);
+          this.radioOnce('stormover', 'La tempête s\'éloigne et votre balisage tient ! Tout le monde à bord. La houle est encore trop forte pour les flotteurs : sortez par la rampe et décollez depuis la piste. Cap sur Hélios, cette fois le réservoir est plein.');
+        }
         break;
       case 'ended': break;
-      default: if (!this.applyFx4?.(type, data)) { this.applyNightFx?.(type, data); this.applyWreckFx?.(type, data); } break;
+      default: if (!this.applyFx4?.(type, data) && !this.applyAdminFx?.(type, data)) { this.applyNightFx?.(type, data); this.applyWreckFx?.(type, data); } break;
     }
   },
   bossNear(type, r) { return this.enemies.list.some((e) => e.type === type && !e.dead && e.pos.distanceTo(this.playerWorld()) < r); },
 
-  // ── siège de la centrale (hôte) ──
+  // ── tempête et siège de la centrale (hôte) ──
+  // Roues montées et plein fait, la tempête se lève aussitôt, pour CFG.storm.total heures de jeu (≈ 3 min réelles) :
+  //  · la mer devient trop forte pour décoller de l'eau : il faudra la piste ;
+  //  · sous ce ciel noir, la piste ne se voit qu'avec son balisage, donc avec le courant du générateur ;
+  //  · le vacarme du groupe attire les morts : on le défend (et on le répare à la clé) jusqu'à l'accalmie.
   updateSiege() {
-    const f = this.flags, S = this.siege, h = ((this.hour % 24) + 24) % 24;
-    const N = this.playerCount();
+    const f = this.flags, S = this.siege, ST = CFG.storm;
+    const N = this.playerCount(), G = this.island2.points.generator;
     if (!f.storm && f.radioDone && f.wheels && f.refueled) {
       this.act('flag', { storm: true });
-      // déjà tard (ou en pleine nuit) : la tempête est passée pendant que vous travailliez
-      if (h >= 21 || h < 7) { this.act('flag', { stormOver: true }); this.fx('stormOver'); } else this.fx('storm');
+      S.left = ST.total; S.lastH = this.hour;
+      this.fx('storm');
+      this.dirtyWorld = true;
     }
-    if (!f.storm || f.stormOver) return;
-    if (!S.active && h >= 18.9 && h < 21) { S.active = true; S.wave = 0; S.genHp = 100; this.fx('siege'); this.dirtyWorld = true; }
+    if (!f.storm) return;
+    if (f.stormOver) {
+      // après l'accalmie, tant qu'on n'a pas décollé : générateur relancé à la clé = balisage rallumé
+      if (!f.tookOff2 && f.power && S.genHp >= 60 && !this.island2.power) this.fx('genUp');
+      return;
+    }
+    // temps écoulé depuis l'arrivée de la tempête (en heures de jeu, sauts d'horloge ignorés)
+    if (S.left == null) S.left = ST.total;   // vieille sauvegarde, ou journée recommencée
+    const dh = S.lastH == null ? 0 : (this.hour - S.lastH + 24) % 24;
+    S.lastH = this.hour;
+    if (dh < 1) S.left = Math.max(0, S.left - dh);
+    const el = ST.total - S.left;
+    if (!S.active && el >= ST.prep && S.left > 0) { S.active = true; S.wave = 0; S.genHp = 100; this.fx('siege'); this.dirtyWorld = true; }
     if (!S.active) return;
-    const G = this.island2.points.generator;
-    const waves = [19.05, 19.6, 20.2];
-    if (S.wave < 3 && h >= waves[S.wave]) {
+    if (S.wave < 3 && el >= ST.waves[S.wave]) {
       S.wave++;
       const n = 6 + 2 * S.wave + 3 * (N - 1);
       this.enemies.spawnAround('voile', G.x, G.z, n, 22, 38, { siege: true });
@@ -304,14 +326,18 @@ export const CombatMixin = {
     }
     if (S.genHp <= 0 && this.island2.power) this.island2.setPower(false);
     if (S.genHp >= 60 && !this.island2.power && f.power) this.fx('genUp');
-    if (h >= 21 || h < 6) {
+    if (S.left <= 0) {
       S.active = false;
       this.enemies.dismiss(G, 120, (e) => e.siege);
       this.act('flag', { stormOver: true });
-      this.fx('stormOver');
-      if (!this.island2.power && f.power) this.fx('genUp');
+      this.fx('stormOver', { dark: this.island2.power ? 0 : 1 });
       this.dirtyWorld = true;
     }
+  },
+  // « 1 h 25 » : temps restant avant l'accalmie
+  stormLeftText() {
+    const m = Math.max(0, Math.round((this.siege.left ?? CFG.storm.total) * 60));
+    return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`;
   },
 
   // zone à tenir active (centrale de Saint-Escale, sas de décontamination d'Hélios) : { pos, wave }
@@ -347,7 +373,8 @@ export const CombatMixin = {
     this.ui.boss(b ? { name: b.T.boss || b.T.name, hp: b.hp / b.maxHp, hint: BOSS_HINT[b.type] } : null);
     const lbl = document.querySelector('#genBar span');
     const c4 = this.c4, near4 = this.island4 && this.nearIsland(me) === 4;
-    if (this.siege.active) { lbl.textContent = 'Générateur'; this.ui.gen({ hp: this.siege.genHp, info: `Tenez jusqu'à 21:00 · il est ${this.clock()} · vague ${this.siege.wave}/3` }); }
+    if (this.siege.active) { lbl.textContent = 'Générateur'; this.ui.gen({ hp: this.siege.genHp, info: `Accalmie dans ${this.stormLeftText()} · vague ${this.siege.wave}/3${this.siege.genHp <= 0 ? ' · balisage éteint !' : ''}` }); }
+    else if (this.flags.stormOver && !this.flags.tookOff2 && this.flags.power && !this.island2.power && this.nearIsland(me) === 2) { lbl.textContent = 'Générateur'; this.ui.gen({ hp: this.siege.genHp, info: 'En panne : pas de balisage, pas de décollage · réparez-le à la clé' }); }
     else if (c4?.deconOn && near4) { lbl.textContent = 'Décontamination'; this.ui.gen({ hp: c4.decon / 75 * 100, info: 'Restez près du sas : sans personne, le cycle se met en pause' }); }
     else if (c4?.synthLeft > 0 && near4) { lbl.textContent = 'Synthèse'; this.ui.gen({ hp: c4.synthLeft / (this.playerCount() > 1 ? 100 : 170) * 100, info: `${['A', 'B', 'C'].filter((k) => this.flags[`synth${k}`]).length}/3 consoles · ${Math.ceil(c4.synthLeft)} s` }); }
     else this.ui.gen(null);

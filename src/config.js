@@ -15,6 +15,10 @@ export const CFG = {
     debugFastForward: 10,
   },
 
+  // Tempête de Saint-Escale (heures de jeu, comptées depuis son arrivée, quelle que soit l'heure) :
+  // un court répit pour rejoindre la centrale, puis le siège du générateur jusqu'à l'accalmie
+  storm: { total: 2.3, prep: 0.3, waves: [0.4, 1.0, 1.6] },
+
   // Brume et lumière
   // lumières (rayon en m) : ralentissent et brûlent un peu les zombies
   lights: { campfire: 9, planeProjectors: 12, lantern: 6 },
@@ -34,6 +38,7 @@ export const CFG = {
     health: 100,
     regenDelay: 5,           // s sans dégâts avant de se soigner
     regenPerSecond: 6,
+    regenCap: 30,            // la santé ne remonte seule que jusqu'à 30 % ; au-delà : bandages, trousses
     stamina: 100,
     sprintCost: 16,          // par seconde
     staminaRegen: 24,
@@ -61,6 +66,8 @@ export const CFG = {
     maxVoiles: 4,            // solo
     horde3: 2.5,             // Port-Cendre : horde de nuit plus grosse et plus rapide
     day3: 1.5,               // Port-Cendre : errants de jour (× maxVoiles)
+    horde4: 1.6,             // Hélios (rues de la ville) : horde de nuit renforcée
+    day4: 2.0,               // Hélios : errants de jour dans les rues (× maxVoiles)
     respawnDelay: 60,        // s avant qu'un zombie tué ne soit remplacé (tant qu'on reste dans le coin)
     respawnNear: 45,         // m : au-delà, en s'éloignant du lieu du kill, le remplacement redevient possible
     respawnClear: 28,        // m : pas de nouvelle sortie de terre autour d'un kill récent
@@ -106,15 +113,11 @@ export const CFG = {
     segments: 150,
   },
 
-  code: '874',
+  // Codes, fréquences, combinaisons et réglages d'énigmes : tirés au sort à chaque partie (secrets.js)
 
   // Île 2 : aéroport de Saint-Escale
   island2: {
     minDist: 1350, maxDist: 1650, // distance à l'île 1 (position tirée au hasard)
-    hangarCode: '407',
-    radioFreq: '127.35',
-    fuses: ['sun', 'anchor', 'plane'], // emplacement → couleur attendue : voir FUSE_SOLUTION
-    valves: { A: false, B: true, C: false, D: true },
     lightRadius: 18,
   },
   swim: { level: -1.25, speed: 0.9 },

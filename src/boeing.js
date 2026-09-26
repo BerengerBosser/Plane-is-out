@@ -96,7 +96,8 @@ function loft(rings, cols, classify) {
 }
 const WIN_FRONT = (th, z) => z > -5.7 && z < -3.6 && Math.abs(th) < 56.25;
 const WIN_SIDE = (th, z) => z > -3.3 && z < -1.8 && Math.abs(th) > 56.25 && Math.abs(th) < 90;
-const DOOR_L = (th, z) => z > 3.0 && z < 4.2 && th < -67.5 && th > -101.25;
+// découpe de la porte : du dessous du plancher (y ≈ 4,1) jusqu'au-dessus du linteau (y ≈ 6,8)
+const DOOR_L = (th, z) => z > 3.0 && z < 4.2 && th < -56.25 && th > -112.5;
 
 // aile en flèche : boîte déformée (corde qui diminue, flèche, dièdre)
 function wing(side, span, root, tip, sweep, y, z, col) {
@@ -189,10 +190,15 @@ export function buildBoeing() {
     for (const z of [-1.8, -2.55, -3.3]) alongT(z, s < 0 ? -90 : 56.25, s < 0 ? -56.25 : 90);
   }
   // encadrement de la porte avant gauche
-  for (const z of [3.0, 4.2]) alongT(z, -101.25, -67.5);
-  for (const th of [-67.5, -101.25]) parts.push(rod(hullPt(3.0, th), hullPt(4.2, th), 0.1, GR));
+  for (const z of [3.0, 4.2]) alongT(z, -112.5, -56.25);
+  for (const th of [-56.25, -112.5]) parts.push(rod(hullPt(3.0, th), hullPt(4.2, th), 0.1, GR));
+  parts.push(B(0.55, 0.36, 1.2, GR, -2.62, FLOOR_B - 0.18, 3.6));   // seuil (bouche le jour sous le plancher)
   // livrée : bande corail + bande turquoise, sous les hublots
-  for (const sx of [-1, 1]) { parts.push(B(0.06, 0.35, 44, CO, sx * 2.9, Y + 0.3, 22)); parts.push(B(0.06, 0.16, 44, TE, sx * 2.91, Y - 0.05, 22)); }
+  // (à gauche, les bandes s'arrêtent au bord de la porte)
+  for (const sx of [-1, 1]) for (const [z0, z1] of sx < 0 ? [[0, 3.0], [4.2, 44]] : [[0, 44]]) {
+    parts.push(B(0.06, 0.35, z1 - z0, CO, sx * 2.9, Y + 0.3, (z0 + z1) / 2));
+    parts.push(B(0.06, 0.16, z1 - z0, TE, sx * 2.91, Y - 0.05, (z0 + z1) / 2));
+  }
   // hublots (vus de l'extérieur)
   for (let z = 5; z < 43; z += 1.1) for (const s of [-1, 1]) parts.push(B(0.06, 0.42, 0.3, DK, s * 2.77, Y + 0.9, z));
   // ailes, moteurs, empennage
@@ -229,7 +235,7 @@ export function buildBoeing() {
   // cabine : parois crème, soubassement plus foncé, ciel clair ; ouverture de la porte avant gauche
   const lining = loft([1.2, 3.0, 4.2, 43.6].map((z) => ({ z, r: 2.82, y: Y })), 48, (th, z) => {
     const a = Math.abs(th);
-    if (a > 106 || (z > 3.0 && z < 4.2 && th < -67.5 && th > -105)) return 'skip';
+    if (a > 106 || (z > 3.0 && z < 4.2 && th < -56 && th > -113)) return 'skip';
     return a < 30 ? '#f4efe6' : a < 84 ? '#ece4d6' : '#cdbfa9';
   }).opaque;
   // poste de pilotage : parois sombres, vitres laissées libres
@@ -412,9 +418,11 @@ export function buildBoeing() {
 
   // porte avant gauche (s'ouvre vers l'extérieur : escalier accosté ou toboggan déployé)
   const doorPivot = new THREE.Group(); doorPivot.position.set(-R - 0.02, FLOOR_B, 3.0); root.add(doorPivot);
-  const door = new THREE.Mesh(prep(new THREE.BoxGeometry(0.12, 2.0, 1.2), WH), flatMat); door.position.set(0, 1.0, 0.6); doorPivot.add(door);
-  const dstripe = new THREE.Mesh(prep(new THREE.BoxGeometry(0.13, 0.12, 1.2), CO), flatMat); dstripe.position.set(0, 0.6, 0.6); doorPivot.add(dstripe);
-  const dwin = new THREE.Mesh(prep(new THREE.BoxGeometry(0.13, 0.3, 0.24), DK), flatMat); dwin.position.set(0, 1.5, 0.6); doorPivot.add(dwin);
+  // battant à la taille de la découpe ; bandes de livrée alignées sur celles de la coque
+  const door = new THREE.Mesh(prep(new THREE.BoxGeometry(0.12, 2.45, 1.2), WH), flatMat); door.position.set(0, 1.2, 0.6); doorPivot.add(door);
+  const dstripe = new THREE.Mesh(prep(new THREE.BoxGeometry(0.13, 0.35, 1.2), CO), flatMat); dstripe.position.set(0, Y + 0.3 - FLOOR_B, 0.6); doorPivot.add(dstripe);
+  const dteal = new THREE.Mesh(prep(new THREE.BoxGeometry(0.13, 0.16, 1.2), TE), flatMat); dteal.position.set(0, Y - 0.05 - FLOOR_B, 0.6); doorPivot.add(dteal);
+  const dwin = new THREE.Mesh(prep(new THREE.BoxGeometry(0.13, 0.3, 0.24), DK), flatMat); dwin.position.set(0, 1.75, 0.6); doorPivot.add(dwin);
   // porte de soute
   const cargoPivot = new THREE.Group(); cargoPivot.position.set(R + 0.05, 4.75, 33); root.add(cargoPivot);
   const cdoor = new THREE.Mesh(prep(new THREE.BoxGeometry(0.1, 1.9, 2.7), WH), flatMat); cdoor.position.set(0, -0.95, 0); cargoPivot.add(cdoor);

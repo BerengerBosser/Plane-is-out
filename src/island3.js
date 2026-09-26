@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { fbm, rng, smoothstep } from './noise.js';
 import { prep, flatMat, textTexture, mergeStatic, signBoard, autoColliders, heightAt } from './terrain.js';
 import { texBox } from './textures.js';
+import { addGreenery } from './greenery.js';
 
 export const FLAT3 = 3.0;
 export const I3 = {
@@ -461,6 +462,15 @@ export function createIsland3(scene, seed, i2) {
     vents,
   };
   let bayOpen = 0, bayTarget = 0;
+  // ── végétation (pins sombres, fougères, bruyère) et maisons de pierre noire hors de l'aéroport ──
+  addGreenery({
+    group, cx, cz, height: height3, colliders, seed: seed ^ 0x3c7, biome: 'volcanic', box: [-330, 330, -225, 285],
+    avoid: (x, z) => (Math.abs(x) < 252 && z > -22 && z < 184) || (Math.abs(z - 10) < 52 && Math.abs(x) > 195)
+      || (x < -236 && z > 0 && z < 175) || Math.hypot(x - I3.volcano.x, z - I3.volcano.z) < 36,
+    rows: [[-230, -32, 230, -32, 8], [-230, 192, 230, 192, 8]],
+    trees: 320, bushes: 320, grass: 3000, flowers: 380, rocks: 60, houses: 10,
+  });
+
   return {
     cx, cz, group, colliders, platforms, points, height: height3, R2: I.R2, radarPos: new THREE.Vector3(cx, 0, cz),
     info: I,

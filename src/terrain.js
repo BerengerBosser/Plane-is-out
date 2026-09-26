@@ -264,7 +264,7 @@ export function buildIsland(scene) {
 
   const trees = { pine: [], round: [] }, rocks = [];
   const tr = rng(42);
-  for (let i = 0; i < 4000 && trees.pine.length + trees.round.length < 560; i++) {
+  for (let i = 0; i < 6000 && trees.pine.length + trees.round.length < 680; i++) {
     const x = (tr() - 0.5) * 2 * (R + 20), z = (tr() - 0.5) * 2 * (R + 20);
     const h = heightAt(x, z);
     if (h < 2.2 || h > 26) continue;
@@ -422,6 +422,7 @@ export function buildIsland(scene) {
   colliders.push({ type: 'circle', x: lh.x, z: lh.z, r: 2.6 });
   const pw = new THREE.Vector3(0.95, 1.55, 2.37).applyAxisAngle(new THREE.Vector3(0, 1, 0), toCenter);
   out.plaquePos = new THREE.Vector3(lh.x + pw.x, lhh + 1.55, lh.z + pw.z);
+  out.plaque = plaque;   // l'année est tirée au sort à chaque partie (voir locks.js)
 
   // ── Feu de débris près de l'épave (source de lumière de nuit) ──
   const cf = LAYOUT.campfire, cfh = heightAt(cf.x, cf.z);

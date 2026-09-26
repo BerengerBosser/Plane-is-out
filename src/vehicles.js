@@ -571,7 +571,7 @@ export const VehicleMixin = {
     const sp = this.vehicleWorld(v, V3(this.driving ? v.def.seat : v.def.pass));
     this.selfAv.root.position.copy(sp).setY(sp.y - 0.36);
     this.selfAv.root.rotation.set(0, v.yaw + (v.def.reverseSeat && this.driving ? Math.PI : 0), 0);
-    this.selfAv.animate(dt, { seat: true, armed: !this.driving, slot: this.driving ? 0 : this.slot, attack: this.attackCd > 0.2 ? 1 : 0 });
+    this.selfAv.animate(dt, { seat: true, armed: !this.driving, slot: this.driving ? 0 : this.slot, attack: this.attackCd > 0.2 ? 1 : 0, mouth: this.voice?.level || 0 });
   },
   exitVehicle(silent) {
     const v = this.driving;

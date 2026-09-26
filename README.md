@@ -63,7 +63,8 @@ Le serveur (`server/server.js`) sert le jeu et gère les parties.
 - **Échelles :** Z face à l'échelle pour grimper, S pour descendre, Espace pour lâcher.
 - **Eau :** on nage ; Z face à un ponton, un quai ou un rocher pour se hisser dessus.
 - **Interagir :** E (maintenir pour réparer, décharger, relever un coéquipier, pousser l'avion coincé) · R : action secondaire · G : lâcher
-- **Inventaire (A), à la Unturned :** chaque objet occupe des cases (un fusil 4×2, un bandage 1×1). Les poches viennent des vêtements portés : tenue de base 2×2 + 2×2 au départ, puis chemises, pantalons cargo, gilets et sacs trouvés sur les îles (sacoche 3×3, sac à dos 4×4, sac de randonnée 5×5, sac militaire 6×6). Glisser-déposer (un sac ou un vêtement lâché sur celui qu'on porte le remplace, le contenu suit), R pour tourner un objet, double-clic pour équiper ou prendre, Maj+clic pour un transfert rapide, Ctrl+clic ou Suppr pour jeter, 1 à 6 au survol pour équiper, clic droit pour les actions (utiliser, diviser une pile, jeter…).
+- **Dispositifs (cadenas, claviers, volants, boutons, miroirs) :** pas de fenêtre d'énigme, tout se manipule dans le monde. On vise la pièce exacte au centre de l'écran (une touche, une molette…) : E pour appuyer ou tourner d'un cran, R pour le cran inverse (ou retirer), molette de la souris cran par cran. E maintenu + souris : saisir la pièce et la tourner finement (Maj : encore plus fin), relâcher E pour la lâcher.
+- **Inventaire (A), à la Unturned :** chaque objet occupe des cases (un fusil 4×2, un bandage 1×1). Les poches viennent des vêtements portés : tenue de base 3×2 + 3×2 au départ, puis chemises et jeans 4×2, ciré, blouson et pantalon cargo 4×3, gilets et sacs trouvés sur les îles (sacoche 4×4, sac à dos 5×5, sac de randonnée 6×6, sac militaire 6×8). Dès la première île, un ciré ou une sacoche suffit pour emporter le fusil à pompe (4×2) et le diable (2×4). Glisser-déposer (un sac ou un vêtement lâché sur celui qu'on porte le remplace, le contenu suit), R pour tourner un objet, double-clic pour équiper ou prendre, Maj+clic pour un transfert rapide, Ctrl+clic ou Suppr pour jeter, 1 à 6 au survol pour équiper, clic droit pour les actions (utiliser, diviser une pile, jeter…).
 - **En main :** 1 arme principale, 2 arme secondaire, 3 à 6 équipements rapides (bandage, talkie, lanterne, trousse, parachute…). 0 ou la même touche : mains nues. H : bandage. Les munitions sont des objets rangés dans les poches.
 - **Combat :** clic pour frapper ou tirer · clic droit : viser · R : recharger. Tir dans la tête ×2. Le bruit des armes à feu attire les morts.
 - **Talkie :** en main, il se lève devant vous quand vous parlez (B) et la voix des autres est claire ; rangé dans le sac, elle arrive étouffée.
@@ -79,11 +80,25 @@ En équipe :
 
 Aux commandes : Z / S gaz · Q / D palonnier · Souris ou flèches : manche · P : pilote automatique · C : vue cockpit · E : quitter le siège.
 
+**Debout dans un avion en vol :** un piqué franc (ou un virage qui plonge vers le sol) fait tomber la gravité ressentie sous zéro. Qui n'est pas assis décolle du plancher, flotte et se cogne au plafond, puis s'étale sur le plancher quand l'avion se redresse (quelques secondes au sol, Espace pour se relever plus vite, petits dégâts si la chute est rude). Assis, la ceinture tient. Debout sur l'aile ou le toit, on est emporté avec l'avion quand il roule sur l'eau ou la piste.
+
 Aux commandes du Boeing : E au poste de pilotage (tout l'équipage doit être à bord ; les coéquipiers sont assis pendant le vol) · Z / S gaz · Q / D palonnier au roulage · souris : manche, tirer à 115 km/h pour décoller · Espace : freins · C : vue poursuite ou poste vitré · E à l'arrêt : couper les réacteurs. Passagers : souris pour regarder, C pour passer du siège au poste de pilotage puis à l'extérieur. Un crash n'est pas fatal : l'avion est replacé en approche (« remise des gaz »).
 
 En véhicule : E conduire ou monter en passager (le passager peut tirer) · Z accélérer · S freiner puis reculer · Q / D tourner · Espace : frein à main (dérapage) · C : vue. On voit son personnage au volant en vue extérieure. Camions spéciaux : Espace pomper, saisir/poser, atteler · R / F fourches · clic maintenu : lance à eau.
 
-**Admin de la partie** (Pause → Admin, réservé à l'hôte en multijoueur) : passer la nuit, +1 heure, tombée de la nuit, temps ×10, réparer le Coucou, sauter au chapitre 2, 3 ou 4, toutes les armes, +50 coquillages, soigner, invincible, horde, tuer tous les zombies, tir ami, infos de débogage. Il remplace les anciennes touches F1 à F4.
+**Admin de la partie** (Pause → Admin, réservé à l'hôte en multijoueur) : passer la nuit, +1 heure, tombée de la nuit, temps ×10, réparer le Coucou, sauter au chapitre 2, 3 ou 4 (tout l'équipage est téléporté), finir le chapitre en cours (tous les défis sauf le départ : décollage, ou synthèse finale au chapitre 4), toutes les armes, +50 coquillages, soigner, invincible, vitesse de déplacement ×2 ×4 ×8, horde, tuer tous les zombies, tir ami, infos de débogage. Il remplace les anciennes touches F1 à F4.
+
+## Chaque partie a ses secrets
+
+Codes, fréquences et combinaisons sont tirés au sort à chaque nouvelle partie (à partir de sa graine : une sauvegarde les retrouve à l'identique, et tout l'équipage partage les mêmes) :
+- l'année de mise en service du phare, donc le code du cabanon ;
+- les trois symboles peints de Jo, donc la combinaison du coffre du canot ;
+- la fréquence d'urgence écrite sur la caisse Hélios (et deux stations parasites sur la bande) ;
+- le code du hangar 2 donné par Marthe ;
+- l'ordre des fusibles sur l'affiche du terminal ;
+- la disposition du poste de sécurité (émetteur, capteur, piliers, socles) ;
+- le réglage des vannes de purge (zones vertes des manomètres) ;
+- le code du barrage sanitaire d'Hélios (lignes de bus et quais).
 
 ## Règles du monde
 
@@ -140,20 +155,22 @@ En véhicule : E conduire ou monter en passager (le passager peut tirer) · Z ac
 
 **Chapitre 1 · Plage du Crash**
 1. Trouver le diable, la clé à molette et la lanterne.
-2. Rapporter les 6 pièces. Le code du cabanon se déduit du mot sur la porte et de la plaque du phare.
+2. Rapporter les 6 pièces. Le code du cabanon se déduit du mot sur la porte et de la plaque du phare : on le compose sur le cadenas à molettes de la porte.
 3. Treuiller la caisse Hélios dans la soute, monter à bord par la porte cargo et décoller vers Hélios. En vol, Marthe découvre que le réservoir fuit : cap sur Saint-Escale.
 
-Bonus : coffre du canot (3 symboles à retrouver sur l'île), Crabe-Roi dans sa crique, pêche, canards, trésor.
+Bonus : coffre du canot (3 symboles peints à retrouver sur l'île, à composer sur ses molettes), Crabe-Roi dans sa crique, pêche, canards, trésor.
 
 **Chapitre 2 · Saint-Escale** (position aléatoire, à trouver au radar)
-1. Remettre le courant : 3 fusibles, placés selon l'affiche du terminal. Chacun est derrière une énigme physique :
+1. Remettre le courant : 3 fusibles, placés selon l'affiche du terminal (on vise chaque emplacement du tableau : E insérer ou échanger, R retirer ; un montage faux fait une décharge). Chacun est derrière une énigme physique :
    - **rouge**, sur le toit du terminal : l'échelle de service est arrachée en bas, il faut glisser une caisse de fret dessous (le kart à bagages aide à la transporter) ;
-   - **bleu**, dans le poste de sécurité : poser deux miroirs sur les socles et les orienter pour guider un laser jusqu'au capteur (un miroir est dans la salle, l'autre au terminal) ;
+   - **bleu**, dans le poste de sécurité : poser deux miroirs sur les socles et les orienter soi-même, à la main (E maintenu + souris, au demi-degré près), pour guider un laser jusqu'au capteur, qui doit rester éclairé un instant. Aucun angle n'est imposé : le faisceau suit la vraie loi de la réflexion. Un corps ou une caisse coupe le faisceau. Un miroir est dans la salle, l'autre au terminal ;
    - **jaune**, dans le local technique du balisage, en bout de piste côté dépôt de carburant : sa porte à double commande ne s'ouvre que si ses deux pédales de sécurité restent enfoncées (un coéquipier, le sac de lest de la manche à air ou le bloc de béton du chantier).
    Le kart à bagages électrique se recharge à sa borne, derrière le terminal.
-2. Monter à la tour par l'escalier extérieur (ou l'ascenseur, avec le courant et son séquenceur), puis appeler Marthe sur la fréquence écrite sur la caisse (la radio de la tour porte bien plus loin que celle du Coucou). La météo de la tour annonce une tempête pour le soir : la mer sera trop forte pour décoller sur l'eau, il faudra la piste. Elle donne aussi le code du hangar, et la tour fournit des talkies.
-3. Récupérer les roues amphibies dans le hangar 2 et les monter sur l'avion.
-4. Faire le plein : décrocher le pistolet de la pompe (le tuyau suit le joueur), le brancher sur l'aile droite, purger le circuit (énigme des tuyaux), puis doser la pression.
+2. Monter à la tour par l'escalier extérieur (ou l'ascenseur, avec le courant et son séquenceur), puis appeler Marthe sur la fréquence écrite sur la caisse (la radio de la tour porte bien plus loin que celle du Coucou) : on cherche la fréquence au bouton de réglage (E maintenu + souris, molette pour affiner), en écoutant les parasites s'effacer et la voix percer sur l'écran, puis on appuie sur le bouton rouge d'émission. Deux autres stations (une balise météo, une radio musicale) brouillent les pistes. La météo de la tour annonce une tempête pour le soir : la mer sera trop forte pour décoller sur l'eau, il faudra la piste. Elle donne aussi le code du hangar, et la tour fournit des talkies.
+3. Récupérer les roues amphibies dans le hangar 2 (code à taper sur le clavier de la façade) et les monter sur l'avion.
+4. Faire le plein :
+   - purger le circuit aux vannes du dépôt, près des cuves : quatre volants (A est la vidange) et trois manomètres ; on tourne les volants jusqu'à ce que les trois aiguilles soient dans le vert en même temps, et on tient. Les aiguilles réagissent avec un temps de retard, et à plusieurs on tourne chacun son volant ;
+   - décrocher le pistolet de la pompe (le tuyau suit le joueur), le brancher sur l'aile droite, puis doser la pression.
 5. **Nuit de tempête :**
    - la porte de l'avion est grillée ;
    - il faut défendre le générateur de la centrale jusqu'à 21 h, contre 3 vagues dont le Colosse ;
@@ -177,7 +194,7 @@ Bonus : coffre du canot (3 symboles à retrouver sur l'île), Crabe-Roi dans sa 
 2. Déclencher le toboggan d'évacuation (porte avant gauche, dedans) : on glisse jusqu'au sol, on remonte en marchant face à l'avion.
 3. Sortir la caisse de la soute (E maintenu à la porte de soute, plus rapide à plusieurs), puis la prendre au chariot élévateur du hangar de fret.
 4. **Le pont-levis du canal** : deux manivelles, A et B, à tourner ensemble. Seul, on les tourne à tour de rôle : si l'une a trop d'avance, le tablier se met de travers. Le grincement réveille les morts du hangar voisin : un joueur tourne, un autre couvre.
-5. **Le barrage sanitaire** : la guérite affiche quatre symboles ; le code, ce sont les quais de ces lignes de bus sur le panneau de la gare routière, à 60 m de là. À plusieurs, l'un lit, l'autre tape.
+5. **Le barrage sanitaire** : la guérite affiche quatre symboles ; le code, ce sont les quais de ces lignes de bus sur le panneau de la gare routière, à 60 m de là. On le tape sur le clavier de la guérite. À plusieurs, l'un lit, l'autre tape.
 6. Remonter l'avenue du Zénith jusqu'à la place du Soleil et poser la caisse sur le sas de l'Institut Hélios.
 7. **Décontamination** : 75 secondes, cinq vagues de morts attirées par la sirène (jusqu'à un cogneur). Le cycle se met en pause s'il n'y a personne près du sas.
 8. **Le synthétiseur** : trois consoles (séquenceur ARN, circuit de refroidissement, centrifugeuse) à régler dans le temps imparti, 100 s à plusieurs (une console chacun), 170 s seul. Ensuite, Marthe prend la première dose : fin de l'aventure.
@@ -198,8 +215,8 @@ Le menu principal propose aussi l'import. En multijoueur, l'hôte détient la sa
 
 ```
 npm install
-node build.mjs     # dist/plane-is-out.html (+ variante pour page publiée)
-npm start          # serveur de jeu
+node build.mjs     # dist/plane-is-out.html (+ variante pour page publiée) et dist/sound-studio.html
+npm start          # serveur de jeu (et studio son sur /studio)
 ```
 
 Sources principales dans `src/` :
@@ -221,9 +238,32 @@ Sources principales dans `src/` :
 - **Réseau :**
   - `mp.js` : salon, avatars, synchronisation, chat de proximité
   - `net.js` : transports (serveur de salles ou salon de page)
-  - `voice.js` : voix
+  - `voice.js`, `voicepanel.js` : voix
 - **Monde :** `terrain.js` (dont les collisions automatiques et les panneaux), `decor.js`, `island2.js`, `island3.js`, `island4.js` (Hélios : aéroport, canal, ville, Institut), `boeing.js` (cabine, poste vitré, toboggan), `planeModel.js`, `enemies.js`, `props.js`, `textures.js`, `trail.js`
 - **Personnages :** `avatars.js` (les quatre personnages, portraits du menu)
+- **Son :** `sounds.js` (catalogue de tous les sons, ambiances, préréglages de réverb), `audio.js` (moteur : synthé, fichiers, bus, réverb, musiques), `studio.js` (studio son)
+
+## Sons et musiques : le studio son
+
+Tous les bruits du jeu (43 : armes, créatures, pas, objets, interface, météo, moteur…) sont listés dans `src/sounds.js`.
+Chacun est joué par le synthé intégré (par défaut) ou par vos fichiers audio (mp3, wav, ogg, m4a, flac…) déposés dans `sounds/`.
+
+1. `npm start`, puis **http://localhost:8080/studio**.
+2. **Sons** : choisir la source (Synthé / Fichiers / Muet), glisser un ou plusieurs fichiers (variantes tirées au hasard) ;
+   sur la forme d'onde : glisser pour découper, poignées jaunes pour le début et la fin, pastilles rouges pour les fondus,
+   clic pour écouter à partir d'un point, molette pour zoomer, « Couper les silences » ;
+   calibrage : gain du fichier, normalisation au pic ou à la sonie (sans jamais saturer), « Égaliser les variantes » ;
+   volume, hauteur, variation aléatoire, envoi réverb, voix simultanées ; simulateur pour les boucles (vent, pluie, moteur).
+3. **Console** : un fader, un vumètre, muet et solo par famille ; limiteur général.
+4. **Réverb** : préréglages (plein air, pièce, hangar, grotte, cathédrale), durée, pré-délai, tonalité, réflexions, et envoi de chaque son.
+5. **Ambiances** : playlists Menu, Détente, Dramatique, En vol, Poste radio. Le jeu choisit : Dramatique la nuit dehors après l'alarme,
+   zombies éveillés tout près, boss, siège, joueur à terre, crash ; En vol aux commandes en l'air ; Détente sinon. Fondus enchaînés.
+6. **Enregistrer** (Ctrl+S) écrit `sounds/config.json`, lu par le jeu au démarrage.
+
+Jeu et studio ouverts dans le même navigateur : chaque réglage s'entend en direct dans le jeu, les sons joués par le jeu
+clignotent dans la liste du studio (« Entendu dans le jeu »), et l'on peut imposer une ambiance au jeu pour la tester.
+**F9** (jeu ou studio, ou le bouton ⟳) recharge la config et tous les fichiers, des deux côtés.
+L'écriture (enregistrer, importer) n'est acceptée que depuis la machine du serveur (`SOUND_EDIT=1` pour l'ouvrir, `SOUND_EDIT=0` pour la fermer).
 
 ## Performances
 
@@ -232,3 +272,5 @@ Paramètres › Graphismes : préréglages Basse, Moyenne, Haute ; distance d'af
 ## Voix
 
 Le chat vocal est spatialisé en stéréo (HRTF). La réverbération dépend du lieu : petite pièce (cabines, vigies), grand hall (terminaux, hangars, caserne), écho près du volcan et des falaises.
+
+Réglages (salon multijoueur, et Paramètres › Voix) : activer le micro, vumètre, « S'écouter » pour tester ce que les autres entendent, choix du micro, mode « Appuyer sur B » ou « Voix détectée » (avec seuil réglable, en cliquant sur le vumètre), gain du micro, volume des voix, et volume ou sourdine de chaque coéquipier (retenus par nom). Au salon, on s'entend sans distance ; en jeu, la voix redevient de proximité. Une fois le micro autorisé, il se rallume tout seul en rejoignant une partie. La bouche des personnages bouge quand ils parlent.

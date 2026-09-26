@@ -106,7 +106,7 @@ export function createGoreFx(scene) {
       const L = flashLights.reduce((a, b) => (a.t < b.t ? a : b));
       L.l.position.copy(p).setY(p.y + 1); L.l.intensity = 40; L.l.distance = r * 6; L.t = 0.25;
     },
-    gasAt(p) { return clouds.some((c) => c.t < c.life && Math.hypot(c.p.x - p.x, c.p.z - p.z) < c.r); },
+    gasAt(p) { return clouds.some((c) => c.t < c.life - 0.8 && Math.abs(p.y - c.p.y) < c.r * 0.8 + 1 && Math.hypot(c.p.x - p.x, c.p.z - p.z) < c.r * 0.9); },
     clear() { [...decals, ...tracers, ...clouds, ...blasts].forEach((o) => scene.remove(o.m)); decals.length = 0; tracers.length = 0; clouds.length = 0; parts.length = 0; blasts.length = 0; },
     update(dt) {
       const counts = Object.fromEntries(Object.keys(im).map((k) => [k, 0]));

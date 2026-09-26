@@ -6,6 +6,8 @@ import { fbm, rng, smoothstep } from './noise.js';
 import { prep, flatMat, textTexture, setIsland2, mergeStatic, signBoard, autoColliders, heightAt } from './terrain.js';
 import { CFG } from './config.js';
 import { texBox, TEX } from './textures.js';
+import { addGreenery } from './greenery.js';
+import { makeSecrets } from './secrets.js';
 
 export const FLAT = 3.2;
 export const I2 = {
@@ -161,6 +163,7 @@ export function createIsland2(scene, seed) {
 
   // ── terminal (on peut y entrer) ──
   const T = I2.terminal, TH = T.h;
+  const TMAX = { maxY: FLAT + TH - 0.2 };   // collisions du rez-de-chaussée : elles s'arrêtent sous la dalle du toit
   const tw = (w, d, x, z, col = '#f3ead8') => { const m = texBox(w, TH, d, col, 'panel', 3); m.position.set(x, FLAT + TH / 2, z); group.add(m); };
   tw(T.w, 0.4, T.x, T.z + T.d / 2);                                 // fond
   tw(0.4, T.d, T.x - T.w / 2, T.z); tw(0.4, T.d, T.x + T.w / 2, T.z);  // côtés
@@ -178,15 +181,15 @@ export function createIsland2(scene, seed) {
   tsign.rotation.y = Math.PI;
   group.add(tsign);
   group.add(boxM(16.5, 2.5, 0.2, '#10162b', T.x, FLAT + TH + 1.8, fz + 0.12));
-  cBox(T.x - T.w / 2, T.x + T.w / 2, T.z + T.d / 2 - 0.2, T.z + T.d / 2 + 0.2);
-  cBox(T.x - T.w / 2 - 0.2, T.x - T.w / 2 + 0.2, T.z - T.d / 2, T.z + T.d / 2);
-  cBox(T.x + T.w / 2 - 0.2, T.x + T.w / 2 + 0.2, T.z - T.d / 2, T.z + T.d / 2);
-  for (const [a, b] of [[-18, -11], [-8, 8], [11, 18]]) cBox(T.x + a, T.x + b, fz - 0.2, fz + 0.2);
+  cBox(T.x - T.w / 2, T.x + T.w / 2, T.z + T.d / 2 - 0.2, T.z + T.d / 2 + 0.2, TMAX);
+  cBox(T.x - T.w / 2 - 0.2, T.x - T.w / 2 + 0.2, T.z - T.d / 2, T.z + T.d / 2, TMAX);
+  cBox(T.x + T.w / 2 - 0.2, T.x + T.w / 2 + 0.2, T.z - T.d / 2, T.z + T.d / 2, TMAX);
+  for (const [a, b] of [[-18, -11], [-8, 8], [11, 18]]) cBox(T.x + a, T.x + b, fz - 0.2, fz + 0.2, TMAX);
   // intérieur : banquettes, tapis à bagages, bureau des objets trouvés, distributeur, affiche
   for (let i = 0; i < 4; i++) group.add(boxM(4, 0.5, 1, '#1f8a8a', T.x - 10 + i * 5.5, FLAT + 0.25, T.z + 1));
   group.add(boxM(9, 0.8, 2.2, '#33373f', T.x + 12, FLAT + 0.4, T.z + 3));
-  cBox(T.x + 7.5, T.x + 16.5, T.z + 1.9, T.z + 4.1);                                   // tapis à bagages
-  for (let i = 0; i < 4; i++) cBox(T.x - 12 + i * 5.5, T.x - 8 + i * 5.5, T.z + 0.5, T.z + 1.5);   // banquettes
+  cBox(T.x + 7.5, T.x + 16.5, T.z + 1.9, T.z + 4.1, TMAX);                                   // tapis à bagages
+  for (let i = 0; i < 4; i++) cBox(T.x - 12 + i * 5.5, T.x - 8 + i * 5.5, T.z + 0.5, T.z + 1.5, TMAX);   // banquettes
   group.add(boxM(8.4, 0.08, 1.8, '#5d6470', T.x + 12, FLAT + 0.84, T.z + 3));
   group.add(boxM(1.2, 0.5, 0.8, '#b98b5e', T.x + 10, FLAT + 1.1, T.z + 3));
   group.add(boxM(0.8, 0.6, 0.6, '#ff6b5b', T.x + 13, FLAT + 1.1, T.z + 3.2));
@@ -196,12 +199,14 @@ export function createIsland2(scene, seed) {
   lf.position.set(desk.x, FLAT + 2.2, T.z + T.d / 2 - 0.25);
   lf.rotation.y = Math.PI;
   group.add(lf);
-  cBox(desk.x - 2, desk.x + 2, desk.z - 0.6, desk.z + 0.6);
+  cBox(desk.x - 2, desk.x + 2, desk.z - 0.6, desk.z + 0.6, TMAX);
   const v = I2.vending;
   group.add(boxM(1.3, 2.2, 0.9, '#ff6b5b', v.x, FLAT + 1.1, v.z));
   group.add(glassBox(0.9, 1.3, 0.05, v.x - 0.1, FLAT + 1.35, v.z - 0.47));
-  cBox(v.x - 0.65, v.x + 0.65, v.z - 0.45, v.z + 0.45);
-  const poster = sign(['CONSIGNES ÉLECTRIQUES', '☀ Éclairage : fusible ROUGE (toit du terminal)', '⚓ Ponton : fusible BLEU (coffre du poste de sécurité)', '✈ Balisage : fusible JAUNE (local de bout de piste)'], '#fff4e0', '#10162b', 2.8, 2.0, 640, 400);
+  cBox(v.x - 0.65, v.x + 0.65, v.z - 0.45, v.z + 0.45, TMAX);
+  // l'ordre des fusibles est tiré au sort à chaque partie (secrets.js)
+  const FN = { red: 'ROUGE (toit du terminal)', blue: 'BLEU (coffre du poste de sécurité)', yellow: 'JAUNE (local de bout de piste)' }, SF = makeSecrets(seed).fuses;
+  const poster = sign(['CONSIGNES ÉLECTRIQUES', `☀ Éclairage : fusible ${FN[SF.sun]}`, `⚓ Ponton : fusible ${FN[SF.anchor]}`, `✈ Balisage : fusible ${FN[SF.plane]}`], '#fff4e0', '#10162b', 2.8, 2.0, 640, 400);
   poster.position.set(I2.poster.x, FLAT + 2.0, I2.poster.z);
   poster.rotation.y = Math.PI;
   group.add(poster);
@@ -502,7 +507,7 @@ export function createIsland2(scene, seed) {
   group.add(boxM(5, 3, 4, '#b98b5e', S.x, FLAT + 1.5, S.z));
   group.add(boxM(5.6, 0.25, 4.6, '#6d4b37', S.x, FLAT + 3.1, S.z));
   cBox(S.x - 2.5, S.x + 2.5, S.z - 2, S.z + 2);
-  const schema = sign(['SCHÉMA DU CIRCUIT', 'Ligne PONTON : ouvrir B et D', 'A = vidange · C = retour cuve', 'Ne jamais ouvrir A !'], '#fff4e0', '#10162b', 2.4, 1.8, 512, 400);
+  const schema = sign(['SCHÉMA DU CIRCUIT', 'Purge aux vannes A à D', '3 manomètres dans le vert', 'A = vidange (fait tout baisser)'], '#fff4e0', '#10162b', 2.4, 1.8, 512, 400);
   schema.position.set(S.x, FLAT + 1.8, S.z - 2.03);
   schema.rotation.y = Math.PI;
   group.add(schema);
@@ -711,7 +716,7 @@ export function createIsland2(scene, seed) {
   const FB = I2.flareBox;
   group.add(boxM(1.2, 0.6, 0.7, '#ff6b5b', FB.x, FLAT + 0.3, FB.z));
   group.add(boxM(1.22, 0.1, 0.72, '#fff4e0', FB.x, FLAT + 0.62, FB.z));
-  cBox(FB.x - 0.6, FB.x + 0.6, FB.z - 0.35, FB.z + 0.35);
+  cBox(FB.x - 0.6, FB.x + 0.6, FB.z - 0.35, FB.z + 0.35, { maxY: FLAT + 1 });   // dans le terminal : rien au-dessus (toit)
   const HR = I2.harpRack;
   group.add(boxM(1.6, 1.4, 0.2, '#8a6a4a', HR.x, D.top + 0.7, HR.z));
   for (let k = 0; k < 4; k++) group.add(boxM(0.04, 1.3, 0.04, '#c9ccd2', HR.x - 0.6 + k * 0.4, D.top + 0.8, HR.z - 0.15));
@@ -884,6 +889,16 @@ export function createIsland2(scene, seed) {
     { p: wp(P.x - 2, FLAT, P.z), r: 13 },
   ] : []);
 
+  // ── végétation et hameau de maisons blanches (hors aéroport, rampe, baie et couloir de la piste) ──
+  addGreenery({
+    group, cx, cz, height: height2, colliders, seed: seed ^ 0x9a2, biome: 'arid', box: [-235, 235, -160, 140],
+    avoid: (x, z) => (Math.abs(x) < 168 && z > -54 && z < 60) || (Math.abs(z + 5) < 48 && Math.abs(x) > 115)
+      || (x > 34 && x < 76 && z > 38) || Math.hypot(x - 58, z - 122) < 58 || Math.hypot(x - I2.bar.x, z - I2.bar.z) < 14 || Math.hypot(x - I2.airliner.x, z - I2.airliner.z) < 26,
+    // bordures de l'aéroport : palmiers et haies le long de la clôture sud et derrière les bâtiments
+    rows: [[-150, -50, 150, -50, 7], [-160, 57, 30, 57, 8], [82, 57, 160, 57, 8]],
+    trees: 190, bushes: 340, grass: 3000, flowers: 420, rocks: 90, houses: 10,
+  });
+
   return {
     cx, cz, group, colliders, platforms, points, valves, fuseSlots, crabs, hangarDoorCol, radarPos: new THREE.Vector3(cx, 0, cz),
     get power() { return power; },
@@ -901,7 +916,7 @@ export function createIsland2(scene, seed) {
       radioScreen.material.color.set(on ? '#1f8a8a' : '#10162b');
     },
     setFuse(i, color) { fuseSlots[i].material = color ? new THREE.MeshLambertMaterial({ color: { red: '#ff4d4d', blue: '#3d7bff', yellow: '#ffd166' }[color] }) : flatMat; },
-    setValve(k, open) { valves[k].open = open; },
+    setValve(k, open) { valves[k].open = +open || 0; },
     openHangar() { hangarTarget = 1; hangarDoorCol.disabled = true; },
     setStairGate(open) { stairGate.visible = !open; stairGateCol.disabled = !!open; },
     get hangarMoving() { return hangarOpen < hangarTarget; },
@@ -913,7 +928,7 @@ export function createIsland2(scene, seed) {
       sockCloth.rotation.y = 0.8 + Math.sin(t * 0.7) * 0.25;
       sockCloth.rotation.z = -0.15 + Math.sin(t * 2.1) * 0.05;
       for (const f of flamingos) f.children[3].position.y = 1.9 + Math.sin(t * 1.5 + f.userData.ph) * 0.03;
-      for (const [, vv] of Object.entries(valves)) vv.wheel.rotation.z += ((vv.open ? Math.PI * 1.5 : 0) - vv.wheel.rotation.z) * Math.min(1, dt * 4);
+      for (const [, vv] of Object.entries(valves)) vv.wheel.rotation.z += ((+vv.open || 0) * Math.PI * 2.5 - vv.wheel.rotation.z) * Math.min(1, dt * 8);
       const moving = hangarOpen < hangarTarget;
       if (moving) hangarOpen = Math.min(1, hangarOpen + dt * 0.2);
       hBeacons.forEach((b) => { b.beam.visible = moving; b.rot.rotation.y += dt * 7; b.lamp.material.color.set(moving && Math.sin(t * 14) > 0 ? '#ffd166' : '#8a5a2a'); });

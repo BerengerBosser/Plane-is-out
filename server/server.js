@@ -5,13 +5,21 @@
 //   un nouvel hôte ou une salle recréée plus tard repart de cette sauvegarde.
 // Usage : node server/server.js   (port : variable PORT, 8080 par défaut ; dossier des sauvegardes : DATA_DIR)
 import { createServer } from 'node:http';
-import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, statSync, unlinkSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, statSync, unlinkSync, renameSync, createReadStream } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve, sep, extname } from 'node:path';
 import { WebSocketServer } from 'ws';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const GAME = join(here, '..', 'dist', 'plane-is-out.html');
+const STUDIO = join(here, '..', 'dist', 'sound-studio.html');
+// sons : dossier sounds/ (fichiers audio + config.json réglée dans le studio)
+// écriture (enregistrer la config, importer des fichiers) : seulement depuis cette machine,
+// sauf SOUND_EDIT=1 (partout) ou SOUND_EDIT=0 (jamais)
+const SOUNDS = resolve(process.env.SOUNDS_DIR || join(here, '..', 'sounds'));
+const SOUND_EDIT = process.env.SOUND_EDIT;
+const AUDIO_TYPES = { '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.opus': 'audio/ogg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.flac': 'audio/flac', '.webm': 'audio/webm' };
+try { mkdirSync(SOUNDS, { recursive: true }); } catch { /* lecture seule */ }
 const PORT = Number(process.env.PORT) || 8080;
 const DATA = process.env.DATA_DIR || join(here, '..', 'data');
 const MAX_PLAYERS = 4;
@@ -26,6 +34,13 @@ const http = createServer((req, res) => {
     res.end(readFileSync(GAME));
     return;
   }
+  if (url === '/studio' || url === '/studio/') {
+    if (!existsSync(STUDIO)) { res.writeHead(500); res.end('Build manquant : lancez « node build.mjs ».'); return; }
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' });
+    res.end(readFileSync(STUDIO));
+    return;
+  }
+  if (url.startsWith('/sounds/')) { soundsRoute(req, res, url.slice(8)); return; }
   if (url === '/health') { res.writeHead(200, { 'content-type': 'text/plain' }); res.end('ok'); return; }
   if (url === '/rooms') {
     res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
@@ -34,6 +49,88 @@ const http = createServer((req, res) => {
   }
   res.writeHead(404); res.end('Introuvable');
 });
+
+// ── sons ────────────────────────────────────────────────
+function canEditSounds(req) {
+  if (SOUND_EDIT === '1') return true;
+  if (SOUND_EDIT === '0') return false;
+  if (req.headers['x-forwarded-for']) return false;   // derrière un proxy : jamais « local »
+  const a = req.socket.remoteAddress || '';
+  return a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1';
+}
+// chemin relatif sûr dans sounds/ (sous-dossiers permis, jamais en dehors)
+function soundPath(rel) {
+  let name;
+  try { name = decodeURIComponent(rel); } catch { return null; }
+  if (!name || name.includes('\0') || name.split(/[\\/]/).some((p) => p === '..' || p.startsWith('.'))) return null;
+  const p = resolve(SOUNDS, name);
+  return p.startsWith(SOUNDS + sep) ? p : null;
+}
+function listSounds(dir = SOUNDS, prefix = '', depth = 0, out = []) {
+  let entries = [];
+  try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return out; }
+  for (const e of entries) {
+    if (e.name.startsWith('.')) continue;
+    if (e.isDirectory() && depth < 3) listSounds(join(dir, e.name), `${prefix}${e.name}/`, depth + 1, out);
+    else if (e.isFile() && AUDIO_TYPES[extname(e.name).toLowerCase()]) {
+      const st = statSync(join(dir, e.name));
+      out.push({ name: prefix + e.name, size: st.size, mtime: Math.round(st.mtimeMs) });
+    }
+  }
+  return out;
+}
+function readBody(req, max, done) {
+  const chunks = []; let n = 0, over = false;
+  req.on('data', (c) => { n += c.length; if (n > max) { over = true; req.destroy(); } else chunks.push(c); });
+  req.on('end', () => { if (!over) done(Buffer.concat(chunks)); });
+}
+const json = (res, code, obj) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(obj)); };
+function soundsRoute(req, res, rel) {
+  const edit = canEditSounds(req);
+  if (rel === '_list') { json(res, 200, { files: listSounds().sort((a, b) => a.name.localeCompare(b.name)), edit }); return; }
+  const p = soundPath(rel);
+  if (!p) { json(res, 400, { error: 'Nom de fichier invalide.' }); return; }
+  const isConfig = rel === 'config.json';
+  const type = isConfig ? 'application/json' : AUDIO_TYPES[extname(p).toLowerCase()];
+  if (!type) { json(res, 400, { error: 'Format non pris en charge (mp3, wav, ogg, m4a, aac, flac, webm, opus).' }); return; }
+  if (req.method === 'PUT') {
+    if (!edit) { json(res, 403, { error: 'Écriture réservée à la machine qui fait tourner le serveur (SOUND_EDIT=1 pour l\'autoriser).' }); return; }
+    // page d'une autre origine : refusée (le navigateur l'empêche déjà sans CORS, on double la garde)
+    const origin = req.headers.origin;
+    let foreign = false;
+    if (origin) { try { foreign = new URL(origin).host !== req.headers.host; } catch { foreign = true; } }
+    if (foreign) { json(res, 403, { error: 'Origine refusée.' }); return; }
+    readBody(req, isConfig ? 2 * 1024 * 1024 : 80 * 1024 * 1024, (buf) => {
+      if (isConfig) { try { const c = JSON.parse(buf.toString('utf8')); if (!c || typeof c !== 'object') throw new Error(); } catch { json(res, 400, { error: 'Configuration illisible.' }); return; } }
+      try {
+        mkdirSync(dirname(p), { recursive: true });
+        const tmp = `${p}.${process.pid}.tmp`;
+        writeFileSync(tmp, buf); renameSync(tmp, p);
+        json(res, 200, { ok: true, name: decodeURIComponent(rel), size: buf.length });
+      } catch (e) { json(res, 500, { error: `Écriture impossible : ${e.message}` }); }
+    });
+    return;
+  }
+  if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); res.end(); return; }
+  let st;
+  try { st = statSync(p); } catch { json(res, 404, { error: 'Introuvable' }); return; }
+  if (!st.isFile()) { json(res, 404, { error: 'Introuvable' }); return; }
+  // lecture partielle (Range) : les musiques sont lues en flux et démarrent au point de découpe
+  const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+  const head = { 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'no-cache' };
+  if (range && (range[1] || range[2])) {
+    let a = range[1] ? +range[1] : st.size - +range[2], b = range[1] && range[2] ? +range[2] : st.size - 1;
+    a = Math.max(0, a); b = Math.min(st.size - 1, b);
+    if (a > b) { res.writeHead(416, { 'content-range': `bytes */${st.size}` }); res.end(); return; }
+    res.writeHead(206, { ...head, 'content-range': `bytes ${a}-${b}/${st.size}`, 'content-length': b - a + 1 });
+    if (req.method === 'HEAD') { res.end(); return; }
+    createReadStream(p, { start: a, end: b }).pipe(res);
+    return;
+  }
+  res.writeHead(200, { ...head, 'content-length': st.size });
+  if (req.method === 'HEAD') { res.end(); return; }
+  createReadStream(p).pipe(res);
+}
 
 // ── salles ──────────────────────────────────────────────
 const rooms = new Map();   // code → { code, members: Map(ws → client), host, started, save, saveAt }
@@ -147,4 +244,4 @@ setInterval(() => {
   } catch { /* rien */ }
 }, 3600000);
 
-http.listen(PORT, () => console.log(`Plane is out : http://localhost:${PORT}  (sauvegardes : ${DATA})`));
+http.listen(PORT, () => console.log(`Plane is out : http://localhost:${PORT}  (sauvegardes : ${DATA})\nStudio son  : http://localhost:${PORT}/studio  (sons : ${SOUNDS})`));

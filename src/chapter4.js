@@ -16,6 +16,7 @@ import { makePipes } from './interact.js';
 import { buildAvatar } from './avatars.js';
 import { CFG } from './config.js';
 import { clamp } from './noise.js';
+import { buildKeypad } from './devices.js';
 
 // réglages de vol du long-courrier (le Coucou garde les siens)
 const BCFG = { maxThrust: 16, airDrag: 0.0032, groundDrag: 0.006, waterDrag: 0.03, waterFriction: 1, takeoffSpeed: 32, stallSpeed: 24, pitchRate: 0.6, rollRate: 0.95, rudderRate: 0.25, bankTurn: 0.6, maxPitch: 0.45, maxRoll: 0.85, worldLimit: 9000, fuelPerSecond: 0.01, gentleMax: 55, sinkMax: 9, landClamp: 36, effSpeed: 40 };
@@ -63,10 +64,44 @@ export const Chapter4Mixin = {
     };
     f.hitTest = () => this.bHitTest();
     this.bcam = new THREE.Vector3();
+    // clavier physique du barrage sanitaire (le code : les quais des lignes de bus affichées)
+    this.removeDevices?.('i4');
+    const BO = I4.gate.booth, kp = this.gateKp = buildKeypad({ title: 'BARRAGE', len: 4, color: '#3d434d' });
+    kp.group.position.set(BO.x - 1.535, FLAT4 + 0.95, BO.z + 0.4); kp.group.rotation.y = -Math.PI / 2;
+    I.group.add(kp.group);
+    this.addDevice?.({
+      tag: 'i4', obj: kp.group, range: 2.2,
+      active: () => this.mode === 'explore' && !this.flags.gate4,
+      prompt: (l) => `<kbd>E</kbd> touche <b>${l}</b> · code : ${I.puzzle.syms.join(' ')}`,
+      hover: (l, on) => kp.hover(on ? l : null),
+      press: (l) => {
+        this.audio.beep();
+        const code = kp.key(l);
+        if (code === null) return;
+        if (code === I.puzzle.code) { kp.flash('OUVERT', 3); this.act('flag', { gate4: true }); this.audio.success(); return; }
+        kp.flash('REFUSÉ'); this.audio.error();
+        this.ui.toast('Code refusé', 'Les agents recopiaient les quais des lignes de bus affichées ici.', 'bad', 2600);
+        this.addNote(`Barrage sanitaire : code = quais des lignes ${I.puzzle.syms.join(' ')} (panneau de la gare routière)`);
+      },
+    });
     this.c4 = this.defaultC4();
     this.jetSetup?.();
   },
   defaultC4() { return { crank: [0, 0], deconOn: 0, decon: 0, synthLeft: 0 }; },
+  // rues de la ville d'Hélios (au nord du canal, hors du laboratoire) : des morts y errent même en plein jour
+  heliosStreet(x, z) {
+    const I = this.island4; if (!I) return false;
+    const lx = x - I.cx, lz = z - I.cz, L = I4.lab;
+    if (lz > I4.canal.z - I4.canal.half - 2 || lz < -250 || Math.abs(lx) > 255) return false;
+    return !(lx > L.x0 - 3 && lx < L.x1 + 3 && lz > L.z0 - 3 && lz < L.z1 + 3);
+  },
+  // la ville est infestée tant qu'aucun événement scripté (décontamination, synthèse) n'occupe déjà l'équipage
+  heliosInfested(targets) {
+    if (!this.island4 || this.chapter() < 4 || this.c4?.deconOn || this.c4?.synthLeft > 0) return false;
+    const on = targets.some((q) => q.active && this.heliosStreet(q.pos.x, q.pos.z));
+    if (on) this.radioOnce('h4streets', 'Hélios… Les rues grouillent de morts, même en plein jour. Pas de bruit inutile, restez groupés.');
+    return on;
+  },
   resetC4() {
     this.c4 = this.defaultC4();
     this.bseat = null;
@@ -208,6 +243,7 @@ export const Chapter4Mixin = {
   },
   leaveBSeat() {
     const S = this.bseat; if (!S) return;
+    this.zgReset?.();
     const s = BSEATS[S.i];
     this.bseat = null;
     this.poseBoeing();
@@ -289,7 +325,9 @@ export const Chapter4Mixin = {
   bSitDown() {
     const S = this.bseat;
     if (!S?.walk) return;
+    if (this.zg && this.zg.mode !== 'walk') { this.ui.toast('Impossible', 'Vous flottez ou êtes au sol : attendez de retrouver vos appuis.', 'bad', 1800); return; }
     S.walk = false;
+    this.zgReset?.();
     const s = BSEATS[S.i];
     this.player.pos.set(s.x, s.y, s.z); this.player.yaw = 0; this.player.pitch = 0; this.player.velY = 0;
     this.player.radius = undefined;
@@ -314,7 +352,7 @@ export const Chapter4Mixin = {
     const inp = this.input, ui = this.ui, S = this.bseat, f = this.bf;
     const { cols, env } = this.bCabinEnv();
     const mods = { canMove: !blocked, canSprint: !this.exhausted && this.stamina > 0, canJump: true, speedMul: 1 };
-    const mv = this.player.update(dt, inp, cols, mods, env);
+    const mv = this.cabinMove(dt, 'boeing', cols, mods, env);
     if (!document.getElementById('optBob').checked) this.player.bob = 0;
     this.moving = mv.moving; this.sprinting = mv.sprint && mv.moving && inp.down('ShiftLeft', 'ShiftRight');
     this.stamina = clamp(this.stamina + (this.sprinting ? -CFG.player.sprintCost : CFG.player.staminaRegen) * dt, 0, CFG.player.stamina);
@@ -333,6 +371,7 @@ export const Chapter4Mixin = {
   updateBSeat(dt, blocked) {
     const inp = this.input, ui = this.ui, f = this.bf, S = this.bseat, b = this.boeing, r = b.root;
     const pilot = S.pilot && this.c3.fly === this.myId();
+    if (!S.walk && (this.player.roll || (this.zg && this.zg.mode !== 'walk'))) this.zgReset();
     ui.show('carnet', inp.down('Tab') && !this.chatting);
     ui.el.hud.dataset.mode = S.walk ? 'explore' : 'flight';
     ui.veil(0);
@@ -445,12 +484,10 @@ export const Chapter4Mixin = {
     if (!s || !c3?.fly || c3.fly === s.me || !this.bf) return;
     const a = s.players.get(c3.fly)?.s?.bf;
     if (!a) return;
-    const f = this.bf, [x, y, z, yaw, pitch, roll, speed, thr, surf, ap] = a;
-    const k = Math.min(1, dt * 10), p = new THREE.Vector3(x, y, z);
-    if (f.pos.distanceTo(p) > 40) f.pos.copy(p); else f.pos.lerp(p, k);
-    const ang = (q, t) => q + Math.atan2(Math.sin(t - q), Math.cos(t - q)) * k;
-    f.yaw = ang(f.yaw, yaw); f.pitch = ang(f.pitch, pitch); f.roll = ang(f.roll, roll);
-    f.speed = speed; f.throttle = thr; f.surface = SURF[surf] || 'ground'; f.autopilot = !!ap;
+    const f = this.bf, [, , , , , , , thr, surf, ap] = a;
+    f.surface = SURF[surf] || 'ground';
+    this.mirrorFlight(f, a, dt, 40, f.surface === 'air');
+    f.throttle = thr; f.autopilot = !!ap;
     f.apply();
   },
   bPresence() {
@@ -527,6 +564,7 @@ export const Chapter4Mixin = {
     if (I.bridgeDown && !has) this.platforms.push(I.bridgePlat);
     else if (!I.bridgeDown && has) this.platforms = this.platforms.filter((p) => p !== I.bridgePlat);
     I.setGate(!!f.gate4);
+    if (this.gateKp) { this.gateKp.state.power = true; if (f.gate4) this.gateKp.state.msg = 'OUVERT'; this.gateKp.update(dt); }
     I.setLabDoor(!!f.decon4);
     I.setDecon(c.deconOn ? 1 : 0);
     const n = ['A', 'B', 'C'].filter((k) => f[`synth${k}`]).length;
@@ -668,7 +706,7 @@ export const Chapter4Mixin = {
       });
     });
     add(P.board, 4.5, { prompt: '<kbd>E</kbd> lire le panneau des départs', press: () => this.readBusBoard() });
-    if (!f.gate4) add(P.booth, 2.6, { prio: 2, prompt: '<kbd>E</kbd> clavier du barrage sanitaire', press: () => this.openGateKeypad() });
+    if (!f.gate4) add(P.booth, 2.6, { prompt: `Clavier du barrage : visez les touches · code ${I.puzzle.syms.join(' ')} = quais de ces lignes de bus` });
     // sas et décontamination
     if (!f.decon4) {
       add(P.padConsole, 2.6, c.deconOn ? { prompt: `Décontamination : ${Math.round(c.decon / DECON_TIME * 100)} %` } : f.crateAtLab ? { prio: 3, prompt: '<kbd>E</kbd> lancer le cycle de décontamination', press: () => this.act('decon', { on: 1 }) } : { prompt: '<span class="warn">Déposez d\'abord la caisse sur le sas (chariot élévateur)</span>' });
@@ -685,18 +723,6 @@ export const Chapter4Mixin = {
     const Z = this.island4.puzzle;
     const L = [['⚓', 'PORT'], ['☀', 'SOLEIL'], ['★', 'ÉTOILE'], ['♣', 'TRÈFLE'], ['♥', 'CŒUR'], ['✈', 'AÉROPORT']];
     this.openNote('Gare routière · derniers départs', L.map(([s, n], i) => `<span style="font-size:22px">${s}</span> ligne ${n} · <b>quai ${Z.quais[i]}</b>`).join('<br>'), `Gare routière : ${L.map(([s], i) => `${s}=${Z.quais[i]}`).join(' ')}`);
-  },
-  openGateKeypad() {
-    const Z = this.island4.puzzle;
-    this.openModalCommon();
-    this.ui.keypad(`Barrage · ${Z.syms.join('  ')}`, 4, (code) => {
-      if (code !== Z.code) { this.audio.error(); this.ui.toast('Code refusé', 'Les agents recopiaient les quais des lignes de bus affichées ici.', 'bad', 2600); return false; }
-      this.act('flag', { gate4: true });
-      this.audio.success();
-      setTimeout(() => this.closeModal(), 400);
-      return true;
-    }, () => this.input.lock());
-    this.addNote(`Barrage sanitaire : code = quais des lignes ${Z.syms.join(' ')} (panneau de la gare routière)`);
   },
   openSynth(k) {
     const done = () => { this.act('synth', { k }); this.closeModal(); };
@@ -800,29 +826,30 @@ export const Chapter4Mixin = {
   },
 
   // ── admin : directement posé à Hélios ──
+  // (aussi depuis le chapitre 4 : on revient au début du chapitre, Boeing posé, caisse en soute)
   adminChapter4() {
     if (this.chapter() === 1) this.debugRepairAll();
     ['hello', 'watch', 'repaired', 'takeoff', 'discovered', 'c3start', 'c3fire', 'c3land', 'c3out', 'c4air'].forEach((k) => this.said.add(k));
     this.act('flag', { tookOff: true, discovered: true, landed2: true, power: true, refueled: true, tookOff2: true, fire3: true, landed3: true, fireOut: true, baysOpen: true, boeingBattery: true, boeingFuel: true, boeingOut: true, wheels: true });
-    this.planeLive = true; this.planeLift = 1;
-    if (this.mode === 'flight') { this.mode = 'explore'; this.ui.el.hud.dataset.mode = 'explore'; }
-    this.act('pilot', { on: false });
+    // Boeing en vol (piloté par n'importe qui) : il se pose d'autorité
+    if (this.c3.fly) { this.c3.fly = 0; this.audio.setEngine(0, 0); }
+    this.adminStopCoucou();
     this.parkAt(3);
     if (this.crateLoaded) { this.crateLoaded = false; this.plane.crateAboard.visible = false; }
-    const it = this.items.crate; it.state = 'installed'; it.carrier = null; it.mesh.visible = false; if (this.carrying === it) this.carrying = null;
+    const it = this.items.crate;
+    if (this.carrying === it) this.dropCarried();
+    for (const v of Object.values(this.vehicles)) if (v.cargo === 'crate') v.cargo = null;
+    it.state = 'installed'; it.carrier = null; it.onVehicle = null; it.mesh.visible = false;
+    // progression du chapitre 4 remise à zéro (utile si l'on y était déjà)
+    this.c4 = this.defaultC4();
+    this.act('flag', { slide: false, crateOut: false, bridge4: false, gate4: false, crateAtLab: false, decon4: false, labCrate: false, synthA: false, synthB: false, synthC: false, cured: false, ended: false });
     this.act('flag', { boeingCrate: true, bAir: true, landed4: true });
     const I = this.island4;
-    this.c3.fly = 0;
     this.c3.bp = { x: I.cx - 120, z: I.cz + I4.runway.z, yaw: -Math.PI / 2, y: FLAT4 };
     this.poseBoeing();
-    this.bseat = null; this.aboard = false; this.seat = null; this.lying = false;
     // dans la cabine, comme après un vrai atterrissage : le toboggan se déclenche de l'intérieur
     // (le camion-escalier est resté à Port-Cendre, on ne pourrait pas monter depuis la piste)
-    const k = this.mpIndex();
-    const inCab = this.boeingLocal(new THREE.Vector3(0, FLOOR_B, 14 + k * 1.1));
-    this.player.place(inCab.x, inCab.z, this.c3.bp.yaw);
-    this.player.pos.y = (this.c3.bp.y ?? FLAT4) + FLOOR_B;
-    this.player.pitch = 0; this.player.velY = 0; this.player.onGround = true;
+    this.warpToBoeing(14);
     this.dirtyWorld = true;
     this.save();
     this.ui.toast('Admin · chapitre 4', 'Hélios : le Boeing est posé, la caisse est en soute.', 'good', 3500);

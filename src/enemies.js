@@ -243,7 +243,7 @@ export function createEnemies(scene, colliders, hooks) {
       siege: !!opts.siege, target: new THREE.Vector3(x, 0, z), attackT: 0, moving: false,
       indoor: !!opts.indoor, dormant: !!opts.indoor, dayz: !!opts.dayz,
     };
-    if (opts.indoor) e.appear = 1;
+    if (opts.indoor || opts.street) e.appear = 1;   // dormants et errants des rues : déjà là, ils ne sortent pas de terre
     list.push(e);
     return e;
   }
@@ -253,6 +253,8 @@ export function createEnemies(scene, colliders, hooks) {
     return null;
   }
   const grid = makeColGrid(colliders), near = [];
+  // point pris dans un bâtiment, un mur, un arbre… (on n'y fait pas apparaître de zombie)
+  const spotFree = (x, z, r = 0.9) => !grid.query(x, z, r + 0.5, []).some((c) => !c.disabled && (c.type === 'circle' ? Math.hypot(x - c.x, z - c.z) < c.r + r : x > c.minX - r && x < c.maxX + r && z > c.minZ - r && z < c.maxZ + r));
   function collide(e) {
     const r = e.T.radius;
     near.length = 0;
@@ -534,13 +536,15 @@ export function createEnemies(scene, colliders, hooks) {
           const a = Math.random() * Math.PI * 2, d = dMin + Math.random() * (dMax - dMin);
           const x = P.x + Math.cos(a) * d, z = P.z + Math.sin(a) * d;
           if (heightAt(x, z) < 0.2 || inLight(x, z, ctx.lights, 4) || cleared(x, z)) continue;
+          if (opts?.zone && !opts.zone(x, z)) continue;
+          if (opts?.street && !spotFree(x, z)) continue;
           const n = Math.min(room, 1 + (Math.random() < extra ? 1 + Math.floor(Math.random() * 3) : 0));
           const lvl = (ctx.day ?? 1) + (ctx.chapter ?? 1) - 2;
           const mega = lvl >= 1 && (ctx.depth ?? 0) > 0.5 && !list.some((q) => q.type === 'mega' && !q.dead) && Math.random() < C.megaNight * (1 + lvl * 0.5);
           for (let k = 0; k < n; k++) {
             const ox = (Math.random() - 0.5) * 3, oz = (Math.random() - 0.5) * 3;
-            if (heightAt(x + ox, z + oz) < 0.2) continue;
-            add(mega && k === 0 ? 'mega' : pickZombie(ctx), x + ox, z + oz, opts);
+            if (heightAt(x + ox, z + oz) < 0.2 || (opts?.street && !spotFree(x + ox, z + oz))) continue;
+            add(mega && k === 0 ? 'mega' : pickZombie(ctx), x + ox, z + oz, opts && { dayz: opts.dayz, street: opts.street });
           }
           hooks.onSpawn?.('voile');
           return;
@@ -563,7 +567,8 @@ export function createEnemies(scene, colliders, hooks) {
         const count = roaming(true) + reserved(true);
         if (spawnT <= 0 && count < ctx.dayCap) {
           spawnT = (5 + Math.random() * 4) / Math.max(1, active.length * 0.7);
-          spawnGroup(ctx.dayCap - count, 0.4, 24, 40, { dayz: true });
+          // dans les rues d'Hélios, les errants sont déjà là (hors de vue) au lieu de sortir de terre
+          spawnGroup(ctx.dayCap - count, 0.4, ctx.dayZone ? 30 : 24, ctx.dayZone ? 55 : 40, { dayz: true, street: !!ctx.dayZone, zone: ctx.dayZone });
         }
       }
 

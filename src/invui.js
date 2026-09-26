@@ -2,9 +2,12 @@
 // Glisser-déposer (R pour tourner l'objet pendant le glisser), double-clic : action rapide, clic droit : menu.
 // Raccourcis : Maj + clic transfert rapide, Ctrl + clic (ou Suppr au survol) jeter, 1 à 6 au survol : équiper.
 import { GEAR, WEAR_PARTS, WEAR_NAMES, EQ_SLOTS, EQ_NAMES, ICONS, slotType, fitsAt, dims, RARITY_OF, RARITY } from './gear.js';
+import { itemArt, warmItemArt } from './itemart.js';
 
 const $ = (id) => document.getElementById(id);
 const svg = (d) => `<svg viewBox="0 0 32 32"><path d="${d}"/></svg>`;
+// vignette 3D de l'objet (repli sur le pictogramme si le rendu échoue)
+const art = (k, r = 0) => { const u = itemArt(k, r); return u ? `<img class="iart" src="${u}" alt="" draggable="false">` : svg(GEAR[k].icon); };
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 // taille d'une case : suit la fenêtre (≈ 20 cases de large, 11 de haut), bornée
 let CELL = 52;
@@ -49,7 +52,7 @@ export function createInvUi(A) {
     const extra = A.info(it);
     const small = w * h === 1 ? ' s1' : '';
     const badge = (it.n || 1) > 1 ? `<i class="n">×${it.n}</i>` : extra ? `<i>${esc(extra)}</i>` : '';
-    return `<div class="iitem cat-${d.cat} r-${RARITY_OF(it.k)}${it.r && !box ? ' rot' : ''}${small}" data-u="${it.u}" data-c="${c}" style="${pos}width:${w * CELL - 4}px;height:${h * CELL - 4}px">${svg(d.icon)}<b>${esc(d.short || d.name)}</b>${badge}</div>`;
+    return `<div class="iitem cat-${d.cat} r-${RARITY_OF(it.k)}${it.r && !box ? ' rot' : ''}${small}" data-u="${it.u}" data-c="${c}" style="${pos}width:${w * CELL - 4}px;height:${h * CELL - 4}px">${art(it.k, box ? 0 : it.r)}<b>${esc(d.short || d.name)}</b>${badge}</div>`;
   };
   const gridHtml = (g, cls = '') => `<div class="igrid ${cls}" data-c="${g.id}" data-w="${g.w}" data-h="${g.h}" style="width:${g.w * CELL}px;height:${g.h * CELL}px">${g.items.map((it) => itemHtml(it, g.id)).join('')}</div>`;
   const slotHtml = (id, label, it, box, icon) => `<div class="islot${state.sel === id.slice(2) ? ' sel' : ''}${it ? ' full' : ''}" data-c="${id}" style="width:${box[0] * CELL}px;height:${box[1] * CELL}px"><span>${label}</span>${it ? itemHtml(it, id, box) : svg(icon)}</div>`;
@@ -99,7 +102,7 @@ export function createInvUi(A) {
     const shared = c === 'ground' || c === 'plane' || c.startsWith('loot:');
     const keys = shared ? '<kbd>Maj</kbd>+clic prendre' : `<kbd>Maj</kbd>+clic ${c.startsWith('s:') || c.startsWith('c:') ? 'ranger' : 'transférer'} · <kbd>Ctrl</kbd>+clic jeter`;
     tip.className = `r-${rar}`;
-    tip.innerHTML = `<header>${svg(d.icon)}<div><b>${esc(d.name)}</b><em>${RARITY[rar]} · ${d.w}×${d.h}${(it.n || 1) > 1 ? ` · ×${it.n}` : ''}</em></div></header>${d.desc ? `<p>${esc(d.desc)}</p>` : ''}${lines.length ? `<small>${lines.map(esc).join(' · ')}</small>` : ''}<footer>${keys}</footer>`;
+    tip.innerHTML = `<header>${art(it.k)}<div><b>${esc(d.name)}</b><em>${RARITY[rar]} · ${d.w}×${d.h}${(it.n || 1) > 1 ? ` · ×${it.n}` : ''}</em></div></header>${d.desc ? `<p>${esc(d.desc)}</p>` : ''}${lines.length ? `<small>${lines.map(esc).join(' · ')}</small>` : ''}<footer>${keys}</footer>`;
     moveTip(e);
   }
   function moveTip(e) {
@@ -185,6 +188,7 @@ export function createInvUi(A) {
     const w = drag.r ? d.h : d.w, h = drag.r ? d.w : d.h;
     ghost.style.width = `${w * CELL - 4}px`; ghost.style.height = `${h * CELL - 4}px`;
     ghost.classList.toggle('rot', !!drag.r);
+    const img = ghost.querySelector('img.iart'); if (img) img.src = itemArt(drag.it.k, drag.r);
     if (drag.gx >= w) drag.gx = w - 0.5;
     if (drag.gy >= h) drag.gy = h - 0.5;
   }
@@ -283,6 +287,7 @@ export function createInvUi(A) {
   addEventListener('resize', () => { const c = CELL; if (fitCell() !== c && open && !drag) render(); });
 
   let lastBar = '';
+  warmItemArt();
   return {
     open() { open = true; fitCell(); root.classList.remove('hidden'); render(); },
     close() { open = false; drag = null; hover = null; closeCtx(); tip.classList.add('hidden'); ghost.classList.add('hidden'); root.classList.remove('dragging'); root.classList.add('hidden'); },
@@ -296,7 +301,7 @@ export function createInvUi(A) {
         const it = eq[s];
         const d = it && GEAR[it.k];
         const lbl = it ? (d.short || d.name.split(' ')[0]) : EQ_NAMES[s].replace('Équip. ', '');
-        return `<div class="slot${sel === s ? ' sel' : ''}${it ? '' : ' empty'} t-${slotType(s)}" data-s="${s}"><i>${i + 1}</i>${it ? svg(d.icon) : ''}<span>${esc(lbl)}</span><u>${it ? esc(info(it) || ((it.n || 1) > 1 ? `×${it.n}` : '')) : ''}</u>${it?.k === 'lantern' ? '<em><b></b></em>' : ''}</div>`;
+        return `<div class="slot${sel === s ? ' sel' : ''}${it ? '' : ' empty'} t-${slotType(s)}" data-s="${s}"><i>${i + 1}</i>${it ? art(it.k) : ''}<span>${esc(lbl)}</span><u>${it ? esc(info(it) || ((it.n || 1) > 1 ? `×${it.n}` : '')) : ''}</u>${it?.k === 'lantern' ? '<em><b></b></em>' : ''}</div>`;
       }).join('');
       if (key + html !== lastBar) { lastBar = key + html; bar.innerHTML = html; }
       const oil = bar.querySelector('em b'); if (oil) oil.style.width = `${info('oil')}%`;

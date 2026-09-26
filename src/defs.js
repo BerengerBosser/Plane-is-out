@@ -35,11 +35,10 @@ export const SAVE_KEY = 'plane-is-out-save-v4';   // (le format interne est vers
 export const SETTINGS_KEY = 'plane-is-out-settings';
 export const PROFILE_KEY = 'plane-is-out-profile';
 export const FUSE_SLOTS = [{ key: 'sun', icon: '☀', label: 'Éclairage' }, { key: 'anchor', icon: '⚓', label: 'Ponton' }, { key: 'plane', icon: '✈', label: 'Balisage' }];
-export const FUSE_SOLUTION = { sun: 'red', anchor: 'blue', plane: 'yellow' };
+export const FUSE_SOLUTION = { sun: 'red', anchor: 'blue', plane: 'yellow' };   // repli : l'ordre réel est tiré au sort (secrets.js)
 export const FUSE_NAMES = { red: 'rouge', blue: 'bleu', yellow: 'jaune' };
 export const TOOL_NAMES = { diable: 'le diable de secours', wrench: 'la clé à molette', lantern: 'la lanterne du gardien' };
-export const SYMBOLS = ['⚓', '☀', '★', '♣', '♥', '✈'];
-export const SYMBOL_CODE = ['⚓', '★', '♥'];
+// (symboles des énigmes : secrets.js, tirés au sort à chaque partie)
 export const COLORS = ['#ffd166', '#ff6b5b', '#5ef2c2', '#b8a4ff', '#6fb7ff', '#ff8fab'];
 export const ITEM_STATES = ['hidden', 'ground', 'carried', 'installed', 'loaded', 'flying', 'placed'];
 

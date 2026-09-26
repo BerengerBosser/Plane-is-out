@@ -6,8 +6,11 @@ import { rng, fbm } from './noise.js';
 
 const R = 185;
 
+// horloge du vent, partagée avec la végétation des autres îles (greenery.js)
+export const WIND = { value: 0 };
+
 // Matériau végétal : ondulation au vent dans le vertex shader
-function swayMaterial(uTime, amount = 0.12) {
+export function swayMaterial(uTime, amount = 0.12) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uTime = uTime;
@@ -53,14 +56,14 @@ function instance(scene, geo, mat, list, { shadow = false, squash = 1, yOff = 0 
 }
 
 export function buildDecor(scene, island) {
-  const uTime = { value: 0 };
+  const uTime = WIND;
   const colliders = island.colliders;
   const clear = island.isClear;
 
   // touffe d'herbe : trois brins
   const blade = (h, col, a) => prep(new THREE.ConeGeometry(0.06, h, 3).translate(0, h / 2, 0).rotateZ(a), col);
   const tuft = mergeGeometries([blade(0.55, '#6fa257', 0.2), blade(0.45, '#7db462', -0.25).rotateY(1.2), blade(0.5, '#679a50', 0.1).rotateY(2.3)]);
-  const grass = scatter(4200, 30000, 11, (x, z, h, r) => {
+  const grass = scatter(6200, 42000, 11, (x, z, h, r) => {
     if (h < 1.9 || h > 30 || slopeAt(x, z).s > 0.65 || pathDist(x, z) < 1.8) return null;
     if (fbm(x * 0.04 + 5, z * 0.04) < 0.38) return null;
     return { s: 0.7 + r() * 0.8, tint: 0.85 + r() * 0.3 };
@@ -79,7 +82,7 @@ export function buildDecor(scene, island) {
     prep(new THREE.IcosahedronGeometry(0.08, 0).translate(0, 0.38, 0), '#ffffff'),
   ]);
   const petals = ['#f4f0e6', '#f5d04b', '#e88fb0', '#b69ae6', '#f08a5d'];
-  const flowers = scatter(900, 20000, 31, (x, z, h, r) => {
+  const flowers = scatter(1400, 30000, 31, (x, z, h, r) => {
     if (h < 2.2 || slopeAt(x, z).s > 0.5 || pathDist(x, z) < 1.5) return null;
     if (fbm(x * 0.06 - 3, z * 0.06 + 8) < 0.55) return null;
     return { s: 0.8 + r() * 0.6 };
@@ -95,7 +98,7 @@ export function buildDecor(scene, island) {
     prep(new THREE.IcosahedronGeometry(0.6, 0).translate(0.55, 0.4, 0.2), '#6a9c56'),
     prep(new THREE.IcosahedronGeometry(0.55, 0).translate(-0.5, 0.35, -0.15), '#557f45'),
   ]);
-  const bushes = scatter(220, 12000, 47, (x, z, h, r) => (h > 2 && h < 28 && slopeAt(x, z).s < 0.6 && clear(x, z) && pathDist(x, z) > 2.5 ? { s: 0.7 + r() * 0.8, tint: 0.85 + r() * 0.3 } : null));
+  const bushes = scatter(420, 20000, 47, (x, z, h, r) => (h > 2 && h < 28 && slopeAt(x, z).s < 0.6 && clear(x, z) && pathDist(x, z) > 2.5 ? { s: 0.7 + r() * 0.8, tint: 0.85 + r() * 0.3 } : null));
   instance(scene, bushGeo, flatMat, bushes, { shadow: true, squash: 0.8 });
 
   // bois flotté sur le sable

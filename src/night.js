@@ -37,8 +37,8 @@ export const NightMixin = {
   updateNightEvents() {
     const h = ((this.hour % 24) + 24) % 24;
     const f = this.flags;
-    // tempête de Saint-Escale : la foudre grille le verrou jusqu'à 21 h (mission de défense)
-    if (f.storm && !f.stormOver && h >= 18.9 && h < 21 && !f.jamStorm) {
+    // tempête de Saint-Escale : la foudre grille le verrou pendant le siège de la centrale (mission de défense)
+    if (f.storm && !f.stormOver && this.siege.active && !f.jamStorm) {
       this.act('flag', { doorJam: true, jamStorm: true });
       this.fx('doorJam', { storm: 1 });
     }
@@ -66,7 +66,7 @@ export const NightMixin = {
   // réparation du verrou (maintenir E à la porte, clé à molette)
   lockSpec() {
     const f = this.flags;
-    if (f.jamStorm) return { prompt: '<span class="warn">Verrou grillé · jusqu\'à 21 h</span>' };
+    if (f.jamStorm) return { prompt: '<span class="warn">Verrou grillé · jusqu\'à l\'accalmie</span>' };
     if (!this.hasItem('wrench')) return { prompt: '<span class="warn">Porte bloquée · clé à molette</span>' };
     const pct = Math.round((this.lockProg || 0) / LOCK_REPAIR_SECONDS * 100);
     return {
@@ -91,8 +91,8 @@ export const NightMixin = {
       this.audio.error(); this.audio.clank();
       if (data.storm) {
         if (this.aboard && !this.flight.airborne) { this.seat = null; this.lying = false; this.leavePlane(true); }
-        this.ui.toast('Verrou grillé par la foudre', 'Pas d\'abri avant 21 h.', 'bad', 5000);
-        this.radioOnce('jamstorm', 'La foudre est tombée sur l\'avion ! Le verrou de la porte cargo est grillé : pas d\'abri cette nuit. Défendez la centrale, ses projecteurs vous protègent.');
+        this.ui.toast('Verrou grillé par la foudre', 'Pas d\'abri avant l\'accalmie.', 'bad', 5000);
+        this.radioOnce('jamstorm', 'La foudre est tombée sur l\'avion ! Le verrou de la porte cargo est grillé : pas d\'abri tant que la tempête dure. Défendez la centrale, ses projecteurs vous protègent.');
       } else {
         this.ui.toast('Verrou grippé', 'Dégrippez-le à la clé (E).', 'bad', 5000);
         this.radioOnce(`jam${this.stats.days}`, 'Ce vieux verrou… Il s\'est grippé avec l\'humidité. Dégrippez-le à la clé avant la nuit, ou préparez-vous à vous battre jusqu\'à l\'aube.');

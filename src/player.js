@@ -93,7 +93,7 @@ export class Player {
   height() { return 1.75 - 0.75 * this.crouch; }
   place(x, z, yaw = 0) {
     this.pos.set(x, heightAt(x, z), z);
-    this.yaw = yaw; this.pitch = 0; this.velY = 0;
+    this.yaw = yaw; this.pitch = 0; this.velY = 0; this.stepOff = 0;
   }
   forward() { return new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
 
@@ -155,23 +155,35 @@ export class Player {
     } else this.onLadder = false;
     if (this.offLadder) this.offLadder = Math.max(0, this.offLadder - dt) || false;
 
-    // zones interdites (eau profonde, murs de la cabine) : on bloque chaque axe séparément
-    const nx = this.pos.x + wish.x;
-    if (env.canGo(nx, this.pos.z, this.pos.y)) this.pos.x = nx;
-    const nz = this.pos.z + wish.z;
-    if (env.canGo(this.pos.x, nz, this.pos.y)) this.pos.z = nz;
-
-    this.resolve(colliders);
+    // zones interdites (eau profonde, murs de la cabine) : on bloque chaque axe séparément ;
+    // pas de 30 cm au plus, pour ne pas traverser un mur fin quand on va très vite (vitesse admin)
+    const steps = Math.max(1, Math.ceil(Math.hypot(wish.x, wish.z) / 0.3));
+    for (let i = 0; i < steps; i++) {
+      const nx = this.pos.x + wish.x / steps;
+      if (env.canGo(nx, this.pos.z, this.pos.y)) this.pos.x = nx;
+      const nz = this.pos.z + wish.z / steps;
+      if (env.canGo(this.pos.x, nz, this.pos.y)) this.pos.z = nz;
+      this.resolve(colliders);
+    }
 
     // vertical
     const ground = env.height(this.pos.x, this.pos.z, this.pos.y);
     if (this.onGround && input.hit('Space') && mods.canJump && this.crouch < 0.5) { this.velY = P.jumpSpeed * (env.frame ? 0.6 : 1); this.onGround = false; }
     this.velY -= P.gravity * dt;
     this.pos.y += this.velY * dt;
-    if (this.pos.y <= ground || (this.onGround && this.pos.y - ground < 0.45 && this.velY <= 0)) {
+    let snap = 0;
+    if (this.velY > 0 && this.pos.y <= ground && ground - this.pos.y < 0.8) {
+      // saut en montant un escalier : la marche suivante soulève les pieds sans casser l'élan
+      snap = ground - this.pos.y; this.pos.y = ground; this.onGround = false;
+    } else if (this.pos.y <= ground || (this.onGround && this.pos.y - ground < 0.45 && this.velY <= 0)) {
       if (!this.onGround && this.velY < 0) this.landSpeed = -this.velY;   // vitesse d'impact (dégâts de chute)
+      snap = ground - this.pos.y;
       this.pos.y = ground; this.velY = 0; this.onGround = true;
     } else this.onGround = false;
+    // marches : la caméra rattrape le changement de hauteur en douceur au lieu d'être téléportée d'une marche à l'autre
+    if (snap && Math.abs(snap) < 0.8) this.stepOff = Math.max(-0.6, Math.min(0.6, (this.stepOff || 0) - snap));
+    this.stepOff = (this.stepOff || 0) * Math.exp(-dt * 13);
+    if (Math.abs(this.stepOff) < 0.002) this.stepOff = 0;
 
     const moving = wish.lengthSq() > 0 && this.onGround;
     this.bob += moving ? dt * (sprint ? 11 : 7.5) : 0;
@@ -186,8 +198,8 @@ export class Player {
     const eye = eyeOverride ?? (P.eyeHeight - 0.72 * this.crouch);
     this.shake = Math.max(0, this.shake - dt * 2.5);
     const sh = this.shake * this.shake * 0.12;
-    const local = new THREE.Vector3(this.pos.x + (Math.random() - 0.5) * sh, this.pos.y + eye + bobY + (Math.random() - 0.5) * sh, this.pos.z);
-    const rot = new THREE.Euler(this.pitch, this.yaw, (Math.random() - 0.5) * sh * 0.5 + Math.sin(this.bob * 0.5) * (moving ? 0.004 : 0), 'YXZ');
+    const local = new THREE.Vector3(this.pos.x + (Math.random() - 0.5) * sh, this.pos.y + (this.stepOff || 0) + eye + bobY + (Math.random() - 0.5) * sh, this.pos.z);
+    const rot = new THREE.Euler(this.pitch, this.yaw, (this.roll || 0) + (Math.random() - 0.5) * sh * 0.5 + Math.sin(this.bob * 0.5) * (moving ? 0.004 : 0), 'YXZ');
     if (frame) {
       frame.updateMatrixWorld(true);
       this.camera.position.copy(frame.localToWorld(local));

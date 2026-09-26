@@ -24,6 +24,7 @@ export const MPMixin = {
     this.chatting = false;
     this.voice = createVoice(this.audio);
     this.voice.onChunk = (b64) => this.session?.send('vx', { a: b64, r: this.slot === 7 ? 1 : 0 });   // la radio n'émet que talkie en main
+    this.voicePanelsInit();
     const $ = (id) => document.getElementById(id);
     const prof = store(PROFILE_KEY) || {};
     this.profile = { name: prof.name || `Pilote ${Math.floor(Math.random() * 90 + 10)}`, color: prof.color || COLORS[Math.floor(Math.random() * COLORS.length)], server: prof.server || '', char: prof.char ?? Math.floor(Math.random() * 4) };
@@ -162,23 +163,14 @@ export const MPMixin = {
     $('mpSetup').hidden = true; $('mpLobby').hidden = false;
     $('mpCodeShow').textContent = code;
     this.refreshLobby();
+    if (this.voice.cfg.on && this.voice.state === 'off') this.voice.start();
     if (!s.isHost) setTimeout(() => { if (this.session === s && !this.inGame()) s.send('hello', {}); }, 600);
   },
   refreshLobby() {
     const $ = (id) => document.getElementById(id);
     const s = this.session;
     if (!s) return;
-    const L = [{ name: `${this.profile.name} (vous)`, color: this.profile.color, host: s.isHost }];
-    for (const [id, p] of s.players) L.push({ name: p.name, color: p.color, host: id === s.hostId });
-    const ul = $('mpPlayers');
-    ul.innerHTML = '';
-    for (const p of L) {
-      const li = document.createElement('li');
-      const i = document.createElement('i'); i.style.background = p.color;
-      li.append(i, document.createTextNode(p.name));
-      if (p.host) { const em = document.createElement('em'); em.textContent = 'hôte'; li.append(' ', em); }
-      ul.appendChild(li);
-    }
+    // (la liste de l'équipage, avec voix et volumes, est tenue par le panneau voix du salon)
     // partie déjà lancée (solo ouvert aux amis) : pas de bouton « Lancer », on retourne au jeu
     const playing = this.inGame();
     $('mpStart').hidden = !s.isHost || playing;
@@ -202,7 +194,8 @@ export const MPMixin = {
     for (const m of this.mates.values()) { this.scene.remove(m.av.root); if (m.diable) this.scene.remove(m.diable); }
     this.mates.clear();
     this._mateList = [];
-    this.voice.setTalking(false);
+    this.voice.update(0, false, false);
+    this.voice.monitor = false;
     this.ui.crew([]);
     this.ui.show('crew', false);
   },
@@ -243,6 +236,8 @@ export const MPMixin = {
     });
     s.on('_host', (h) => {
       this.refreshLobby();
+      if (this.ui.visible('adminSheet') && !this.canAdmin()) { this.ui.show('adminSheet', false); this.ui.show('pause', true); }
+      this.refreshPauseAdmin?.();
       if (h === s.me && this.inGame()) { this.ui.toast('Vous êtes l\'hôte', 'L\'hôte précédent est parti : la partie continue chez vous.', ''); this.dirtyWorld = true; }
     });
     s.on('hello', (d, from) => { if (s.isHost && (this.inGame() || this.mode === 'intro')) { s.send('start', { seed: this.seed, late: 1 }, from); setTimeout(() => { this.sendWorld(from); this.sendCrewInv(from, s.players.get(from)?.name); }, 300); } });
@@ -320,6 +315,7 @@ export const MPMixin = {
       bf: this.bPresence?.() || 0,
       jt: this.jetPresence?.() || 0,
       ab: this.aboard ? 1 : 0,
+      zg: this.zgState?.() || 0,
       y: +p.yaw.toFixed(2),
       st: this.seat?.id || (this.mode === 'flight' ? 'pilot' : this.driving ? 'veh' : 0),
       ly: this.lying ? 1 : 0,
@@ -342,12 +338,13 @@ export const MPMixin = {
       pu: this.pushingT > 0 ? 1 : 0,
       rd: this.riding ? this.riding.id : 0,
       tl: this.slot === 7 && this.voice?.talking ? 1 : 0,
+      vo: this.voice?.talking ? Math.min(9, 1 + Math.round(this.voice.level * 20)) : 0,   // on parle (bouche des avatars, même hors de portée de voix)
     };
     if (s.isHost) {
       st.h = +this.hour.toFixed(4);
       st.wx = WX_KINDS.indexOf(this.weather.kind);
       st.en = this.enemies.snapshot();
-      st.sg = [this.siege.active ? 1 : 0, Math.round(this.siege.genHp), this.siege.wave];
+      st.sg = [this.siege.active ? 1 : 0, Math.round(this.siege.genHp), this.siege.wave, this.siege.left == null ? -1 : +this.siege.left.toFixed(3)];
     }
     if (this.ownsPlane() && this.planeLive) {
       const f = this.flight;
@@ -429,7 +426,11 @@ export const MPMixin = {
       if (st.jt) this.applyJetPresence?.(st.jt, id);
       m.av.root.position.copy(m.pos);
       if (mode === 'flight') { const sp = this.plane.root.localToWorld(new THREE.Vector3(-0.62, FLOOR, -3.45)); m.av.root.position.copy(sp); m.seat = 'pilot'; }
-      m.av.root.rotation.set(0, m.yaw, 0);
+      // à bord du Coucou : le coéquipier suit l'assiette de l'avion (sinon il traverse la carlingue dans les virages)
+      if (m.aboard || mode === 'flight') {
+        this.plane.root.getWorldQuaternion(m.av.root.quaternion);
+        if (mode !== 'flight') m.av.root.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), st.y));
+      } else m.av.root.rotation.set(0, m.yaw, 0);
       // assis dans le Boeing : sur son siège, dans le repère de l'avion
       m.bseat = st.bs >= 0 && this.boeing ? st.bs : null;
       if (m.bseat !== null && BSEATS[m.bseat]) {
@@ -454,7 +455,7 @@ export const MPMixin = {
         const sp = this.vehicleWorld(v, new THREE.Vector3(...v.def.pass)); m.av.root.position.copy(sp).setY(sp.y - 0.36); m.av.root.rotation.set(0, st.y, 0); m.seat = 'pass';
       }
       m.av.near(m.pos.distanceTo(this.camera.position));
-      m.av.animate(dt, { moving: st.mv > 0, sprint: st.mv === 2, seat: !!m.seat, lying: !!st.ly, down: m.downed, carry: !!m.carry, slot: st.sl, attack: st.at, crouch: !!st.cr, push: !!st.pu, talk: !!st.tl, armed: m.seat === 'pass', hideHeld: m.aboard && st.sl !== 7 });
+      m.av.animate(dt, { float: st.zg === 1, rag: st.zg === 2, moving: st.mv > 0 && !st.zg, sprint: st.mv === 2, seat: !!m.seat, lying: !!st.ly, down: m.downed, carry: !!m.carry, slot: st.sl, attack: st.at, crouch: !!st.cr, push: !!st.pu, talk: !!st.tl, armed: m.seat === 'pass', hideHeld: m.aboard && st.sl !== 7, mouth: Math.max(this.voice.peerLevel(id), (st.vo || 0) / 45) });
       // parachute ouvert du coéquipier
       if (st.pc && !m.chute) { const c = new THREE.Mesh(new THREE.SphereGeometry(2.6, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2.6), new THREE.MeshLambertMaterial({ color: m.color || '#ff6b5b', side: THREE.DoubleSide, flatShading: true })); c.scale.set(1, 0.45, 1); c.position.y = 4.2; m.av.root.add(c); m.chute = c; }
       if (m.chute) { m.chute.visible = !!st.pc; if (m.chute.parent !== m.av.root) m.av.root.add(m.chute); }
@@ -481,21 +482,11 @@ export const MPMixin = {
       if (hs.h !== undefined) this.hour = hs.h;
       if (hs.wx !== undefined) this.hostWx = hs.wx;
       if (hs.en && hs.en !== this._lastEn) { this._lastEn = hs.en; this.enemies.applySnapshot(hs.en); }
-      if (hs.sg) { this.siege.active = !!hs.sg[0]; this.siege.genHp = hs.sg[1]; this.siege.wave = hs.sg[2]; }
+      if (hs.sg) { this.siege.active = !!hs.sg[0]; this.siege.genHp = hs.sg[1]; this.siege.wave = hs.sg[2]; this.siege.left = hs.sg[3] >= 0 ? hs.sg[3] : undefined; }
     }
-    // avion simulé par un autre joueur
-    if (!this.ownsPlane()) {
-      const own = this.pilotId && s.players.has(this.pilotId) ? this.pilotId : s.hostId;
-      const pl = s.players.get(own)?.s?.pl;
-      if (pl) this.applyPlane(pl, dt);
-    }
-    // Boeing piloté par un coéquipier
-    this.updateBoeingMirror?.(dt);
     // voix : oreille = caméra
     this.voice.listener(this.camera);
-    const talk = this.inGame() && !this.chatting && this.input.down('KeyB');
-    if (talk && this.voice.state === 'off') this.voice.start().then((st) => { if (st === 'denied') this.ui.toast('Micro indisponible', 'Autorisez le micro dans le navigateur, ou utilisez le chat texte (Entrée).', 'bad', 5000); });
-    this.voice.setTalking(talk);
+    this.voiceTick(dt);
     // équipage (HUD)
     if (this.inGame()) {
       const me = this.playerWorld();
@@ -536,15 +527,41 @@ export const MPMixin = {
     return Math.max(0, ids.indexOf(this.session.me));
   },
 
+  // avions simulés par un autre joueur : appliqués AVANT la caméra et les déplacements de l'image
+  // (sinon la vue des passagers a une image de retard : à 200 km/h, un mètre de décalage qui tremble)
+  mpPreUpdate(dt) {
+    const s = this.session;
+    if (!s) return;
+    if (!this.ownsPlane()) {
+      const own = this.pilotId && s.players.has(this.pilotId) ? this.pilotId : s.hostId;
+      const pl = s.players.get(own)?.s?.pl;
+      if (pl) this.applyPlane(pl, dt);
+    }
+    this.updateBoeingMirror?.(dt);
+  },
+  // suit un avion simulé ailleurs : on extrapole le dernier paquet (vitesse × âge) et on rattrape en douceur,
+  // sans à-coups entre deux paquets (~15 par seconde)
+  mirrorFlight(f, a, dt, snap, air = true) {
+    const [x, y, z, yaw, pitch, roll, speed] = a;
+    const M = f._mir || (f._mir = { a: null, t: 0 });
+    const now = performance.now();
+    if (M.a !== a) { M.a = a; M.t = now; }
+    const age = Math.min(0.35, (now - M.t) / 1000);
+    const tgt = new THREE.Vector3(x, y, z).addScaledVector(f.forward(yaw, air ? pitch : 0), speed * age);
+    const pred = f.pos.clone().addScaledVector(f.forward(f.yaw, air ? f.pitch : 0), f.speed * dt);
+    if (pred.distanceTo(tgt) > snap) f.pos.copy(tgt);
+    else f.pos.copy(pred.lerp(tgt, 1 - Math.exp(-dt * 6)));
+    const k = 1 - Math.exp(-dt * 14);
+    const ang = (q, t) => q + Math.atan2(Math.sin(t - q), Math.cos(t - q)) * k;
+    f.yaw = ang(f.yaw, yaw); f.pitch = ang(f.pitch, pitch); f.roll = ang(f.roll, roll);
+    f.speed = speed;
+  },
   applyPlane(pl, dt) {
     const f = this.flight;
-    const [x, y, z, yaw, pitch, roll, speed, thr, surf, fuel, ap] = pl;
-    const k = Math.min(1, dt * 10);
-    if (f.pos.distanceTo(new THREE.Vector3(x, y, z)) > 25) f.pos.set(x, y, z);
-    else f.pos.lerp(new THREE.Vector3(x, y, z), k);
-    const ang = (a, b) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
-    f.yaw = ang(f.yaw, yaw); f.pitch = ang(f.pitch, pitch); f.roll = ang(f.roll, roll);
-    f.speed = speed; f.throttle = thr; f.surface = SURF[surf] || 'water'; f.fuel = fuel; f.autopilot = !!ap;
+    const [, , , , , , , thr, surf, fuel, ap] = pl;
+    f.surface = SURF[surf] || 'water';
+    this.mirrorFlight(f, pl, dt, 25, f.surface === 'air');
+    f.throttle = thr; f.fuel = fuel; f.autopilot = !!ap;
     if (!this.planeLive) { this.planeLive = true; this.planeLift = 1; }
     f.apply();
     this.plane.spinners.forEach((sp) => { sp.rotation.z += dt * (5 + thr * 40); });
@@ -640,16 +657,31 @@ export const MPMixin = {
     }
     return env;
   },
+  // micro : appuyer pour parler (B ou bouton du panneau) ou détection de la voix ; on émet dès qu'on est dans un salon
+  voiceTick(dt) {
+    const ptt = (!this.chatting && this.input.down('KeyB')) || !!this.vpPtt;
+    if (ptt && this.voice.state === 'off' && this.session) {
+      this.voice.start().then((st) => {
+        if (st === 'denied') this.ui.toast('Micro refusé', 'Autorisez le micro dans la barre d\'adresse du navigateur, puis Paramètres → Voix.', 'bad', 5000);
+        else if (st === 'unsupported') this.ui.toast('Micro indisponible', 'Le navigateur ne donne le micro qu\'aux pages en https (ou localhost).', 'bad', 5000);
+      });
+    }
+    this.voice.update(dt, ptt, !!this.session);
+  },
   onVoice(from, d) {
+    const s = this.session;
+    if (!s) return;
+    const g = this.voice.peerGain(s.players.get(from)?.name || '?');
     const m = this.mates.get(from);
-    if (!m || !this.inGame()) return;
+    // au salon (ou coéquipier encore au salon) : voix directe, sans distance
+    if (!this.inGame() || !m || m.mode === 'menu') { this.voice.play(from, d.a, null, 'direct', g); return; }
     const dist = m.pos.distanceTo(this.playerWorld());
     const radio = d.r && this.hasItem('talkie') && dist > 10;
     if (!radio && dist > VOICE_RANGE) return;
     // talkie en main : son radio net ; talkie rangé dans le sac : étouffé
     const mode = radio ? (this.slot === 7 ? 'clear' : 'bag') : null;
     if (radio) this.radioInT = this.t;
-    this.voice.play(from, d.a, m.pos, mode, 1, this.voiceEnv(m.pos, m.aboard));
+    this.voice.play(from, d.a, m.pos, mode, g, this.voiceEnv(m.pos, m.aboard));
   },
 
   // ── repères (V) ──

@@ -71,17 +71,21 @@ export const ArmsMixin = {
       const flat = new THREE.Vector3(dir.x, 0, dir.z).normalize();
       // un coéquipier devant soi ?
       if (this.hitMate(origin, flat, C.range, C.dmg, C.knock)) return;
-      // la masse balaye tout l'arc ; les autres armes frappent l'ennemi le plus proche
-      const targets = C.cleave ? this.probeAll(origin, flat, C.range) : [this.probe(origin, flat, C.range)].filter(Boolean);
+      // armes blanches : le coup balaye tout l'arc (du plus proche au plus lointain) ; les poings frappent le plus proche
+      const targets = C.cleave ? this.probeAll(origin, flat, C.range, C.arc).slice(0, C.hits || 99) : [this.probe(origin, flat, C.range)].filter(Boolean);
       if (!targets.length) return;
-      if (C.cleave) { this.player.shake = Math.max(this.player.shake, 0.5); this.audio.thud?.(); }
-      for (const e of targets) {
-        this.dealDamage(e, C.dmg, flat, C.knock, { stun: C.stun });
+      if (C.heavy || targets.length > 2) { this.player.shake = Math.max(this.player.shake, C.heavy ? 0.5 : 0.3); this.audio.thud?.(); }
+      targets.forEach((e, i) => {
+        // chacun est repoussé dans l'axe du coup qui le touche (le balayage écarte les côtés)
+        const kd = new THREE.Vector3(e.pos.x - origin.x, 0, e.pos.z - origin.z);
+        const dir2 = kd.lengthSq() > 0.01 ? kd.normalize().add(flat).normalize() : flat;
+        this.dealDamage(e, C.dmg * Math.max(0.5, 1 - i * (C.falloff || 0)), dir2, C.knock, { stun: C.stun });
         this.ui.hitmark?.(e.dead || e.hp <= 0);
         const hp = new THREE.Vector3(e.pos.x, e.pos.y + e.T.h * 0.7, e.pos.z);
-        this.gore.blood(hp, flat, !!C.blade || !!C.cleave, !!e.T.goo);
-        this.session?.send('gore', { p: [hp.x, hp.y, hp.z].map((v) => +v.toFixed(2)), d: [flat.x, flat.z].map((v) => +v.toFixed(2)), b: C.blade || C.cleave ? 1 : 0, g: e.T.goo ? 1 : 0 });
-      }
+        const gory = !!C.blade || !!C.heavy;
+        this.gore.blood(hp, dir2, gory, !!e.T.goo);
+        this.session?.send('gore', { p: [hp.x, hp.y, hp.z].map((v) => +v.toFixed(2)), d: [dir2.x, dir2.z].map((v) => +v.toFixed(2)), b: gory ? 1 : 0, g: e.T.goo ? 1 : 0 });
+      });
     }, E.key === 'fists' ? 90 : 150);
   },
   // dégâts à un ennemi : l'hôte applique, l'invité envoie

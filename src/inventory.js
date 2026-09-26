@@ -15,7 +15,7 @@ export function newInventory() {
     eq: { primary: null, secondary: null, u1: null, u2: null, u3: null, u4: null },
     sel: 'fists',
   };
-  gridAdd(inv.cl.top.c, 2, 2, makeItem('bandage', 2));
+  gridAdd(inv.cl.top.c, ...GEAR.c_tee.grid, makeItem('bandage', 2));
   return inv;
 }
 // empile dans les piles existantes d'une grille ; renvoie le reste
@@ -209,7 +209,7 @@ export const InventoryMixin = {
       this.selectEq(this.inv.sel === s ? 'fists' : s);
     });
     if (inp.hit('Digit0') || inp.hit('Backquote')) this.selectEq('fists');
-    if (inp.hit('WheelDown') || inp.hit('WheelUp')) {
+    if ((inp.hit('WheelDown') || inp.hit('WheelUp')) && !this.devWheel && !this.grab) {
       const list = ['fists', ...EQ_SLOTS.filter((s) => this.inv.eq[s])];
       const i = Math.max(0, list.indexOf(this.inv.sel));
       this.selectEq(list[(i + (inp.hit('WheelDown') ? 1 : -1) + list.length) % list.length]);

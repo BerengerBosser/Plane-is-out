@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { fbm, rng, smoothstep } from './noise.js';
 import { prep, flatMat, textTexture, mergeStatic, signBoard, autoColliders, heightAt, colorize } from './terrain.js';
+import { addGreenery } from './greenery.js';
 
 export const FLAT4 = 2.6;
 export const I4 = {
@@ -24,6 +25,9 @@ export const I4 = {
   fountain: { x: 0, z: -68 },
   pad: { x: 0, z: -105, r: 5 },
   lab: { x0: -32, x1: 32, z0: -158, z1: -118, h: 14, door: 4 },
+  // postes de la synthèse (A : pupitre du séquenceur, hélice 4 m derrière · B : table des raccords · C : centrifugeuse) et tableau du protocole
+  synthSt: { A: { x: -17, z: -134.6 }, B: { x: 17, z: -134.5 }, C: { x: -18, z: -123.5 } },
+  synthBoard: { x: -8.5, z: -121.5 },
   tower: { x: 100, z: -95, w: 26, d: 26, h: 112 },
   hill: { x: -120, z: -300, h: 28, r: 45 },
   vehicles: {
@@ -530,39 +534,129 @@ export function createIsland4(scene, seed, i3) {
     labDoors.push({ mesh: d, s });
   }
   const labDoorCol = cBox(-DW, DW, L.z1 - 0.3, L.z1 + 0.3);
-  // intérieur : sol clair, synthétiseur, consoles, salle blanche vitrée
+  // intérieur : sol à dalles, bandes de guidage, synthétiseur, tapis roulant, mobilier de labo, salle blanche vitrée
+  // (les trois postes de la synthèse sont construits à part, dans synth3d.js : ils bougent)
+  const HZ0 = -146;                                  // grand hall : de la vitre de la salle blanche (nord) à la façade (sud)
+  const labFloor = (w, d, col, x, z, dy = 0) => group.add(boxM(w, 0.012, d, col, x, RY + 0.045 + dy, z));
   group.add(boxM(LW - 1, 0.06, LD - 1, '#e6e8ea', 0, RY + 0.01, lzc));
+  for (let x = L.x0 + 2.5, i = 0; x < L.x1 - 1; x += 4, i++) for (let z = HZ0 + 2, j = 0; z < L.z1 - 1; z += 4, j++) if ((i + j) % 2 === 0) labFloor(3.96, 3.96, '#d7dce1', x, z);
+  labFloor(LW - 1.2, 0.18, '#1f8a8a', 0, L.z1 - 1.2);                                  // seuil
+  labFloor(9, 6, '#cfd6db', 0, -121.5, 0.002);                                          // tapis d'entrée
+  const ST = I4.synthSt;
+  // bandes de guidage : chaque poste relié au synthétiseur par sa couleur
+  labFloor(12, 0.3, '#ff5a4d', -9.6, -139, 0.004);
+  labFloor(13.55, 0.3, '#4d8bff', 10.375, -139, 0.004); labFloor(0.3, 3.4, '#4d8bff', ST.B.x, -137.4, 0.004);
+  labFloor(13.75, 0.3, '#ffd166', -9.925, -126, 0.006); labFloor(0.3, 11.35, '#ffd166', -3.2, -131.8, 0.006);
+  // plinthes et frise turquoise le long des murs
+  for (const sx of [L.x0 + 0.32, L.x1 - 0.32]) { group.add(boxM(0.06, 0.25, LD - 1, '#3a3f48', sx, Y + 0.14, lzc)); group.add(boxM(0.05, 0.35, LD - 1, '#1f8a8a', sx, Y + 2.2, lzc)); }
+  group.add(boxM(LW - 1, 0.35, 0.05, '#1f8a8a', 0, Y + 2.2, L.z0 + 0.32));
+  // synthétiseur : socle à gradins, colonne, couronne, câbles vers le plafond
   const SY = { x: 0, z: -139 };
-  group.add(m(new THREE.CylinderGeometry(2.6, 3.0, 1.2, 14), '#5d6470', SY.x, Y + 0.6, SY.z));
-  group.add(m(new THREE.CylinderGeometry(1.4, 1.4, 3.6, 12, 1, true), '#8d9299', SY.x, Y + 3.0, SY.z));
-  group.add(m(new THREE.CylinderGeometry(2.2, 2.2, 0.5, 14), '#3a3f48', SY.x, Y + 5.0, SY.z));
-  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; group.add(boxM(0.4, 5, 0.4, '#3a3f48', SY.x + Math.cos(a) * 2.4, Y + 2.5, SY.z + Math.sin(a) * 2.4)); }
+  group.add(m(new THREE.CylinderGeometry(3.3, 3.5, 0.3, 20), '#3a3f48', SY.x, Y + 0.15, SY.z));
+  group.add(m(new THREE.CylinderGeometry(2.6, 3.0, 1.2, 16), '#5d6470', SY.x, Y + 0.75, SY.z));
+  for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8; const s = boxM(0.7, 0.05, 0.25, k % 2 ? '#ffd166' : '#10162b', SY.x + Math.cos(a) * 3.25, Y + 0.31, SY.z + Math.sin(a) * 3.25); s.rotation.y = -a; group.add(s); }
+  { const cas = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.45, 3.6, 20, 1, true), glassMat); cas.position.set(SY.x, Y + 3.15, SY.z); group.add(cas); }   // cloche vitrée : on voit le cœur
+  for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; group.add(boxM(0.12, 3.6, 0.12, '#8d9299', SY.x + Math.cos(a) * 1.46, Y + 3.15, SY.z + Math.sin(a) * 1.46)); }
+  group.add(m(new THREE.CylinderGeometry(2.2, 2.2, 0.5, 16), '#3a3f48', SY.x, Y + 5.2, SY.z));
+  group.add(m(new THREE.CylinderGeometry(1.6, 2.2, 0.6, 16), '#5d6470', SY.x, Y + 5.75, SY.z));
+  group.add(m(new THREE.TorusGeometry(2.25, 0.08, 6, 24).rotateX(Math.PI / 2), '#ffd166', SY.x, Y + 5.0, SY.z));
+  for (let k = 0; k < 4; k++) {
+    const a = k * Math.PI / 2 + Math.PI / 4;
+    group.add(boxM(0.35, 5, 0.35, '#3a3f48', SY.x + Math.cos(a) * 2.45, Y + 2.9, SY.z + Math.sin(a) * 2.45));
+    group.add(boxM(0.5, 0.2, 0.5, '#ffd166', SY.x + Math.cos(a) * 2.45, Y + 1.45, SY.z + Math.sin(a) * 2.45));
+  }
+  for (const a of [0.4, 2.2, 4.1]) group.add(m(new THREE.CylinderGeometry(0.1, 0.1, L.h - 6.2, 6), '#1b1e23', SY.x + Math.cos(a) * 1.2, Y + 6.05 + (L.h - 6.2) / 2, SY.z + Math.sin(a) * 1.2));
   const coreMat = new THREE.MeshBasicMaterial({ color: '#2a3a4a', toneMapped: false });
-  const core = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 3.4, 12), coreMat); core.position.set(SY.x, Y + 3.0, SY.z); dyn(core);
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 3.4, 16), coreMat); core.position.set(SY.x, Y + 3.15, SY.z); dyn(core);
   cCircle(SY.x, SY.z, 3.1);
-  // tapis roulant du sas au synthétiseur, caisse posée dessus une fois entrée
+  const syS = sign(['SYNTHÉTISEUR · HX-1'], '#10162b', '#5ef2c2', 3.2, 0.45, 768, 100, true); syS.position.set(SY.x, Y + 5.2, SY.z + 2.23); group.add(syS);
+  // tapis roulant du sas au synthétiseur : on peut sauter dessus (plateforme), caisse posée dessus une fois entrée
   group.add(boxM(2.2, 0.5, 18, '#33373f', 0, Y + 0.25, -127)); group.add(boxM(2.0, 0.04, 18, '#1b1e23', 0, Y + 0.52, -127));
-  cBox(-1.1, 1.1, -136, -118.4);
+  for (let z = -135.5; z < -118.5; z += 1.2) group.add(boxM(2.0, 0.015, 0.08, '#3a3f48', 0, Y + 0.545, z));
+  for (const sx of [-1.12, 1.12]) group.add(boxM(0.06, 0.12, 18, '#ffd166', sx, Y + 0.44, -127));
+  cBox(-1.1, 1.1, -136, -118.4, { maxY: Y + 0.28, top: Y + 0.54 });
+  platforms.push({ minX: cx - 1.1, maxX: cx + 1.1, minZ: cz - 136, maxZ: cz - 118.4, top: Y + 0.54 });
   const crateIn = new THREE.Group(); crateIn.position.set(0, Y + 0.54, -134); crateIn.visible = false; dyn(crateIn);
   crateIn.add(boxM(1.4, 1.0, 1.0, '#e9e4d8', 0, 0.5, 0)); crateIn.add(boxM(1.42, 0.14, 1.02, '#ffd166', 0, 0.75, 0));
   const csig = sign(['HÉLIOS'], '#e9e4d8', '#c8553d', 1.0, 0.3, 256, 80); csig.position.set(0, 0.45, 0.51); crateIn.add(csig);
-  const consoles = [{ k: 'A', x: -8, z: -131, name: 'Séquenceur ARN' }, { k: 'B', x: 9, z: -132, name: 'Refroidissement' }, { k: 'C', x: 7, z: -123.5, name: 'Centrifugeuse' }];
-  const consoleLamps = {};
-  for (const cs of consoles) {
-    group.add(boxM(1.6, 1.0, 0.8, '#3a3f48', cs.x, Y + 0.5, cs.z)); group.add(boxM(1.6, 0.6, 0.1, '#1b1e23', cs.x, Y + 1.35, cs.z + 0.35));
-    cBox(cs.x - 0.8, cs.x + 0.8, cs.z - 0.4, cs.z + 0.4);
-    const sc2 = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.45), new THREE.MeshBasicMaterial({ color: '#5a2a2a', toneMapped: false })); sc2.position.set(cs.x, Y + 1.35, cs.z + 0.41); dyn(sc2);
-    consoleLamps[cs.k] = sc2;
-    const s = sign([`${cs.k} · ${cs.name.toUpperCase()}`], '#10162b', '#5ef2c2', 1.6, 0.3, 512, 90); s.position.set(cs.x, Y + 1.8, cs.z + 0.42); group.add(s);
+  // paillasses (côté est, près de l'entrée) : tiroirs, verrerie, microscope, écran
+  const flaskCols = ['#5ef2c2', '#ffd166', '#ff6b5b', '#b8a4ff', '#6fb7ff', '#8fe36b'];
+  for (const bz of [-121.2, -126.4]) {
+    group.add(boxM(8, 0.9, 1.3, '#e9ecef', 26.6, Y + 0.45, bz)); group.add(boxM(8.1, 0.07, 1.36, '#3a3f48', 26.6, Y + 0.93, bz));
+    for (let k = 0; k < 5; k++) group.add(boxM(1.3, 0.05, 0.05, '#8d9299', 23.4 + k * 1.6, Y + 0.7, bz + 0.67));
+    for (let k = 0; k < 7; k++) {
+      const fx = 23.2 + k * 0.95 + (k % 2) * 0.2, col = flaskCols[(k + (bz > -124 ? 0 : 3)) % flaskCols.length];
+      if (k % 3 === 1) { group.add(m(new THREE.CylinderGeometry(0.05, 0.16, 0.3, 8), '#dfe8ee', fx, Y + 1.12, bz - 0.2)); group.add(m(new THREE.CylinderGeometry(0.13, 0.15, 0.12, 8), col, fx, Y + 1.03, bz - 0.2)); }
+      else { group.add(m(new THREE.CylinderGeometry(0.06, 0.06, 0.34, 8), '#dfe8ee', fx, Y + 1.14, bz - 0.25)); group.add(m(new THREE.CylinderGeometry(0.055, 0.055, 0.18, 8), col, fx, Y + 1.06, bz - 0.25)); }
+    }
+    // microscope
+    group.add(boxM(0.35, 0.06, 0.3, '#33373f', 30, Y + 0.99, bz)); group.add(boxM(0.08, 0.45, 0.08, '#33373f', 30, Y + 1.2, bz + 0.1));
+    const tube = m(new THREE.CylinderGeometry(0.05, 0.06, 0.35, 8), '#e9ecef', 30, Y + 1.35, bz - 0.02); tube.rotation.x = 0.5; group.add(tube);
+    // écran d'ordinateur
+    group.add(boxM(0.9, 0.55, 0.05, '#1b1e23', 24.2, Y + 1.3, bz + 0.35)); group.add(boxM(0.1, 0.3, 0.1, '#33373f', 24.2, Y + 1.05, bz + 0.38));
+    const scr = sign(['ANALYSE', 'souche HX · 97 %'], '#0d2a24', '#5ef2c2', 0.82, 0.47, 256, 150, true); scr.position.set(24.2, Y + 1.3, bz + 0.323); scr.rotation.y = Math.PI; group.add(scr);
+    for (const sx of [23.6, 25.8, 28.0]) group.add(m(new THREE.CylinderGeometry(0.22, 0.2, 0.05, 10), '#3a3f48', sx, Y + 0.62, bz - 1.1), m(new THREE.CylinderGeometry(0.04, 0.04, 0.6, 6), '#8d9299', sx, Y + 0.3, bz - 1.1));
   }
-  // salle blanche : Marthe derrière la vitre
-  group.add(glassBox(40, L.h - 1, 0.14, 0, Y + (L.h - 1) / 2, -146)); cBox(-20, 20, -146.3, -145.7);
-  for (let x = -20; x <= 20; x += 5) group.add(boxM(0.2, L.h - 1, 0.25, '#3a3f48', x, Y + (L.h - 1) / 2, -146));
-  for (const sx of [-20.2, 20.2]) { group.add(boxM(0.4, L.h, 12, labW, sx, Y + L.h / 2, -152)); cBox(sx - 0.2, sx + 0.2, -158, -146); }
-  group.add(boxM(3, 0.9, 1.2, '#e9e4d8', -6, Y + 0.45, -152)); group.add(boxM(1, 2.2, 0.8, '#dfe3e8', 8, Y + 1.1, -155));
-  const lab2 = sign(['SALLE BLANCHE · ACCÈS INTERDIT'], '#ffd166', '#10162b', 5, 0.5, 1024, 100); lab2.position.set(0, Y + 3.2, -145.9); group.add(lab2);
+  // sorbonne (hotte vitrée) contre le mur est
+  group.add(boxM(1.3, 0.95, 3.2, '#e9ecef', L.x1 - 1.0, Y + 0.48, -140)); group.add(boxM(1.3, 0.8, 3.2, '#e9ecef', L.x1 - 1.0, Y + 2.35, -140));
+  group.add(boxM(0.1, 1.9, 3.2, '#3a3f48', L.x1 - 0.4, Y + 1.9, -140)); group.add(glassBox(0.05, 0.85, 3.0, L.x1 - 1.62, Y + 1.45, -140));
+  group.add(boxM(1.1, 0.4, 0.8, '#8d9299', L.x1 - 1.0, Y + 3.0, -140)); group.add(m(new THREE.CylinderGeometry(0.25, 0.25, L.h - 3.2, 8), '#8d9299', L.x1 - 1.0, Y + 3.2 + (L.h - 3.2) / 2, -140));
+  const hood = sign(['SORBONNE', '⚠ vitre baissée'], '#ffd166', '#10162b', 1.4, 0.45, 512, 160); hood.position.set(L.x1 - 1.66, Y + 2.35, -140); hood.rotation.y = -Math.PI / 2; group.add(hood);
+  // étagères à flacons (mur ouest, entre les postes)
+  for (const sz of [-129.5, -142.5]) {
+    for (const dz of [-1.6, 1.6]) group.add(boxM(0.5, 2.6, 0.08, '#8d9299', L.x0 + 0.65, Y + 1.3, sz + dz));
+    for (let k = 0; k < 4; k++) {
+      group.add(boxM(0.5, 0.05, 3.3, '#b8bec6', L.x0 + 0.65, Y + 0.35 + k * 0.7, sz));
+      for (let b = 0; b < 6; b++) { const col = flaskCols[(b + k * 2) % flaskCols.length]; group.add(m(new THREE.CylinderGeometry(0.09, 0.09, 0.3 + (b % 2) * 0.1, 8), col, L.x0 + 0.62, Y + 0.55 + k * 0.7 + (b % 2) * 0.05, sz - 1.3 + b * 0.5)); }
+    }
+  }
+  // congélateurs −80 °C, près de l'entrée ouest
+  for (const fx of [-29.8, -27.6]) {
+    group.add(boxM(1.9, 2.1, 1.0, '#f4f6f8', fx, Y + 1.05, -119.4)); group.add(boxM(0.08, 0.9, 0.08, '#8d9299', fx + 0.7, Y + 1.2, -119.93));
+    const fz = sign(['−80 °C'], '#10162b', '#6fb7ff', 0.7, 0.25, 256, 90, true); fz.position.set(fx - 0.3, Y + 1.8, -119.91); fz.rotation.y = Math.PI; group.add(fz);
+  }
+  // plantes en pot et poubelle à risque biologique
+  for (const [px, pz] of [[-28.5, -144.8], [30.5, -144.5], [-6.5, -119.6], [6.5, -119.6]]) {
+    group.add(m(new THREE.CylinderGeometry(0.35, 0.28, 0.6, 8), '#c8553d', px, Y + 0.3, pz));
+    group.add(m(new THREE.IcosahedronGeometry(0.6, 0), '#6f9a4a', px, Y + 1.1, pz)); group.add(m(new THREE.IcosahedronGeometry(0.45, 0), '#8fb069', px + 0.2, Y + 1.5, pz - 0.1));
+  }
+  group.add(m(new THREE.CylinderGeometry(0.3, 0.26, 0.75, 10), '#ffd166', 11.5, Y + 0.38, -144.9));
+  // conduites au plafond : de chaque poste au synthétiseur, aux couleurs des bandes
+  const pipeY = Y + L.h - 1.2;
+  const pipe = (x0, z0, x1, z1, col, y = pipeY) => {
+    const len = Math.hypot(x1 - x0, z1 - z0), p = m(new THREE.CylinderGeometry(0.12, 0.12, len, 8), col, (x0 + x1) / 2, y, (z0 + z1) / 2);
+    p.rotation.z = Math.PI / 2; p.rotation.y = -Math.atan2(z1 - z0, x1 - x0); group.add(p);
+  };
+  pipe(ST.A.x, ST.A.z - 4, -1.6, ST.A.z - 4, '#ff5a4d');
+  group.add(m(new THREE.CylinderGeometry(0.12, 0.12, pipeY - Y - 4.2, 8), '#ff5a4d', ST.A.x, (pipeY + Y + 4.2) / 2, ST.A.z - 4));
+  pipe(ST.B.x + 2.75, -136.4, 1.6, -136.4, '#4d8bff', pipeY - 0.35);
+  group.add(m(new THREE.CylinderGeometry(0.12, 0.12, pipeY - 0.35 - Y, 8), '#4d8bff', ST.B.x + 2.75, (pipeY - 0.35 + Y) / 2, -136.4));
+  pipe(ST.B.x + 2.75, -135.1, ST.B.x + 2.75, -136.4, '#4d8bff', Y + 0.45);
+  pipe(ST.C.x, ST.C.z - 1.9, ST.C.x, -136.8, '#ffd166', pipeY + 0.35); pipe(ST.C.x, -136.8, -1.6, -136.8, '#ffd166', pipeY + 0.35);
+  group.add(m(new THREE.CylinderGeometry(0.12, 0.12, pipeY + 0.35 - Y, 8), '#ffd166', ST.C.x, (pipeY + 0.35 + Y) / 2, ST.C.z - 1.9));
+  // chemins de câbles et luminaires
+  for (const x of [-12, 12]) group.add(boxM(0.5, 0.08, LD - 14, '#8d9299', x, Y + L.h - 0.7, -132));
   const ceilGlow = new THREE.Mesh(mergeGeometries([-20, -8, 4, 16].flatMap((x) => [-150, -136, -124].map((z) => new THREE.BoxGeometry(6, 0.06, 1.2).translate(x + 2, Y + L.h - 0.2, z)))), new THREE.MeshBasicMaterial({ color: '#f4fbff', toneMapped: false }));
   dyn(ceilGlow);
+  // panneaux : sortie de secours, consignes, tableau du protocole (visible en entrant)
+  const exitS = sign(['⇦ SORTIE'], '#1f8a3a', '#fff4e0', 1.4, 0.4, 512, 140, true); exitS.position.set(0, Y + 3.9, L.z1 - 0.32); exitS.rotation.y = Math.PI; group.add(exitS);
+  const WB = I4.synthBoard;
+  group.add(boxM(3.4, 2.0, 0.1, '#f7f7f2', WB.x, Y + 1.75, WB.z)); group.add(boxM(3.5, 0.1, 0.2, '#8d9299', WB.x, Y + 0.72, WB.z + 0.05));
+  for (const dx of [-1.5, 1.5]) { group.add(boxM(0.08, 1.6, 0.08, '#8d9299', WB.x + dx, Y + 0.8, WB.z)); group.add(boxM(0.08, 0.05, 0.8, '#8d9299', WB.x + dx, Y + 0.03, WB.z)); }
+  const wbS = sign(['PROTOCOLE DE SYNTHÈSE', 'A · recopier l\'hélice ARN (3 manches)', 'B · relier l\'azote ❄ à la cuve ⚗', 'C · rotor équilibré, régime dans le vert', 'puis : dose → passe-plat de la salle blanche', '⚠ le mélange ne tient pas longtemps !'], '#fbfbf6', '#1c3a8a', 3.2, 1.85, 1024, 600);
+  wbS.position.set(WB.x, Y + 1.75, WB.z + 0.056); group.add(wbS);
+  // salle blanche : Marthe derrière la vitre, lit, perfusion, bureau
+  group.add(glassBox(40, L.h - 1, 0.14, 0, Y + (L.h - 1) / 2, -146)); cBox(-20, 20, -146.3, -145.7);
+  for (let x = -20; x <= 20; x += 5) group.add(boxM(0.2, L.h - 1, 0.25, '#3a3f48', x, Y + (L.h - 1) / 2, -146));
+  group.add(boxM(40, 0.25, 0.3, '#3a3f48', 0, Y + 0.12, -146));
+  for (const sx of [-20.2, 20.2]) { group.add(boxM(0.4, L.h, 12, labW, sx, Y + L.h / 2, -152)); cBox(sx - 0.2, sx + 0.2, -158, -146); }
+  labFloor(40, 11.4, '#dfeef0', 0, -152);
+  group.add(boxM(2.2, 0.55, 1.1, '#e9ecef', -8, Y + 0.45, -153)); group.add(boxM(2.1, 0.18, 1.0, '#9fd6e8', -8, Y + 0.8, -153)); group.add(boxM(0.5, 0.2, 0.9, '#fff4e0', -8.8, Y + 0.98, -153));
+  group.add(m(new THREE.CylinderGeometry(0.03, 0.03, 2.0, 6), '#8d9299', -6.6, Y + 1.0, -152.2)); group.add(boxM(0.22, 0.32, 0.08, '#b8ffe0', -6.6, Y + 1.85, -152.2));
+  group.add(boxM(2.4, 0.08, 1.0, '#b98b5e', 9, Y + 0.85, -155.5)); for (const dx of [-1.1, 1.1]) group.add(boxM(0.08, 0.85, 0.9, '#8d9299', 9 + dx, Y + 0.42, -155.5));
+  group.add(boxM(0.8, 0.5, 0.05, '#1b1e23', 9, Y + 1.2, -155.8));
+  group.add(boxM(1, 2.2, 0.8, '#dfe3e8', 15, Y + 1.1, -156)); group.add(boxM(3, 0.9, 1.2, '#e9e4d8', -15, Y + 0.45, -155));
+  const lab2 = sign(['SALLE BLANCHE · ACCÈS INTERDIT'], '#ffd166', '#10162b', 5, 0.5, 1024, 100); lab2.position.set(0, Y + 3.2, -145.9); group.add(lab2);
   // sas de décontamination : dalle, balises, buses, pupitre
   const PD = I4.pad;
   group.add(m(new THREE.CylinderGeometry(PD.r, PD.r, 0.1, 24), '#3a3f48', PD.x, Y + 0.05, PD.z));
@@ -641,13 +735,23 @@ export function createIsland4(scene, seed, i3) {
     labDoor: wp(0, Y + 1.5, L.z1 + 1.5),
     labIn: wp(-5, Y, -121),
     synth: wp(SY.x, Y, SY.z),
-    consoles: consoles.map((cs) => ({ k: cs.k, name: cs.name, p: wp(cs.x, Y + 1.1, cs.z + 0.9) })),
+    synthBoard: wp(I4.synthBoard.x, Y + 1.6, I4.synthBoard.z + 0.4),
     marthe: wp(0, Y, -151),
     glass: wp(0, Y + 1.6, -145),
     fountain: wp(FO.x, Y, FO.z),
     tower: wp(TW.x, Y, TW.z),
     ducks: [{ id: 'd9', x: cx + FO.x + 6.4, z: cz + FO.z + 1.8, y: Y + 0.95, hint: 'sur la fontaine de la place du Soleil' }, { id: 'd10', x: cx - 40, z: cz + 11, y: Y + 0.72, hint: 'sur un banc de la gare routière' }],
   };
+  // ── garrigue, pins parasols, cyprès, oliviers et villas autour du plateau ; bosquets sur les pelouses de l'aéroport ──
+  const airGrass = (x, z) => z > 92 && z < 132 && Math.abs(x) > 142 && Math.abs(x) < 256;
+  addGreenery({
+    group, cx, cz, height: height4, colliders, seed: seed ^ 0x4a9, biome: 'med', box: [-380, 380, -355, 305],
+    avoid: (x, z) => (Math.abs(x) < 270 && z > -270 && z < 220 && !airGrass(x, z)) || (Math.abs(z - I4.runway.z) < 55 && Math.abs(x) > 225)
+      || (Math.abs(z - I4.canal.z) < 22 && Math.abs(x) > 245) || Math.hypot(x - I4.hill.x, z - I4.hill.z) < 9,
+    // haie de pins au sud de la piste, alignements le long des pelouses de l'aérogare
+    rows: [[-218, 198, 218, 198, 8], [-250, 94, -150, 94, 9], [150, 94, 250, 94, 9]],
+    trees: 400, bushes: 460, grass: 4200, flowers: 800, rocks: 70, houses: 14,
+  });
   const nightLights = [{ p: wp(0, Y, 30), r: 18 }, { p: wp(0, Y, -70), r: 26 }, { p: wp(0, Y, -105), r: 18 }, { p: wp(T.x, Y, T.z), r: 22 }];
   let bridgeK = 0, bridgeT = 0, gateK = 0, gateT = 0, doorK = 0, doorT = 0, decon = 0, synthN = 0, cured = 0, nightF = 0;
   return {
@@ -660,7 +764,6 @@ export function createIsland4(scene, seed, i3) {
     setLabDoor(open, instant) { doorT = open ? 1 : 0; if (instant) doorK = doorT; labDoorCol.disabled = !!open; },
     setDecon(k) { decon = k; },
     setSynth(done, isCured) { synthN = done; cured = isCured ? 1 : 0; },
-    setConsole(k, on) { consoleLamps[k]?.material.color.set(on ? '#5ef2c2' : '#5a2a2a'); },
     setCrateIn(on) { crateIn.visible = !!on; },
     // manivelles : roue qui tourne, voyant vert quand elles sont au bout
     setCranks(a, b) { [a, b].forEach((v, i) => { cranks[i].wheel.rotation.z = -v * 40; cranks[i].lamp.material.color.set(v >= 1 ? '#5ef2c2' : v > 0 ? '#ffd166' : '#ff4d4d'); }); },

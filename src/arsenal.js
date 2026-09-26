@@ -31,15 +31,17 @@ export const EQUIP = [
 export const EQ = Object.fromEntries(EQUIP.map((e) => [e.key, e.id]));
 
 // armes de mêlée : dégâts, portée, cadence, recul infligé, étourdissement
+// cleave : le coup balaye tout l'arc devant soi, comme la gerbe d'un fusil à pompe
+//   arc : ouverture (cosinus minimal : plus il est bas, plus l'arc est large) · hits : cibles au plus
+//   les cibles suivantes (de la plus proche à la plus lointaine) perdent `falloff` des dégâts chacune
 export const MELEE = {
   fists: { dmg: 12, range: 2.1, cd: 0.42, knock: 5, stun: 0.25 },
-  wrench: { dmg: 28, range: 2.5, cd: 0.7, knock: 8, stun: 0.35 },
-  machete: { dmg: 46, range: 2.4, cd: 0.55, knock: 3, stun: 0.3, blade: true },
-  bat: { dmg: 36, range: 2.6, cd: 0.72, knock: 11, stun: 0.8 },
-  axe: { dmg: 72, range: 2.4, cd: 1.0, knock: 6, stun: 0.6, blade: true },
-  katana: { dmg: 58, range: 2.7, cd: 0.46, knock: 3, stun: 0.3, blade: true },
-  // cleave : frappe tous les ennemis de l'arc devant soi
-  sledge: { dmg: 88, range: 2.6, cd: 1.25, knock: 15, stun: 1.1, cleave: true },
+  wrench: { dmg: 28, range: 2.5, cd: 0.7, knock: 8, stun: 0.35, cleave: true, arc: 0.5, hits: 2, falloff: 0.25 },
+  machete: { dmg: 46, range: 2.5, cd: 0.55, knock: 3, stun: 0.3, blade: true, cleave: true, arc: 0.2, hits: 4, falloff: 0.12 },
+  bat: { dmg: 36, range: 2.6, cd: 0.72, knock: 11, stun: 0.8, cleave: true, arc: 0.3, hits: 4, falloff: 0.12 },
+  axe: { dmg: 72, range: 2.5, cd: 1.0, knock: 6, stun: 0.6, blade: true, cleave: true, arc: 0.35, hits: 3, falloff: 0.15 },
+  katana: { dmg: 58, range: 2.8, cd: 0.46, knock: 3, stun: 0.3, blade: true, cleave: true, arc: 0.15, hits: 5, falloff: 0.1 },
+  sledge: { dmg: 88, range: 2.6, cd: 1.25, knock: 15, stun: 1.1, cleave: true, arc: 0.25, hits: 8, falloff: 0.05, heavy: true },
 };
 
 // armes à feu (tir instantané) : chargeur, munitions, dispersion, recul, bruit (attire les zombies)

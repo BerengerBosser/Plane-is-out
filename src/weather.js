@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { CFG } from './config.js';
 import { heightAt } from './terrain.js';
 import { rng } from './noise.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 export const WX_KINDS = ['clear', 'cloudy', 'rain', 'storm'];
 // cible de chaque temps : couverture nuageuse, pluie, orage (éclairs, rafales)
@@ -35,27 +36,62 @@ export function createWeather(scene, audio) {
   rain.visible = false;
   scene.add(rain);
 
-  // ── nuages d'orage : couche basse et sombre qui suit la caméra ──
+  // ── nuages d'orage : plafond bas qui suit la caméra ──
+  // Chaque amas est un seul maillage de boules bosselées, ombré à la facette (ventre sombre, sommet éclairé) ;
+  // la teinte suit l'heure et les éclairs (shade), et chaque amas s'efface au bord de la zone au lieu de sauter.
+  // Sous le plafond, une couche de lambeaux plus sombres file avec les rafales quand l'orage gronde.
   const storm = new THREE.Group();
-  const stormMat = new THREE.MeshLambertMaterial({ color: '#555b63', emissive: '#262a30', flatShading: true, transparent: true, opacity: 0, fog: false, depthWrite: false });
   const r = rng(911);
-  for (let i = 0; i < 34; i++) {
-    const c = new THREE.Group();
-    const n = 5 + Math.floor(r() * 4);
+  const bump = (x, y, z) => Math.sin(x * 0.21 + y * 0.13) * Math.sin(z * 0.17 - x * 0.07) + 0.5 * Math.sin(y * 0.31 + z * 0.23);
+  function cloudGeo(n, radA, radB, flat, spread) {
+    const parts = [], mid = Math.floor(n / 2);
     for (let k = 0; k < n; k++) {
-      const rad = 26 + r() * 22;
-      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(rad, 1), stormMat);
-      m.position.set((k - n / 2) * 30 + r() * 10, r() * 10, r() * 30 - 15);
-      m.scale.y = 0.45;
-      c.add(m);
+      const rad = (k === mid ? radB : radA) + r() * radA * 0.5;
+      const g = new THREE.IcosahedronGeometry(rad, 1);
+      const p = g.attributes.position;
+      // bosses : déplacement fonction de la position (les sommets partagés restent soudés)
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i), y = p.getY(i), z = p.getZ(i), l = Math.hypot(x, y, z) || 1;
+        const s = 1 + 0.16 * bump(x + k * 7, y, z);
+        p.setXYZ(i, x / l * rad * s, y / l * rad * s, z / l * rad * s);
+      }
+      g.scale(1, flat * (k === mid ? 1.25 : 1), 1);
+      g.translate((k - n / 2) * spread + r() * spread * 0.35, (k === mid ? rad * 0.25 : 0) + r() * 6, r() * spread - spread / 2);
+      parts.push(g);
     }
-    c.position.set((r() * 2 - 1) * 750, 150 + r() * 70, (r() * 2 - 1) * 750);
-    c.userData.wx = c.position.x; c.userData.wz = c.position.z;
-    c.rotation.y = r() * 6;
-    storm.add(c);
+    const geo = mergeGeometries(parts);
+    parts.forEach((g) => g.dispose());
+    // une nuance par facette : dessous sombre, dessus clair, un peu de bruit
+    const pos = geo.attributes.position, col = new Float32Array(pos.count * 3);
+    geo.computeBoundingBox();
+    const y0 = geo.boundingBox.min.y, hy = Math.max(1, geo.boundingBox.max.y - y0);
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), nrm = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i += 3) {
+      a.fromBufferAttribute(pos, i); b.fromBufferAttribute(pos, i + 1); c.fromBufferAttribute(pos, i + 2);
+      nrm.subVectors(c, b).cross(a.clone().sub(b)).normalize();
+      const h = ((a.y + b.y + c.y) / 3 - y0) / hy;
+      const v = THREE.MathUtils.clamp(0.56 + 0.24 * nrm.y + 0.26 * h + 0.07 * (nrm.x * 0.6 - nrm.z * 0.4) + (r() - 0.5) * 0.06, 0.3, 1.1);
+      for (let j = 0; j < 3; j++) col.set([v, v, v * 1.03], (i + j) * 3);
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    return geo;
   }
+  function addLayer(count, opts) {
+    for (let i = 0; i < count; i++) {
+      const mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, fog: false, depthWrite: false });
+      const m = new THREE.Mesh(cloudGeo(opts.n + Math.floor(r() * 4), opts.radA, opts.radB, opts.flat, opts.spread), mat);
+      m.position.set((r() * 2 - 1) * 750, opts.y + r() * opts.dy, (r() * 2 - 1) * 750);
+      m.rotation.y = r() * 6;
+      m.userData = { wx: m.position.x, wz: m.position.z, low: opts.low, speed: 0.7 + r() * 0.6 };
+      storm.add(m);
+    }
+  }
+  addLayer(44, { n: 5, radA: 22, radB: 40, flat: 0.5, spread: 30, y: 150, dy: 70, low: false });
+  addLayer(18, { n: 3, radA: 11, radB: 18, flat: 0.38, spread: 20, y: 78, dy: 36, low: true });
   storm.visible = false;
   scene.add(storm);
+  const tint = new THREE.Color(), tintLow = new THREE.Color();
+  const C_CLOUDY = new THREE.Color('#c9ced6'), C_STORM = new THREE.Color('#7b838e'), C_FLASH = new THREE.Color('#e4eaff'), haze = new THREE.Color();
 
   // ── éclair : ligne brisée en fines poutres lumineuses ──
   const boltMat = new THREE.MeshBasicMaterial({ color: '#eef3ff', fog: false, transparent: true, opacity: 1, depthWrite: false });
@@ -151,12 +187,17 @@ export function createWeather(scene, audio) {
       // ancrés dans le monde (ils dérivent avec le vent), repliés dans un carré de 1500 m autour de la caméra
       storm.position.set(cam.x, 0, cam.z);
       const wrap = (v) => ((v % 1500) + 2250) % 1500 - 750;
+      const base = Math.min(0.97, cur.over * 1.1);
       for (const c of storm.children) {
-        c.userData.wx += dt * (4 + cur.storm * 8);
-        c.position.x = wrap(c.userData.wx - cam.x);
-        c.position.z = wrap(c.userData.wz - cam.z);
+        const u = c.userData;
+        u.wx += dt * (u.low ? 10 + cur.storm * 16 : 4 + cur.storm * 8) * u.speed;
+        c.position.x = wrap(u.wx - cam.x);
+        c.position.z = wrap(u.wz - cam.z);
+        // fondu au bord du carré (l'amas repasse de l'autre côté sans qu'on le voie)
+        const fade = 1 - THREE.MathUtils.smoothstep(Math.max(Math.abs(c.position.x), Math.abs(c.position.z)), 560, 740);
+        c.material.opacity = (u.low ? base * THREE.MathUtils.smoothstep(cur.storm, 0.25, 0.8) * 0.9 : base) * fade;
+        c.visible = c.material.opacity > 0.01;
       }
-      stormMat.opacity = Math.min(0.97, cur.over * 1.1);
     }
 
     // éclairs spontanés pendant l'orage
@@ -179,8 +220,23 @@ export function createWeather(scene, audio) {
     return { over: cur.over, rain: cur.rain, storm: cur.storm, flash };
   }
 
+  // teinte des nuages d'orage selon le ciel du moment (s : couleurs de sky.update) et l'éclair en cours
+  function shade(s) {
+    if (!storm.visible || !s) return;
+    const lum = 0.12 + s.amb * 0.95;
+    tint.copy(C_CLOUDY).lerp(C_STORM, cur.storm).lerp(s.hor, 0.12).multiplyScalar(lum).lerp(C_FLASH, flash * 0.75);
+    tintLow.copy(tint).multiplyScalar(0.8).lerp(C_FLASH, flash * 0.5);
+    // perspective aérienne : les amas lointains se fondent dans la couleur de l'horizon
+    haze.copy(s.hor).lerp(C_FLASH, flash * 0.5);
+    for (const c of storm.children) {
+      const far = THREE.MathUtils.smoothstep(Math.hypot(c.position.x, c.position.z), 220, 720) * 0.6;
+      c.material.color.copy(c.userData.low ? tintLow : tint).lerp(haze, far);
+    }
+  }
+
   return {
     update,
+    shade,
     strike,
     get kind() { return kind; },
     get state() { return cur; },

@@ -73,7 +73,8 @@ export const LootMixin = {
     const box3 = (id, kind, x, y, z, ry, opts) => {
       add(id, kind, x, y, z, ry, { cont: true, needs: opts.needs });
       this.lootDefs[id] = { name: opts.name || CONT_NAMES[kind], table: opts.table, rolls: opts.rolls || [1, 2], guaranteed: opts.guaranteed || [], grid: opts.grid || [4, 3], daily: !!opts.daily };
-      if (kind === 'locker' || kind === 'crate' || kind === 'military') { const c = { type: 'circle', x, z, r: kind === 'locker' ? 0.35 : 0.45 }; this.colliders.push(c); this.lootCols.push(c); }
+      // maxY : pas de colonne invisible au-dessus (ex. casier des objets trouvés, sous le toit du terminal)
+      if (kind === 'locker' || kind === 'crate' || kind === 'military') { const c = { type: 'circle', x, z, r: kind === 'locker' ? 0.35 : 0.45, maxY: y + (kind === 'locker' ? 1.6 : 0.8) }; this.colliders.push(c); this.lootCols.push(c); }
     };
     const cb = LAYOUT.cabane, cp = LAYOUT.camp, lh = LAYOUT.lighthouse, bc = LAYOUT.beach, ru = LAYOUT.ruins;
     const h1 = (x, z) => heightAt(x, z);

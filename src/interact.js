@@ -6,7 +6,7 @@ import { heightAt, LAYOUT } from './terrain.js';
 import { SLOTS, PLANE_POINTS, SEATS, FLOOR, HOLES } from './planeModel.js';
 import { GEAR } from './gear.js';
 import { FLAT } from './island2.js';
-import { ITEMS, TOOL_NAMES, SYMBOLS, SYMBOL_CODE } from './defs.js';
+import { ITEMS, TOOL_NAMES } from './defs.js';
 import { WEAPONS } from './weapons.js';
 
 export const FUEL_CAP = new THREE.Vector3(1.5, 3.25, -0.6);   // bouchon du réservoir (aile droite)
@@ -71,9 +71,9 @@ const SHOP = [
   { id: 'chute', icon: '🪂', name: 'Parachute', desc: 'Sauter de l\'avion en vol', cost: 6, personal: true, give: ['parachute', 1], min: 2 },
   { id: 'bandage', icon: '🩹', name: '3 bandages', desc: '+45 santé chacun (H)', cost: 2, personal: true, give: ['bandage', 3] },
   { id: 'stakes', icon: '📍', name: '3 pieux d\'ancrage', desc: 'Ancrage du treuil', cost: 2, personal: true, give: ['stake', 3] },
-  { id: 'mask', icon: '🦺', name: 'Gilet renforcé', desc: '−30 % de dégâts · poches 2×2', cost: 6, personal: true, give: ['c_armorvest', 1] },
-  { id: 'satchel', icon: '👜', name: 'Sacoche', desc: 'Sac · poches 3×3', cost: 4, personal: true, give: ['c_satchel', 1] },
-  { id: 'backpack', icon: '🎒', name: 'Sac à dos', desc: 'Sac · poches 4×4', cost: 10, personal: true, give: ['c_backpack', 1], min: 2 },
+  { id: 'mask', icon: '🦺', name: 'Gilet renforcé', desc: '−30 % de dégâts · poches 3×2', cost: 6, personal: true, give: ['c_armorvest', 1] },
+  { id: 'satchel', icon: '👜', name: 'Sacoche', desc: 'Sac · poches 4×4', cost: 4, personal: true, give: ['c_satchel', 1] },
+  { id: 'backpack', icon: '🎒', name: 'Sac à dos', desc: 'Sac · poches 5×5', cost: 10, personal: true, give: ['c_backpack', 1], min: 2 },
   { id: 'medkit', icon: '❤️', name: 'Repas chaud', desc: 'Santé au maximum, tout de suite', cost: 2, personal: true },
   { id: 'lamps', icon: '💡', name: 'Guirlande de cabine', desc: 'Le Coucou éclaire plus loin : les zombies y ralentissent', cost: 5, up: true },
   { id: 'rug', icon: '🪴', name: 'Tapis et plantes', desc: 'Cabine cosy : on y récupère deux fois plus vite', cost: 4, up: true },
@@ -107,10 +107,17 @@ export const InteractMixin = {
       if (inp.hit('KeyE')) this.standUp();
       return;
     }
+    // pièce saisie à la main (volant, bouton, miroir) : la souris la tourne, rien d'autre
+    if (this.grab) { this.cable.visible = false; return; }
+    // en apesanteur ou étalé sur le plancher de la cabine : on ne peut rien attraper
+    if (this.aboard && this.zg && this.zg.mode !== 'walk') { ui.prompt(''); ui.hold(0); this.holdT = 0; return; }
 
     if (this.aboard) this.cabinInteractions(add, L);
     else this.worldInteractions(add, L, me);
     this.mateInteractions(add, me);
+    // dispositif 3D visé au centre de l'écran (touche, molette, volant…) : prioritaire
+    const dc = this.aboard || this.carrying ? null : this.deviceCandidate();
+    if (dc) cands.push(dc);
 
     cands.sort((a, b) => a.score - b.score);
     const c = cands[0];
@@ -118,6 +125,7 @@ export const InteractMixin = {
     let holding = false;
     this.cable.visible = false;
     if (c) {
+      if (c.wheel && (inp.hit('WheelUp') || inp.hit('WheelDown'))) c.wheel(inp.hit('WheelUp') ? 1 : -1);
       if (c.alt && inp.hit('KeyR')) c.alt();
       else if (c.press && inp.hit('KeyE')) c.press();
       else if (c.hold && inp.down('KeyE')) {
@@ -189,10 +197,11 @@ export const InteractMixin = {
           press: () => { if (this.planeReady()) this.takeControls(); else this.sit(s); },
         });
       } else if (s.bunk) {
-        const waitStorm = this.flags.radioDone && this.flags.wheels && this.flags.refueled && !this.flags.stormOver && this.hour < 18.4 && this.hour > 6;
+        // pendant la tempête de Saint-Escale, pas question de dormir : elle se passe en deux heures, à la centrale
+        const inStorm = this.flags.storm && !this.flags.stormOver;
         add(pt, 1.7, {
-          prompt: waitStorm ? '<kbd>E</kbd> Attendre la tempête' : this.isNightish() ? (this.planeAfloatNow() ? '<kbd>E</kbd> Dormir' : '<span class="warn">Dormir : sur l\'eau seulement</span>') : '<kbd>E</kbd> S\'allonger',
-          press: () => (waitStorm ? this.requestSleep(18.5) : this.isNightish() ? this.requestSleep() : this.sit(s)),
+          prompt: inStorm ? '<kbd>E</kbd> S\'allonger <span class="warn">(tempête : impossible de dormir)</span>' : this.isNightish() ? (this.planeAfloatNow() ? '<kbd>E</kbd> Dormir' : '<span class="warn">Dormir : sur l\'eau seulement</span>') : '<kbd>E</kbd> S\'allonger',
+          press: () => (!inStorm && this.isNightish() ? this.requestSleep() : this.sit(s)),
         });
       } else add(pt, 1.4, { prompt: '<kbd>E</kbd> S\'asseoir', press: () => this.sit(s) });
     }
@@ -204,7 +213,7 @@ export const InteractMixin = {
     if (this.crateLoaded) {
       add(L(new THREE.Vector3(0.62, FLOOR + 0.8, 4.05)), 1.8, {
         prompt: '<kbd>E</kbd> Étiquette de la caisse',
-        press: () => this.openNote('Étiquette de la caisse', 'LABORATOIRE HÉLIOS — FRAGILE<br>Ne pas ouvrir. Garder au frais et au sec.<br><br>En cas de problème : fréquence d\'urgence <b>127.35</b>', 'Caisse Hélios : fréquence d\'urgence 127.35'),
+        press: () => this.openNote('Étiquette de la caisse', `LABORATOIRE HÉLIOS — FRAGILE<br>Ne pas ouvrir. Garder au frais et au sec.<br><br>En cas de problème : fréquence d'urgence <b>${this.secrets.radioFreq}</b> MHz`, `Caisse Hélios : fréquence d'urgence ${this.secrets.radioFreq} MHz`),
       });
     }
     if (!this.flags.reserveUsed) {
@@ -312,9 +321,9 @@ export const InteractMixin = {
     const cab = this.island.cabin;
     if (!this.flags.doorOpen) {
       add(cab.pos.clone().add(new THREE.Vector3(-0.15, 1.5, 0)), 2.4, { prompt: '<kbd>E</kbd> Lire le mot', press: () => this.openNote('Mot sur la porte', 'Code du cabanon = les trois derniers chiffres de l\'année du phare.<br>— le gardien', 'Mot du gardien : « Code du cabanon = les trois derniers chiffres de l\'année du phare. »') });
-      add(cab.pos.clone().add(new THREE.Vector3(0.45, 1.05, 0)), 2.4, { prompt: '<kbd>E</kbd> Cadenas', press: () => this.openCabinLock() });
+      add(cab.pos.clone().add(new THREE.Vector3(0.35, 1.05, 0)), 2.4, { prompt: 'Cadenas à molettes : visez une molette (<kbd>E</kbd>/<kbd>R</kbd> ou molette de la souris)' });
     }
-    add(this.island.plaquePos, 2.6, { prompt: '<kbd>E</kbd> Lire la plaque', press: () => this.openNote('Plaque du phare', 'PHARE DE LA POINTE<br>mis en service en 1874', 'Plaque du phare : « mis en service en 1874 »') });
+    add(this.island.plaquePos, 2.6, { prompt: '<kbd>E</kbd> Lire la plaque', press: () => this.openNote('Plaque du phare', `PHARE DE LA POINTE<br>mis en service en ${this.secrets.year}`, `Plaque du phare : « mis en service en ${this.secrets.year} »`) });
     const F = this.fun;
     add(F.hammock.pos, 2.6, { prompt: '<kbd>E</kbd> Hamac', press: () => this.lieDown() });
     add(F.boombox.pos, 2.4, { prompt: this.music ? '<kbd>E</kbd> Couper la musique' : '<kbd>E</kbd> Poste radio', press: () => this.toggleMusic() });
@@ -337,7 +346,7 @@ export const InteractMixin = {
     }
     add(F.survival.pos, 2.6, this.flags.chest
       ? { prompt: '<kbd>E</kbd> Coffre du canot', press: () => this.takeFromChest() }
-      : { prompt: '<kbd>E</kbd> Coffre du canot (cadenas)', press: () => this.openSymbolLock() });
+      : { prompt: 'Coffre du canot : cadenas à symboles (visez une molette)' });
     if (this.flags.kingDead) add(F.harpoonRack.pos, 2.8, { prompt: `<kbd>E</kbd> ${this.lootTaken.harpoonGun ? 'Harpons' : 'Fusil-harpon'}`, press: () => this.takeHarpoon() });
     // griller un poisson au feu de camp
     if (this.fishCount()) add(this.island.fire.pos.clone().add(new THREE.Vector3(0, 0.6, 0)), 3.2, { prompt: '<kbd>E</kbd> Griller un poisson', press: () => this.grillFish() });
@@ -355,16 +364,16 @@ export const InteractMixin = {
         add(this.fuseSpots[k], 2.4, { prio: 2, prompt: `<kbd>E</kbd> ${where}`, press: () => this.act('fuse', { k }) });
       }
       this.physInteractions(add, me);
-      add(P.fusePanel, 2.6, { prompt: '<kbd>E</kbd> Tableau électrique', press: () => this.openFusePanel() });
-      add(P.poster, 2.8, { prompt: '<kbd>E</kbd> Affiche', press: () => this.openNote('Consignes électriques', 'La centrale (à l\'ouest du terminal) a trois circuits, chacun son fusible :<br>☀ Éclairage : fusible <b>ROUGE</b> — rechange sur le toit du terminal, près des projecteurs<br>⚓ Ponton et pompe : fusible <b>BLEU</b> — rechange au coffre du poste de sécurité<br>✈ Balisage de piste : fusible <b>JAUNE</b> — rechange dans le local technique, en bout de piste', 'Affiche du terminal : ☀ rouge (toit) · ⚓ bleu (poste de sécurité) · ✈ jaune (local de bout de piste)') });
+      add(P.fusePanel, 2.6, { prompt: 'Tableau électrique : visez un emplacement (<kbd>E</kbd> insérer, <kbd>R</kbd> retirer)' });
+      add(P.poster, 2.8, { prompt: '<kbd>E</kbd> Affiche', press: () => this.readFusePoster() });
       const inCab = me.y > FLAT + 10;
       if (!inCab) add(P.lift, 2.4, { prompt: I.power ? '<kbd>E</kbd> Ascenseur' : '<span class="warn">Pas de courant</span>', press: () => { if (I.power) this.useLift(true); else this.audio.error(); } });
       if (inCab) {
         add(P.liftTop, 2.2, { prompt: '<kbd>E</kbd> Descendre', press: () => this.useLift(false) });
-        add(P.console, 2.4, { prompt: '<kbd>E</kbd> Radio de la tour', press: () => this.openRadio() });
+        add(P.console, 2.4, { prompt: I.power ? 'Radio de la tour : visez le bouton de réglage ou le bouton rouge d\'émission' : '<span class="warn">Radio éteinte : pas de courant</span>' });
       }
-      add(P.hangarPad, 2.4, { prompt: this.flags.hangarOpen ? 'Hangar ouvert' : '<kbd>E</kbd> Clavier du hangar', press: () => { if (!this.flags.hangarOpen) this.openHangarPad(); } });
-      add(P.shed, 2.6, { prompt: '<kbd>E</kbd> Consigne', press: () => this.openNote('Consigne du dépôt', 'La cuve alimente la pompe du ponton.<br>Après un long arrêt : <b>purger le circuit</b> depuis le panneau de la pompe,<br>puis <b>doser la pression</b> : trop fort, la sécurité saute.', 'Dépôt : purger le circuit au panneau de la pompe, puis doser la pression') });
+      add(P.hangarPad, 2.4, { prompt: this.flags.hangarOpen ? 'Hangar ouvert' : 'Clavier du hangar : visez les touches' });
+      add(P.shed, 2.6, { prompt: '<kbd>E</kbd> Consigne', press: () => this.openNote('Consigne du dépôt', 'La cuve alimente la pompe du ponton.<br>Après un long arrêt : <b>purger le circuit</b> aux vannes du dépôt, près des cuves :<br>tournez les volants (<kbd>E</kbd> maintenu + souris) jusqu\'à ce que les trois manomètres soient dans le vert en même temps.<br>A est la vidange : elle fait baisser toutes les pressions.<br>Ensuite, au ponton, <b>doser la pression</b> de la pompe : trop fort, la sécurité saute.', 'Dépôt : purger le circuit aux vannes (3 manomètres dans le vert), puis doser la pression à la pompe') });
       add(P.vending, 2.2, { prompt: '<kbd>E</kbd> Sodas', press: () => this.soda() });
       // pompe : pistolet et panneau
       if (this.nozzle === null && !this.flags.refueled || this.nozzle === null && this.flight.fuel < this.flight.tankMax - 1) {
@@ -415,7 +424,14 @@ export const InteractMixin = {
     });
   },
 
-  valvesOk() { return Object.entries(CFG.island2.valves).every(([k, v]) => this.valves[k] === v); },
+  // affiche du terminal : l'ordre des fusibles change à chaque partie
+  readFusePoster() {
+    const F = this.secrets.fuses, N = { red: 'ROUGE', blue: 'BLEU', yellow: 'JAUNE' };
+    const where = { red: 'rechange sur le toit du terminal, près des projecteurs', blue: 'rechange au coffre du poste de sécurité', yellow: 'rechange dans le local technique, en bout de piste' };
+    const short = { red: 'rouge (toit)', blue: 'bleu (poste de sécurité)', yellow: 'jaune (local de bout de piste)' };
+    const L = [['sun', '☀ Éclairage'], ['anchor', '⚓ Ponton et pompe'], ['plane', '✈ Balisage de piste']];
+    this.openNote('Consignes électriques', `La centrale (à l'ouest du terminal) a trois circuits, chacun son fusible :<br>${L.map(([k, n]) => `${n} : fusible <b>${N[F[k]]}</b> — ${where[F[k]]}`).join('<br>')}`, `Affiche du terminal : ${L.map(([k, n]) => `${n.split(' ')[0]} ${short[F[k]]}`).join(' · ')}`);
+  },
   pumpSpec() {
     const I = this.island2;
     if (!I.power) return { prompt: '<span class="warn">Pompe : pas de courant</span>' };
@@ -463,7 +479,11 @@ export const InteractMixin = {
   },
 
   // ── actions simples ──
-  sit(s) { this.seat = s; this.player.pos.set(s.x, FLOOR, s.z); this.player.yaw = s.yaw; this.player.pitch = 0; this.audio.drop(); },
+  sit(s) {
+    if (this.zg && this.zg.mode !== 'walk') return;   // en apesanteur ou étalé : pas de siège
+    this.zgReset?.();
+    this.seat = s; this.player.pos.set(s.x, FLOOR, s.z); this.player.yaw = s.yaw; this.player.pitch = 0; this.audio.drop();
+  },
   standUp() {
     if (this.seat) { const s = this.seat; this.seat = null; this.player.pos.set(s.x + (s.x < 0 ? 0.55 : -0.55), FLOOR, s.z); if (s.bunk) this.player.pos.set(-0.2, FLOOR, s.z); }
     else { this.lying = false; this.player.place(this.fun.hammock.pos.x + 1.2, this.fun.hammock.pos.z + 1.2, this.player.yaw); }
@@ -607,84 +627,15 @@ export const InteractMixin = {
     if (note) this.addNote(note);
   },
   addNote(n) { if (!this.notes.includes(n)) this.act('note', { text: n }); },
-  openCabinLock() {
-    this.openModalCommon();
-    this.ui.keypad('Cadenas du cabanon', 3, (code) => {
-      if (code !== CFG.code) { this.audio.error(); return false; }
-      this.act('door');
-      this.audio.success();
-      setTimeout(() => this.closeModal(), 400);
-      this.ui.toast('Cadenas ouvert', 'La porte du cabanon grince.', 'good');
-      return true;
-    }, () => this.input.lock());
-  },
-  openSymbolLock() {
-    this.openModalCommon();
-    this.ui.symbolLock(SYMBOLS, (vals) => {
-      if (vals.join('') !== SYMBOL_CODE.join('')) { this.audio.error(); return false; }
-      this.act('flag', { chest: true });
-      this.act('scrap', { n: 3 });
-      setTimeout(() => { this.closeModal(); this.takeFromChest(); }, 700);
-      return true;
-    }, () => this.input.lock());
-  },
-  openHangarPad() {
-    this.openModalCommon();
-    this.ui.keypad('Hangar 2 · accès', 3, (code) => {
-      if (code !== CFG.island2.hangarCode) { this.audio.error(); return false; }
-      if (!this.island2.power) { this.audio.error(); this.ui.toast('Code accepté', 'Mais le moteur de la porte ne répond pas : pas de courant.', 'bad'); return false; }
-      this.act('hangar');
-      this.audio.success();
-      setTimeout(() => this.closeModal(), 400);
-      return true;
-    }, () => this.input.lock());
-  },
-  openFusePanel() {
-    this.openModalCommon();
-    const owned = [...this.fuses, ...this.fuseSlots.map((s) => s.fuse).filter(Boolean)];
-    const slots = this.fuseSlots.map((s) => ({ ...s }));
-    this.ui.fusePanel(slots, owned, (sl) => {
-      this.audio.clank();
-      const full = sl.every((s) => s.fuse);
-      const ok = sl.every((s) => s.fuse === { sun: 'red', anchor: 'blue', plane: 'yellow' }[s.key]);
-      this.act('fslots', { slots: sl.map((s) => s.fuse) });
-      if (full && ok) setTimeout(() => this.closeModal(), 700);
-      else if (full) {
-        this.audio.spark();
-        this.hp -= 8; this.lastHurt = this.t; this.ui.hurt(0.6); setTimeout(() => this.ui.hurt(0), 250);
-        this.ui.toast('Court-circuit !', 'Voir l\'affiche du terminal.', 'bad', 3000);
-      }
-    }, () => this.input.lock());
-  },
-  openRadio() {
-    if (!this.island2.power) { this.ui.toast('Radio éteinte', 'Pas de courant.', 'bad'); return; }
-    this.openModalCommon();
-    this.ui.radioTuner((f) => {
-      if (f !== CFG.island2.radioFreq) { this.audio.error(); this.ui.toast('Grésillements', 'Personne sur cette fréquence.', 'bad', 1800); return false; }
-      this.act('flag', { radioDone: true });
-      this.audio.success();
-      setTimeout(() => this.closeModal(), 600);
-      this.ui.radio(`Enfin une liaison claire ! Écoutez : la météo de la tour annonce une tempête ce soir. La mer sera trop forte pour décoller sur l'eau : il vous faudra la piste, donc les roues amphibies du hangar 2. Le code : ${CFG.island2.hangarCode}. Ma sœur était contrôleuse ici, c'était son code.`, () => this.audio.radio());
-      this.ui.radio('Faites le plein au ponton, montez les roues, et tenez jusqu\'à 21 h, quand le vent tombe. Et prenez les talkies de la tour : vous vous entendrez partout sur l\'île.', () => this.audio.radio());
-      this.addNote(`Radio : code du hangar 2 = ${CFG.island2.hangarCode}`);
-      return true;
-    }, () => this.input.lock());
-  },
-  // pompe : purge du circuit (énigme) puis pompage (jauge de pression)
+  // pompe : le circuit doit être purgé aux vannes du dépôt, puis on dose la pression (jauge)
   openPump() {
-    this.openModalCommon();
     if (!this.puzzles.pipes) {
-      if (!this.pipePz) this.pipePz = makePipes(this.seed ^ 0x5eed);
-      this.ui.onTick = () => this.audio.ratchet();
-      this.ui.pipePuzzle(this.pipePz, () => {
-        this.act('puzzle', { k: 'pipes', v: 1 });
-        this.audio.powerUp();
-        this.ui.toast('Circuit purgé', 'La pompe a de la pression. À vous de doser.', 'good');
-        this.closeModal(true);
-        setTimeout(() => this.openPump(), 250);
-      }, () => this.input.lock());
+      this.audio.error();
+      this.ui.toast('Circuit non purgé', 'Air dans les tuyaux : purgez-le aux vannes du dépôt, près des cuves (bout de piste, côté est).', 'bad', 4500);
+      this.addNote('Pompe : purger d\'abord le circuit aux vannes du dépôt (près des cuves)');
       return;
     }
+    this.openModalCommon();
     let acc = 0;
     this.ui.pumpPanel({
       getFuel: () => this.flight.fuel,

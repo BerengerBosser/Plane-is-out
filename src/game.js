@@ -50,8 +50,12 @@ import { MPMixin } from './mp.js';
 import { LootMixin } from './loot.js';
 import { PlanePushMixin } from './planepush.js';
 import { AdminMixin } from './admin.js';
+import { VoicePanelMixin } from './voicepanel.js';
 import { CombatMixin } from './combat.js';
 import { JetMixin } from './jet.js';
+import { DevicesMixin } from './devices.js';
+import { LocksMixin } from './locks.js';
+import { ZeroGMixin } from './zerog.js';
 
 // ── Fumées (repères visuels) ────────────────────────────────
 class Smoke {
@@ -153,6 +157,8 @@ export class Game {
     addEventListener('resize', () => this.onResize());
 
     this.audio = createAudio();
+    // sounds/config.json (fichiers réglés dans le studio son) ; sans serveur : sons de synthèse
+    this.audio.loadConfig().then((r) => this.soundStatus({ ...this.audio.stats(), config: r.ok }));
     this.ui = createUI();
     this.input = new Input(this.canvas);
     this.island = buildIsland(this.scene);
@@ -229,6 +235,10 @@ export class Game {
     this.duckSpots = duckSpots1();
 
     this.createItems();
+    // dispositifs 3D (claviers, molettes, volants, miroirs) et cadenas de l'île 1
+    this.devicesInit();
+    this.deviceProviders.push(() => this.mirrorDevices());
+    this.buildLocks();
     this.combatInit();
     this.armsInit();
     this.invInit();
@@ -288,6 +298,7 @@ export class Game {
       Object.values(this.fuseMeshes || {}).forEach((m) => this.scene.remove(m));
     }
     this.seed = seed;
+    this.applySecrets(seed);   // codes, fréquences et combinaisons de cette partie
     this.island2 = createIsland2(this.scene, seed);
     this.buildPhysPuzzles();
     this.colliders.push(...this.island2.colliders);
@@ -397,7 +408,9 @@ export class Game {
     this.planeLive = false;
     this.fuses = new Set();          // fusibles trouvés (équipe)
     this.fuseSlots = FUSE_SLOTS.map((s) => ({ ...s, fuse: null }));
-    this.valves = { A: false, B: false, C: false, D: false };
+    this.valves = { A: 0, B: 0, C: 0, D: 0 };
+    this.grab = null;
+    this.zg = null;
     this.ducks = new Set();
     this.symbols = new Set();
     this.music = false;
@@ -652,6 +665,24 @@ export class Game {
     // hauteur réelle de chaque marche (l'avion peut pencher ou tanguer)
     this.planeStairPlats = STAIRS.steps.map((s) => ({ obb: true, x: r.position.x, z: r.position.z, r: r.rotation.y, minX: s.x0, maxX: s.x1, minZ: STAIRS.z0, maxZ: STAIRS.z1, top: r.localToWorld(v.set((s.x0 + s.x1) / 2, s.top, (STAIRS.z0 + STAIRS.z1) / 2)).y, stair: true }));
   }
+  // debout sur l'avion (ailes, toit, flotteurs, marches) : on est emporté avec lui quand il roule, dérive ou tangue
+  // (avant : l'avion glissait sous les pieds et on se retrouvait dans la carlingue)
+  ridePlane(before) {
+    const P = this.player, r = this.plane.root;
+    if (before) {
+      const R = this._ride; this._ride = null;
+      if (!R) return;
+      const w = r.localToWorld(R.local.clone());
+      if (w.distanceTo(P.pos) > 6) return;
+      P.pos.copy(w);
+      P.yaw += r.rotation.y - R.yaw;
+      return;
+    }
+    if (!P.onGround || this.hoist) return;
+    const plats = (this.planeTopPlats || []).concat(this.planeStairPlats || []);
+    if (!plats.some((p) => this.onPlatform(p, P.pos.x, P.pos.z) && Math.abs(P.pos.y - p.top) < 0.12)) return;
+    this._ride = { local: r.worldToLocal(P.pos.clone()), yaw: r.rotation.y };
+  }
   // passage sans téléportation entre le monde et la cabine : on change seulement de repère (même position à l'écran)
   updateBoarding() {
     if (this.seat || this.lying || this.downed || this.driving || this.riding || this.hoist) return;
@@ -667,7 +698,7 @@ export class Game {
         }
         this.boardPlane(l);
       }
-    } else if (!this.seat && this.player.pos.x > 1.75) this.exitPlane();
+    } else if (!this.seat && this.player.pos.x > 1.75 && !this.flight.airborne) this.exitPlane();
   }
   // sortie par la porte : sur le palier (au sol), ou dans le vide (en vol)
   exitPlane(fall = false) {
@@ -675,6 +706,7 @@ export class Game {
     root.updateMatrixWorld(true);
     const w = root.localToWorld(this.player.pos.clone());
     this.aboard = false; this.seat = null;
+    this.zgReset?.();
     this.player.pos.copy(w);
     this.player.yaw += root.rotation.y;
     this.player.velY = fall ? 1.5 : 0;
@@ -763,11 +795,13 @@ export class Game {
       { sub: true, text: 'Fusible bleu · poste de sécurité', hint: 'Guidez le laser avec deux miroirs', done: fz('blue') },
       { sub: true, text: 'Fusible jaune · local du balisage', hint: 'Bout de piste · lestez les deux pédales', done: fz('yellow') },
       { id: 'radio', text: 'Appeler Marthe depuis la tour de contrôle', hint: 'Fréquence : étiquette de la caisse', done: f.radioDone },
-      { id: 'hangar', text: 'Ouvrir le hangar 2 et récupérer les roues amphibies', hint: f.radioDone ? `Code du hangar : ${CFG.island2.hangarCode}` : 'Le code viendra par la radio', done: f.hangarOpen && (this.items.wheels.state !== 'ground' || f.wheels) },
+      { id: 'hangar', text: 'Ouvrir le hangar 2 et récupérer les roues amphibies', hint: f.radioDone ? `Code du hangar : ${this.secrets.hangarCode}` : 'Le code viendra par la radio', done: f.hangarOpen && (this.items.wheels.state !== 'ground' || f.wheels) },
       { id: 'wheels', text: 'Monter les roues sur les flotteurs', hint: 'Avion près du ponton', done: f.wheels },
-      { id: 'fuel', text: 'Faire le plein au ponton', hint: this.nozzle !== 'plane' ? 'Pistolet de la pompe → aile droite' : 'Panneau de la pompe', done: f.refueled },
-      { id: 'storm', text: 'Tenir la centrale jusqu\'à 21 h', hint: 'Défendez le générateur (clé : réparer)', done: f.stormOver, hidden: !f.storm },
-      { id: 'takeoff2', text: 'Décoller de Saint-Escale, cap sur Hélios', hint: 'Rampe, puis plein gaz sur la piste', done: f.tookOff2 },
+      { id: 'fuel', text: 'Faire le plein au ponton', hint: !this.puzzles.pipes ? 'D\'abord purger le circuit aux vannes du dépôt' : this.nozzle !== 'plane' ? 'Pistolet de la pompe → aile droite' : 'Panneau de la pompe', done: f.refueled },
+      { sub: true, text: 'Purger le circuit · vannes du dépôt', hint: 'Trois manomètres dans le vert en même temps', done: !!this.puzzles.pipes || f.refueled },
+      { id: 'storm', text: `Tenir la centrale pendant la tempête${f.storm && !f.stormOver ? ` (${this.stormLeftText()})` : ''}`, hint: 'Son générateur allume le balisage de la piste · clé : réparer', done: f.stormOver, hidden: !f.storm },
+      { id: 'gen', text: 'Relancer le générateur (balisage éteint)', hint: 'Centrale · E maintenu avec la clé à molette', done: this.island2.power || f.tookOff2, hidden: !f.stormOver || !f.power },
+      { id: 'takeoff2', text: 'Décoller de la piste de Saint-Escale, cap sur Hélios', hint: 'Mer trop agitée pour l\'eau : rampe, puis plein gaz sur la piste', done: f.tookOff2 },
       { id: 'warden', optional: true, text: 'Bonus · vaincre le Colosse', hint: 'Vulnérable dans la lumière', done: f.wardenDead, hidden: !f.storm },
     ].filter((o) => !o.hidden);
   }
@@ -791,8 +825,8 @@ export class Game {
       case 'power': { const k = ['red', 'blue', 'yellow'].find((q) => !this.fuses.has(q)); return k ? this.fuseSpots[k] : P.fusePanel; }
       case 'radio': return P.lift;
       case 'hangar': return this.flags.hangarOpen ? this.items.wheels.pos : P.hangarPad;
-      case 'fuel': return this.nozzle === this.myId() ? this.plane.root.position : P.pump;
-      case 'storm': return P.generator;
+      case 'fuel': return !this.puzzles.pipes && !this.flags.refueled ? P.valvesMid || P.pump : this.nozzle === this.myId() ? this.plane.root.position : P.pump;
+      case 'storm': case 'gen': return P.generator;
       case 'takeoff2': return P.runwayStart;
       default: return null;
     }
@@ -819,6 +853,22 @@ export class Game {
   progress() { this.lastProgress = this.t; }
 
   radioOnce(key, msg) { if (this.said.has(key)) return; this.said.add(key); this.ui.radio(msg, () => this.audio.radio()); }
+  // approche de Saint-Escale sans les roues amphibies : se poser sur l'eau, surtout pas sur la piste
+  updateArrival2(f) {
+    if (this.flags.wheels || f.wheels || !f.airborne || this.chapter() !== 2 || !this.island2) return;
+    const d = Math.hypot(f.pos.x - this.island2.cx, f.pos.z - this.island2.cz);
+    if (d < 650 && !this.said.has('arrive2')) {
+      this.ui.toast('Saint-Escale en vue · pas de roues !', 'Posez-vous sur l\'eau, près du ponton de carburant. Sur la piste ou le sable, c\'est le crash.', 'bad', 9000);
+      this.radioOnce('arrive2', 'Je vous vois sur mon écran, vous approchez de Saint-Escale. Attention : le Coucou n\'a que ses flotteurs, pas de roues ! N\'essayez pas la piste. Amerrissez dans la baie, près du ponton de carburant, et rejoignez la rampe à pied.');
+    }
+    // au ras du sol, sous l'avion : rappel (toutes les 6 s au plus)
+    const g = heightAt(f.pos.x, f.pos.z);
+    if (d < 260 && g > -0.45 && f.pos.y - g < 30 && (f.vy ?? 0) < -0.5 && this.t - (this._noWheelT ?? -99) > 6) {
+      this._noWheelT = this.t;
+      this.audio.error();
+      this.ui.toast('Pas de roues : remettez les gaz !', 'Visez l\'eau, pas la terre ferme.', 'bad', 3000);
+    }
+  }
   nextHint() {
     if (this.chapter() === 1) {
       if (!this.hasItem('diable') && !this.flags.diable) return 'Le diable de secours est tombé près des débris, sur la plage. Sans lui, les moteurs vont vous casser le dos.';
@@ -844,7 +894,7 @@ export class Game {
     $('btnContinue').addEventListener('click', () => { this.mpLeave(); this.continueGame(); });
     $('btnResume').addEventListener('click', () => this.resumeGame());
     $('btnRetry').addEventListener('click', () => this.retryDay());
-    $('btnSave').addEventListener('click', () => { this.save(); ui.toast('Partie sauvegardée', '', 'good'); });
+    $('btnSave').addEventListener('click', () => { this.save(); this.pauseSaved('partie sauvegardée ✓'); });
     $('btnQuit').addEventListener('click', () => this.quitToMenu());
     const openSheet = (id) => { this.sheetFrom = ui.visible('pause') ? 'pause' : 'menu'; ui.show(this.sheetFrom, false); ui.show(id, true); };
     const closeSheet = (id) => { ui.show(id, false); ui.show(this.sheetFrom || 'menu', true); };
@@ -854,8 +904,8 @@ export class Game {
     $('btnHelp2').addEventListener('click', () => openSheet('help'));
     $('setClose').addEventListener('click', () => closeSheet('settings'));
     $('helpClose').addEventListener('click', () => closeSheet('help'));
-    document.querySelectorAll('#settings .tab').forEach((t) => t.addEventListener('click', () => {
-      document.querySelectorAll('#settings .tab').forEach((x) => x.classList.toggle('on', x === t));
+    document.querySelectorAll('#settings .tabs .tab').forEach((t) => t.addEventListener('click', () => {
+      document.querySelectorAll('#settings .tabs .tab').forEach((x) => x.classList.toggle('on', x === t));
       document.querySelectorAll('[data-pane]').forEach((p) => { p.hidden = p.dataset.pane !== t.dataset.tab; });
     }));
     const bindRange = (id, out, fmt, apply) => { $(id).addEventListener('input', (e) => { $(out).textContent = fmt(+e.target.value); apply(+e.target.value); this.saveSettings(); }); };
@@ -905,7 +955,14 @@ export class Game {
     document.addEventListener('fullscreenchange', () => { $('optFull').checked = !!document.fullscreenElement; $('btnFull').querySelector('span').textContent = document.fullscreenElement ? 'Fenêtré' : 'Plein écran'; });
     bindRange('optView', 'oView', (v) => `${Math.round(v * 100)} %`, (v) => { this.viewDist = v; });
     bindRange('optBright', 'oBright', (v) => `${Math.round(v * 100)} %`, (v) => { this.brightness = v; });
+    // sons : actualisation (F9, ici et dans le studio son ouvert sur /studio)
+    $('btnSoundRefresh').addEventListener('click', () => this.refreshSounds());
+    this.audio.on('remoteRefresh', (r) => { this.soundStatus(r); ui.toast('Sons actualisés', 'depuis le studio son', 'good', 1800); });
+    this.audio.on('refresh', (r) => this.soundStatus(r));
+    // le navigateur n'autorise le son qu'après un geste : dès le premier clic (musique du menu comprise)
+    addEventListener('pointerdown', () => this.audio.init(), { once: true, capture: true });
     addEventListener('keydown', (e) => {
+      if (e.code === 'F9') { e.preventDefault(); this.refreshSounds(); return; }
       if (ui.modalOpen()) {
         if (e.code === 'Escape') this.closeModal();
         else ui.modalKey?.(e);
@@ -931,10 +988,26 @@ export class Game {
   }
   openPause() {
     this.ui.show('pause', true);
-    const n = this.session ? ` · équipage ${this.session.count()}` : '';
+    this.refreshPauseAdmin();
+    const $ = (id) => document.getElementById(id);
     const ch = ['Chapitre 1 · Plage du Crash', 'Chapitre 2 · Saint-Escale', 'Chapitre 3 · Port-Cendre', 'Chapitre 4 · Hélios'][this.chapter() - 1] || '';
-    document.getElementById('pauseInfo').textContent = `${ch} · ${this.clock()} · canards ${this.ducks.size}/${this.duckSpots.length}${n}`;
+    const chips = [ch, `🕒 ${this.clock()}`, `🦆 ${this.ducks.size}/${this.duckSpots.length}`];
+    if (this.session) chips.push(`👥 ${this.session.count()}`);
+    $('pauseInfo').replaceChildren(...chips.filter(Boolean).map((t) => Object.assign(document.createElement('span'), { textContent: t })));
+    // le HUD est masqué pendant la pause : on y recopie l'objectif en cours
+    $('pgTitle').textContent = $('trTitle').textContent;
+    $('pgSub').textContent = $('trSub').textContent;
+    $('pauseGoal').hidden = !$('trTitle').textContent;
     this.save();
+    this.pauseSaved('sauvegarde auto ✓');
+    setTimeout(() => $('btnResume').focus({ preventScroll: true }), 0);
+  }
+  // confirmation de sauvegarde affichée dans la carte (les notifications du HUD sont rangées en coin)
+  pauseSaved(txt) {
+    const el = document.getElementById('pauseSaved');
+    el.textContent = txt;
+    clearTimeout(this.pauseSavedT);
+    this.pauseSavedT = setTimeout(() => { el.textContent = ''; }, 4000);
   }
   resumeGame() { this.ui.show('pause', false); this.input.lock(); }
   toggleFullscreen(on) {
@@ -947,6 +1020,39 @@ export class Game {
     } catch { this.ui.toast('Plein écran indisponible', 'Essayez la touche F11.', 'bad'); }
   }
 
+  // F9 : relit sounds/config.json et tous les fichiers audio (remplacés ou ajoutés), et prévient le studio ouvert
+  async refreshSounds() {
+    this.audio.init();
+    this.audio.broadcast({ t: 'refresh' });
+    const r = await this.audio.refresh();
+    const err = r.errors.length ? ` · illisibles : ${r.errors.join(', ')}` : '';
+    this.ui.toast('Sons actualisés', r.config ? `${r.files} fichier${r.files > 1 ? 's' : ''} de sons, ${r.music} musique${r.music > 1 ? 's' : ''}${err}` : 'Pas de sounds/config.json (serveur absent ?) : sons de synthèse.', r.config && !err ? 'good' : 'bad', 3000);
+  }
+  soundStatus(r) {
+    const el = document.getElementById('soundInfo');
+    if (el) el.textContent = r.config ? `${r.files} son${r.files > 1 ? 's' : ''} en fichier · ${r.music} musique${r.music > 1 ? 's' : ''}${r.errors.length ? ` · ${r.errors.length} illisible(s)` : ''}` : 'sons de synthèse';
+  }
+  // ambiance musicale : le jeu choisit l'humeur, le moteur audio enchaîne en fondu (musiques réglées dans le studio son)
+  updateMusicMood(dt) {
+    this.moodT = (this.moodT || 0) - dt;
+    if (this.moodT > 0) return;
+    this.moodT = 0.5;
+    let m = null;
+    if (this.mode === 'menu') m = 'menu';
+    else if (this.mode === 'intro') m = 'drama';
+    else if (this.inGame() || this.mode === 'dead') {
+      const me = this.playerWorld();
+      // danger : nuit dehors après l'alarme, zombies éveillés tout près, boss, siège, joueur à terre ou mort
+      const danger = this.mode === 'dead' || this.downed || this.siege?.active
+        || (this.flags.alarm && this.isNight() && !this.aboard && !this.bseat && this.mode !== 'flight')
+        || this.enemies.list.some((e) => !e.dead && e.type !== 'crab' && e.state !== 'sleep' && (e.appear ?? 1) >= 1 && e.pos.distanceTo(me) < (e.T?.boss ? 70 : 28));
+      // le calme revient une vingtaine de secondes après le dernier danger
+      this.dangerT = danger ? 20 : Math.max(0, (this.dangerT || 0) - 0.5);
+      const flying = (this.mode === 'flight' && this.flight.airborne) || (this.jetting && this.jet?.f.airborne) || (this.bseat && this.bf?.airborne);
+      m = this.dangerT > 0 ? 'drama' : flying ? 'flight' : 'calm';
+    }
+    this.audio.setMood(m);
+  }
   setShadows(on) {
     this.renderer.shadowMap.enabled = on;
     this.scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; });
@@ -1378,7 +1484,15 @@ export class Game {
   // point de réveil : feu (île 1) ou cabine de l'avion (île 2)
   respawn() {
     if (this.carrying) this.dropCarried();
-    if (this.chapter() === 2 && this.planeLive) {
+    if (this.chapter() === 2 && this.planeLive && this.flags.doorJam) {
+      // verrou grippé (ou grillé par la foudre pendant le siège) : la cabine serait une prison.
+      // On se réveille derrière les sacs de sable de la centrale, face à l'ouverture.
+      const G = this.island2.points.generator, k = this.session ? this.mpIndex() : 0;
+      this.aboard = false; this.seat = null; this.lying = false;
+      this.player.place(G.x - 2.3, G.z - 1.2 + (k % 4) * 0.8, Math.PI / 2);
+      this.player.onGround = true;
+      setTimeout(() => this.ui.toast('Réveil à la centrale', this.flags.jamStorm ? 'Le verrou de l\'avion est grillé jusqu\'à l\'accalmie : défendez le générateur.' : 'Le verrou de l\'avion est grippé : dégrippez-le à la clé pour rentrer.', 'bad', 4500), 1200);
+    } else if (this.chapter() === 2 && this.planeLive) {
       this.aboard = true; this.seat = null; this.lying = false;
       this.player.pos.set(-0.3 + (this.mpIndex() % 2) * 0.5, FLOOR, 3.3 - this.mpIndex() * 0.8); this.player.yaw = Math.PI / 2;
     } else if (this.chapter() >= 3 && this.boeing && !this.c3?.fly) {
@@ -1446,10 +1560,12 @@ export class Game {
     const inp = this.input;
     // plus de visée possible (avion, siège du Boeing, volant, menu) : le champ de vision revient d'un coup
     if (this.aiming && (this.mode !== 'explore' || this.bseat || this.driving || this.jetting)) this.aimFov(1, 0);
+    if (this.session && (this.inGame() || this.mode === 'dead')) this.mpPreUpdate(dt);
     if (this.mode === 'menu') this.updateMenu(dt);
     else if (this.mode === 'intro') this.updateIntro(dt);
     else if (this.mode === 'explore') this.updateExplore(dt);
     else if (this.mode === 'flight') this.updateFlight(dt);
+    this.updateMusicMood(dt);
 
     this.updateFlying(dt);
     this.smoke.update(dt);
@@ -1458,6 +1574,7 @@ export class Game {
     const focus = this.mode === 'flight' || this.mode === 'crashed' ? this.flight.pos : this.inGame() ? this.playerWorld() : this.camera.position;
     const wx = this.updateWeather(dt);
     const sk = this.sky.update(hour, this.camera.position, this.t, dt, focus, (this.viewDist || 1) * (this.mode === 'flight' || this.mode === 'menu' || this.bseat || this.jetting ? 1.25 : 1), wx);
+    this.weather.shade(sk.sky);
     // génération à distance : au-delà du brouillard, rien n'est dessiné (îles, décor, objets)
     // le dôme du ciel reste toujours en deçà du plan lointain (sinon il est découpé : disque noir au centre de l'écran)
     const far = Math.max(900, this.scene.fog.far * 1.3);
@@ -1479,7 +1596,8 @@ export class Game {
         const targets = this.enemyTargets(), i3 = this.island3;
         const on3 = !!i3 && targets.some((q) => q.active && Math.hypot(q.pos.x - i3.cx, q.pos.z - i3.cz) < 420);
         const maxVoiles = CFG.combat.maxVoiles + 2 * (this.playerCount() - 1);
-        this.enemies.update(dt, { players: targets, day: this.stats.days, chapter: this.chapter(), night: sk.brume, depth: this.nightDepth(), lights: this.lightSources(), maxVoiles, hordeMul: on3 ? CFG.combat.horde3 : 1, dayCap: on3 ? Math.round(maxVoiles * CFG.combat.day3) : 0, siege: this.siege.active ? { pos: this.island2.points.generator, active: true } : null });
+        const on4 = !on3 && this.heliosInfested(targets);   // rues d'Hélios : errants de jour, horde de nuit renforcée
+        this.enemies.update(dt, { players: targets, day: this.stats.days, chapter: this.chapter(), night: sk.brume, depth: this.nightDepth(), lights: this.lightSources(), maxVoiles, hordeMul: on3 ? CFG.combat.horde3 : on4 ? CFG.combat.horde4 : 1, dayCap: on3 ? Math.round(maxVoiles * CFG.combat.day3) : on4 ? Math.round(maxVoiles * CFG.combat.day4) : 0, dayZone: on4 ? this._heliosZone || (this._heliosZone = (x, z) => this.heliosStreet(x, z)) : null, siege: this.siege.active ? { pos: this.island2.points.generator, active: true } : null });
         this.updateNightEvents(dt);
         this.updateSiege(dt);
         this.updateHoldTrickle(dt);
@@ -1507,6 +1625,7 @@ export class Game {
       this.updateLoot();
       this.updateIndoorZombies();
       this.updateSelfAvatar(dt);
+      this.updateLocks(dt);
       this.updateChapter3(dt);
       this.updateChapter4(dt);
       this.updateJet?.(dt);
@@ -1598,7 +1717,7 @@ export class Game {
     if (!this.flags.h16 && h >= 16 && h < 18) { this.flags.h16 = true; this.ui.radio('Il est 16 h. Plus que trois heures avant la nuit. Prévoyez où vous dormirez.', () => this.audio.radio()); }
     if (!this.flags.h18 && h >= 18 && h < 18.5) {
       this.flags.h18 = true;
-      this.ui.radio(this.flags.storm && !this.flags.stormOver ? '18 h. Tout le monde à la centrale ! Préparez-vous à tenir jusqu\'à 21 h.' : '18 h ! Mettez-vous à l\'abri : près d\'une lumière, ou dans l\'avion. La couchette est confortable, paraît-il.', () => this.audio.radio());
+      this.ui.radio(this.flags.storm && !this.flags.stormOver ? `18 h. Tenez bon à la centrale, l'accalmie est dans ${this.stormLeftText()}.` :'18 h ! Mettez-vous à l\'abri : près d\'une lumière, ou dans l\'avion. La couchette est confortable, paraît-il.', () => this.audio.radio());
     }
     if (!this.flags.alarm && h >= CFG.time.alarmHour && h < CFG.time.nightHour + 1) {
       this.flags.alarm = true;
@@ -1641,6 +1760,13 @@ export class Game {
   updateToxicity(dt, altitude, pos) {
     return this.updateNightExposure(dt, altitude, pos);
   }
+  // nuage toxique d'un Gonflé : ~10 santé/s tant qu'on reste dedans (les vêtements n'y font rien)
+  updateGas(dt) {
+    if (this.aboard || this.downed || this.driving || !this.gore?.gasAt(this.playerWorld())) { this.gasT = 0; return; }
+    if (!this.gasT && !this.said.has('gas')) { this.said.add('gas'); this.ui.toast('Gaz toxique !', 'Sortez du nuage vert : il vous ronge tant que vous y restez.', 'bad', 3500); }
+    this.gasT = (this.gasT || 0) + dt;
+    if (this.gasT >= 0.5) { this.gasT -= 0.5; this.hurt(5, 'le gaz'); }
+  }
   hurt(dmg, type, dir) {
     if (this.mode !== 'explore' || this.aboard || this.downed || this.bseat) return;
     if (this.godMode) return;
@@ -1648,16 +1774,17 @@ export class Game {
     const veh = this.driving || this.riding;
     if (veh && ENEMY_TYPES[type] && (veh.hp ?? 100) > 0) { this.damageVehicle(veh, dmg); return; }
     // vêtements de protection (gilet, casque, veste militaire) ; pas contre les chutes ni le feu
-    this.hp -= dmg * (type === 'la chute' || type === 'le feu' ? 1 : 1 - this.armor());
+    const gas = type === 'le gaz';
+    this.hp -= dmg * (type === 'la chute' || type === 'le feu' || gas ? 1 : 1 - this.armor());
     if (dir && !this.driving && !this.riding) { const k = dir.k ?? 4; this.player.pos.x += dir.x * k * 0.12; this.player.pos.z += dir.z * k * 0.12; }
-    if (this.gore && type !== 'fire' && type !== 'le feu') this.gore.blood(this.playerWorld().setY(this.playerWorld().y + 1.3), null, false);
+    if (this.gore && type !== 'fire' && type !== 'le feu' && !gas) this.gore.blood(this.playerWorld().setY(this.playerWorld().y + 1.3), null, false);
     this.lastHurt = this.t;
-    this.player.shake = 1;
+    this.player.shake = gas ? Math.max(this.player.shake, 0.25) : 1;
     this.audio.hurt();
     this.ui.hurt(0.9);
     setTimeout(() => this.ui.hurt(this.hp < 30 ? 0.35 : 0), 250);
     if (type === 'crab') this.radioOnce('crabhit', 'Ils pincent fort, hein ? Clic gauche pour frapper. La clé à molette tape bien plus fort que vos poings.');
-    if (this.hp <= 0 && !this.downed) this.die(type === 'explosion' ? 'Pris dans le souffle' : ENEMY_TYPES[type] && type !== 'crab' && type !== 'kingcrab' ? (type === 'mega' ? 'Un méga-zombie vous a écrasé' : 'Les zombies vous ont eu') : type === 'kingcrab' ? 'Le Crabe-Roi vous a eu' : 'Vous vous êtes effondré');
+    if (this.hp <= 0 && !this.downed) this.die(type === 'explosion' ? 'Pris dans le souffle' : gas ? 'Asphyxié par le gaz' :ENEMY_TYPES[type] && type !== 'crab' && type !== 'kingcrab' ? (type === 'mega' ? 'Un méga-zombie vous a écrasé' : 'Les zombies vous ont eu') : type === 'kingcrab' ? 'Le Crabe-Roi vous a eu' : 'Vous vous êtes effondré');
   }
   onKill(e) {
     this.audio.hitShell();
@@ -1791,6 +1918,10 @@ export class Game {
       this.aimFov(dt, zoom);
     }
 
+    // plus dans une cabine en vol : la caméra reprend son aplomb
+    if (!this.aboard && (this.player.roll || (this.zg && this.zg.mode !== 'walk'))) this.zgReset();
+    // pièce saisie (volant de vanne, bouton de radio, miroir) : la souris la tourne au lieu de la caméra
+    const grabbing = !this.downed && !this.driving && !this.riding && !this.seat && !this.lying && this.updateGrab(dt, blocked);
     this.plane.root.updateMatrixWorld(true);
     if (this.downed) {
       this.updateDowned(dt);
@@ -1816,19 +1947,21 @@ export class Game {
       const swim = this.swimming();
       const help = this.carryHelp();
       const mods = {
-        canMove: !blocked,
+        canMove: !blocked && !grabbing,
         canSprint: (w <= 1 || this.carryMode === 'diable') && !this.exhausted && this.stamina > 0 && !swim,
-        canJump: w <= 1 && !swim,
-        speedMul: (w ? Math.min(0.95, speedTable[w] * (help ? 2.6 : 1)) : 1) * (swim ? CFG.swim.speed * this.swimMul() : 1),
+        canJump: w <= 1 && !swim && !grabbing,
+        speedMul: (w ? Math.min(0.95, speedTable[w] * (help ? 2.6 : 1)) : 1) * (swim ? CFG.swim.speed * this.swimMul() : 1) * (this.aboard ? 1 : this.adminSpeed || 1),
       };
       this.player.radius = this.aboard ? 0.24 : undefined;
       if (!this.aboard && !this.hoist && !blocked && swim && !this.player.onLadder && inp.down('KeyW', 'ArrowUp')) this.tryClimbOut();
       if (this.hoist) mv = this.updateHoist(dt);
-      else if (this.aboard) mv = this.player.update(dt, inp, cabinColliders(this.crateLoaded, this.upgrades), mods, this.cabinEnv());
+      else if (this.aboard) mv = this.cabinMove(dt, 'coucou', cabinColliders(this.crateLoaded, this.upgrades), mods, this.cabinEnv());
       else {
         // seuls les colliders à portée du joueur (l'archipel en compte des milliers)
         const pp = this.player.pos;
+        this.ridePlane(true);
         mv = this.player.update(dt, inp, this.nearCols(pp.x, pp.z, 8, this.colliders, this.planeNear(pp.x, pp.z, 22) ? this.planeColliders() : null, this.blockCols, this.vehicleCols, this.boeingCols), mods, this.worldEnv());
+        this.ridePlane(false);
       }
       if (!document.getElementById('optBob').checked) this.player.bob = 0;
       if (!this.hoist) this.updateFall(dt);
@@ -1842,7 +1975,8 @@ export class Game {
     }
     this.moving = mv.moving;
     this.sprinting = mv.sprint;
-    if (!this.downed && this.t - this.lastHurt > P.regenDelay) this.hp = Math.min(P.health, this.hp + P.regenPerSecond * dt * (this.aboard && this.upgrades.has('rug') ? 2 : 1));
+    this.updateGas(dt);
+    if (!this.downed && this.hp < P.regenCap && this.t - this.lastHurt > P.regenDelay) this.hp = Math.min(P.regenCap, this.hp +P.regenPerSecond * dt * (this.aboard && this.upgrades.has('rug') ? 2 : 1));
     ui.vitals(this.hp, this.stamina);
     if (this.hp > 30 && this.t - this.lastHurt > 0.3) ui.hurt(0);
 
@@ -2087,7 +2221,12 @@ export class Game {
     const inp = this.input, ui = this.ui, f = this.flight;
     this.advanceTime(dt);
     const wasGround = f.surface === 'ground';
-    f.noTakeoff = this.flags.storm && !this.flags.stormOver && this.nearIsland(f.pos) === 2;
+    // Saint-Escale : rien ne décolle pendant la tempête ; ensuite la houle interdit l'eau (piste seulement),
+    // et la piste ne se voit qu'avec son balisage (générateur en marche)
+    const fl = this.flags, at2 = this.nearIsland(f.pos) === 2;
+    f.noTakeoffWhy = !at2 || !fl.storm ? '' : !fl.stormOver ? 'storm' : fl.tookOff2 ? '' : f.onWater ? 'sea' : fl.power && !this.island2.power ? 'dark' : '';
+    f.noTakeoff = !!f.noTakeoffWhy;
+    this.updateArrival2(f);
     // chapitre 3 : le moteur droit surchauffe en approche de Port-Cendre
     if (this.chapter() === 3 && this.island3) {
       const d3 = Math.hypot(f.pos.x - this.island3.cx, f.pos.z - this.island3.cz);
@@ -2110,7 +2249,12 @@ export class Game {
         }
         if (this.chapter() === 2 && this.nearIsland(f.pos) === 2 && this.flags.stormOver && this.flags.refueled && !this.flags.tookOff2) this.act('flag', { tookOff2: true });
         void wasGround;
-      } else if (e === 'gusts') ui.toast('Rafales de tempête', 'Décollage impossible avant 21 h : le vent plaque l\'avion au sol.', 'bad', 3500);
+      } else if (e === 'gusts') {
+        const w = f.noTakeoffWhy;
+        if (w === 'sea') ui.toast('Mer trop agitée', 'La houle fait rebondir les flotteurs : sortez par la rampe et décollez de la piste.', 'bad', 4000);
+        else if (w === 'dark') ui.toast('Balisage éteint', 'Impossible de suivre la piste dans le noir : relancez le générateur de la centrale.', 'bad', 4000);
+        else if (w === 'storm') ui.toast('Rafales de tempête', `Décollage impossible avant l'accalmie (${this.stormLeftText()}) : le vent plaque l'avion.`, 'bad', 3500);
+      }
       else if (e === 'landed') { this.audio.splash(); ui.toast('Amerrissage réussi', 'À l\'arrêt, <kbd>E</kbd> pour quitter le siège.', 'good'); }
       else if (e === 'landed_ground') ui.toast('Atterrissage', 'Sur roues. Joli.', 'good');
       else if (e === 'beach') ui.toast('Échoué sur le sable', 'Faites demi-tour avec <kbd>Q</kbd>/<kbd>D</kbd>.', 'bad');
@@ -2124,8 +2268,9 @@ export class Game {
     }
     if (inp.hit('KeyE')) this.leaveControls();
     const exposed = this.updateToxicity(dt, f.onWater ? 0 : f.pos.y, f.pos);
-    let state = f.onWater ? (f.speed < 1 ? 'À l\'arrêt sur l\'eau' : f.speed >= CFG.flight.takeoffSpeed ? 'Vitesse de décollage : tirez !' : 'Sur l\'eau')
-      : f.surface === 'ground' ? (f.noTakeoff ? 'Tempête : décollage bloqué' : f.braking ? 'Freinage' : f.speed >= CFG.flight.takeoffSpeed ? 'Vitesse de décollage : tirez !' : 'Au sol, sur roues')
+    const blocked = { storm: 'Tempête : décollage bloqué', sea: 'Houle : décollez de la piste', dark: 'Balisage éteint : décollage bloqué' }[f.noTakeoffWhy];
+    let state = f.onWater ? (f.speed < 1 ? 'À l\'arrêt sur l\'eau' : blocked || (f.speed >= CFG.flight.takeoffSpeed ? 'Vitesse de décollage : tirez !' : 'Sur l\'eau'))
+      : f.surface === 'ground' ? (f.noTakeoff ? blocked || 'Décollage bloqué' :f.braking ? 'Freinage' : f.speed >= CFG.flight.takeoffSpeed ? 'Vitesse de décollage : tirez !' : 'Au sol, sur roues')
         : f.speed < CFG.flight.stallSpeed ? 'Décrochage ! Piquez du nez' : f.autopilot ? 'Pilote automatique' : 'En vol';
     if (f.fuel <= 0) state = 'Panne sèche !';
     ui.flight(true, { speed: f.speed, alt: f.surface === 'ground' ? 0 : f.pos.y, throttle: f.throttle, fuel: f.fuel, state, hull: this.planeHp() });
@@ -2180,4 +2325,4 @@ export class Game {
   }
 }
 
-Object.assign(Game.prototype, WorldMixin, InteractMixin, MPMixin, CombatMixin, NightMixin, WeatherMixin, CamClipMixin,WreckMixin, FishingMixin, SavesMixin, PhysPuzzleMixin, VehicleMixin, Chapter3Mixin, Chapter4Mixin, ArmsMixin, InventoryMixin, LootMixin, PlanePushMixin, AdminMixin, JetMixin, VWeldMixin);
+Object.assign(Game.prototype, WorldMixin, InteractMixin, MPMixin, CombatMixin, NightMixin, WeatherMixin, CamClipMixin,WreckMixin, FishingMixin, SavesMixin, PhysPuzzleMixin, VehicleMixin, Chapter3Mixin, Chapter4Mixin, ArmsMixin, InventoryMixin, LootMixin, PlanePushMixin, AdminMixin, VoicePanelMixin, JetMixin, VWeldMixin, DevicesMixin, LocksMixin, ZeroGMixin);

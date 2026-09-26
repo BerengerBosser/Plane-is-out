@@ -32,7 +32,7 @@
     <div id="hudWatch"><i id="hwIcon">☀</i><b id="hwTime">--:--</b><span id="hwNext"></span><em id="hwDay">J1</em></div>
 
     <div id="vitals">
-      <div class="pill hp"><svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9.3-9A5.3 5.3 0 0 1 12 6.4 5.3 5.3 0 0 1 21.3 12C19 16.5 12 21 12 21z"/></svg><div class="bar"><div id="hpBar"></div></div></div>
+      <div class="pill hp"><svg viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9.3-9A5.3 5.3 0 0 1 12 6.4 5.3 5.3 0 0 1 21.3 12C19 16.5 12 21 12 21z"/></svg><div class="bar"><div id="hpBar"></div><i class="regenCap" title="La santé remonte seule jusqu'ici"></i></div></div>
       <div class="pill st"><svg viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg><div class="bar"><div id="stBar"></div></div></div>
       <div class="pill tox" id="tox" hidden><svg viewBox="0 0 24 24"><path d="M4 15c2-2 4 2 6 0s4 2 6 0 4 2 4 2M4 10c2-2 4 2 6 0s4 2 6 0 4 2 4 2"/></svg><div class="bar"><div id="toxBar"></div></div></div>
     </div>
@@ -112,7 +112,8 @@
       </section>
       <section id="mpLobby" hidden>
         <div class="codeBig"><small>Code de la partie</small><b id="mpCodeShow">ABCD</b><button id="mpCopy" type="button" class="tab">Copier</button></div>
-        <ul id="mpPlayers"></ul>
+        <h3 class="mpVoiceH">Équipage et voix</h3>
+        <div id="voiceLobby"></div>
         <label class="row check" for="mpResume"><span id="mpResumeLabel">Reprendre ma sauvegarde</span><input id="mpResume" type="checkbox"></label>
         <button id="mpStart" class="big primary"><span>Lancer la partie</span></button>
         <button id="mpBack" class="big primary" hidden><span>Retour au jeu</span><small>la partie continue</small></button>
@@ -163,25 +164,39 @@
 
   <!-- ── Pause ── -->
   <div id="pause" class="screen hidden">
-    <div class="pauseCard pauseMenu">
-      <h2>Pause</h2>
-      <p id="pauseInfo"></p>
-      <button id="btnResume" class="big primary"><span>Reprendre</span><small>Échap ou clic</small></button>
-      <div class="pauseGrid">
-        <button id="btnSettings2" class="tile"><i>⚙</i><span>Paramètres</span></button>
-        <button id="btnHelp2" class="tile"><i>⌨</i><span>Commandes</span></button>
-        <button id="btnFull" class="tile"><i>⛶</i><span>Plein écran</span></button>
-        <button id="btnSave" class="tile"><i>💾</i><span>Sauvegarder</span></button>
-        <button id="btnExport" class="tile"><i>⬇</i><span>Télécharger</span></button>
-        <button id="btnImport2" class="tile"><i>📂</i><span>Importer</span></button>
+    <div class="pauseCard pauseMenu" role="dialog" aria-modal="true" aria-labelledby="pauseTitle">
+      <div class="pmMain">
+        <h2 id="pauseTitle">Pause</h2>
+        <div id="pauseInfo" class="pmChips"></div>
+        <div class="pmGoal" id="pauseGoal">
+          <small>Objectif en cours</small>
+          <b id="pgTitle"></b>
+          <span id="pgSub"></span>
+        </div>
+        <button id="btnResume" class="big primary"><span>▶ Reprendre</span><small><kbd>Échap</kbd></small></button>
+        <div class="pauseRow pmExit">
+          <button id="btnRestart" class="tile wide danger"><span>Nouvelle partie</span><small>recommencer</small></button>
+          <button id="btnQuit" class="tile wide"><span>Menu principal</span><small>sauvegarde auto</small></button>
+        </div>
       </div>
-      <button id="btnHost" class="tile wide admBtn"><i>👥</i><span>Inviter des amis</span><small>ouvrir cette partie au multijoueur</small></button>
-      <button id="btnAdmin" class="tile wide admBtn"><i>🛠</i><span>Admin de la partie</span><small>temps, chapitres, armes, zombies…</small></button>
+      <div class="pmSide">
+        <h3>Réglages</h3>
+        <div class="pauseGrid">
+          <button id="btnSettings2" class="tile"><i>⚙</i><span>Paramètres</span></button>
+          <button id="btnHelp2" class="tile"><i>⌨</i><span>Commandes</span></button>
+          <button id="btnFull" class="tile"><i>⛶</i><span>Plein écran</span></button>
+        </div>
+        <h3>Sauvegarde <small id="pauseSaved"></small></h3>
+        <div class="pauseGrid">
+          <button id="btnSave" class="tile"><i>💾</i><span>Sauvegarder</span></button>
+          <button id="btnExport" class="tile"><i>⬇</i><span>Télécharger</span></button>
+          <button id="btnImport2" class="tile"><i>📂</i><span>Importer</span></button>
+        </div>
+        <h3>Partie</h3>
+        <button id="btnHost" class="pmLink"><i>👥</i><span>Inviter des amis<small>ouvrir cette partie au multijoueur</small></span></button>
+        <button id="btnAdmin" class="pmLink"><i>🛠</i><span>Admin de la partie<small>temps, chapitres, armes, zombies…</small></span></button>
+      </div>
       <input id="importFile" type="file" accept=".json,application/json" hidden>
-      <div class="pauseRow">
-        <button id="btnRestart" class="tile wide danger"><span>Nouvelle partie</span><small>recommencer</small></button>
-        <button id="btnQuit" class="tile wide"><span>Menu principal</span><small>sauvegarde auto</small></button>
-      </div>
     </div>
   </div>
 
@@ -200,6 +215,7 @@
       <div class="tabs" role="tablist">
         <button class="tab on" data-tab="jeu">Jeu</button>
         <button class="tab" data-tab="audio">Audio</button>
+        <button class="tab" data-tab="voix">Voix</button>
         <button class="tab" data-tab="gfx">Graphismes</button>
       </div>
       <section data-pane="jeu">
@@ -211,7 +227,13 @@
       </section>
       <section data-pane="audio" hidden>
         <label class="row" for="optVol"><span>Volume général</span><input id="optVol" type="range" min="0" max="1" step="0.05" value="0.7"><output id="oVol">70 %</output></label>
-        <label class="row" for="optMusic"><span>Musique</span><input id="optMusic" type="range" min="0" max="1" step="0.05" value="0.8"><output id="oMusic">80 %</output></label>
+        <label class="row" for="optMusic"><span>Musique (ambiances et poste radio)</span><input id="optMusic" type="range" min="0" max="1" step="0.05" value="0.8"><output id="oMusic">80 %</output></label>
+        <div class="sndTools">
+          <button type="button" id="btnSoundRefresh" class="big"><span>⟳ Actualiser les sons</span><small><kbd>F9</kbd> · <em id="soundInfo">sons de synthèse</em></small></button>
+        </div>
+      </section>
+      <section data-pane="voix" hidden>
+        <div id="voiceSettings"></div>
       </section>
       <section data-pane="gfx" hidden>
         <div class="row"><span>Qualité</span><div class="qual"><button type="button" class="tab" data-quality="low">Basse</button><button type="button" class="tab" data-quality="mid">Moyenne</button><button type="button" class="tab" data-quality="high">Haute</button></div></div>
@@ -237,25 +259,27 @@
         <p><kbd>Z Q S D</kbd><span>se déplacer (ou W A S D) · <kbd>Maj</kbd> courir · <kbd>Espace</kbd> sauter</span></p>
         <p><kbd>C</kbd><span>maintenu : s'accroupir (passer sous les obstacles bas, tirer plus précis)</span></p>
         <p><kbd>E</kbd><span>interagir · maintenir pour réparer ou pousser l'avion · <kbd>R</kbd> action secondaire</span></p>
+        <p><kbd>Viser</kbd><span>cadenas, claviers, volants, boutons, miroirs : visez la pièce · <kbd>E</kbd>/<kbd>R</kbd> ou molette : un cran · <kbd>E</kbd> maintenu + souris : tourner finement (<kbd>Maj</kbd> très fin)</span></p>
         <p><kbd>Z</kbd><span>face à une échelle : grimper (<kbd>S</kbd> descendre, <kbd>Espace</kbd> lâcher) · on entre dans l'avion à pied par la porte cargo</span></p>
         <p><kbd>Z</kbd><span>en nageant, face à un ponton ou un quai : se hisser</span></p>
         <p><kbd>G</kbd><span>lâcher ce qu'on porte · ranger le crochet du treuil</span></p>
         <p><kbd>Tab</kbd> <kbd>M</kbd> <kbd>T</kbd><span>carnet de bord · carte · montre · <kbd>P</kbd> photographier un indice</span></p>
         <p><kbd>Échap</kbd><span>pause : paramètres, sauvegardes, admin de la partie</span></p>
+        <p><kbd>F9</kbd><span>actualiser les sons (fichiers de sounds/ remplacés ou ajoutés)</span></p>
         <h3>En main et sac</h3>
         <p><kbd>1</kbd>–<kbd>6</kbd><span>1 arme principale · 2 secondaire · 3 à 6 équipements rapides · <kbd>0</kbd> mains nues · molette</span></p>
         <p><kbd>A</kbd><span>inventaire : glisser-déposer (un sac lâché sur le sac porté le remplace), <kbd>R</kbd> tourner, double-clic équiper, <kbd>Maj</kbd>+clic transfert rapide, <kbd>Ctrl</kbd>+clic ou <kbd>Suppr</kbd> jeter, <kbd>1</kbd>–<kbd>6</kbd> au survol équiper, clic droit actions</span></p>
         <p><kbd>E</kbd><span>en vol, à la porte : sauter · <kbd>Espace</kbd> en chute : parachute</span></p>
         <p><kbd>Clic</kbd><span>frapper (poings, clé, machette, batte, hache) ou tirer (pistolet, fusil à pompe, carabine, fusées, harpon)</span></p>
         <p><kbd>Clic droit</kbd><span>viser · <kbd>R</kbd> recharger · un tir dans la tête compte double · le bruit attire les morts</span></p>
-        <p><kbd>H</kbd><span>utiliser un bandage (+45 santé)</span></p>
+        <p><kbd>H</kbd><span>utiliser un bandage (+45 santé) · seul, on ne récupère que jusqu'à 30 %</span></p>
         <p><kbd>B</kbd><span>talkie en main : il se lève devant vous et on vous entend clairement ; au fond du sac, la radio est étouffée</span></p>
         <p><kbd>R</kbd><span>crochet du treuil en main : planter un pieu d'ancrage (achetés au comptoir)</span></p>
         <p><kbd>Clic</kbd><span>canne à pêche : lancer, ferrer, maintenir pour mouliner · fer à souder (poste du flanc droit) : maintenir sur un point orange</span></p>
         <h3>Multijoueur</h3>
         <p><kbd>Entrée</kbd><span>écrire à l'équipage</span></p>
         <p><kbd>V</kbd><span>placer un repère « ici ! »</span></p>
-        <p><kbd>B</kbd><span>parler (micro) · de près, ou partout avec un talkie</span></p>
+        <p><kbd>B</kbd><span>parler (micro) · de près, ou partout avec un talkie · Paramètres → Voix : choisir et tester le micro, détection de la voix, volume de chaque ami</span></p>
         <p><kbd>X</kbd><span>maintenu : roue de messages rapides (bougez la souris, relâchez)</span></p>
         <p><kbd>E</kbd><span>maintenu près d'un coéquipier à terre : le relever</span></p>
         <h3>Véhicules</h3>

@@ -160,7 +160,7 @@ export const WorldMixin = {
         const all = new Set([...this.fuses, ...this.fuseSlots.map((s) => s.fuse).filter(Boolean)]);
         d.slots.forEach((f, i) => { this.fuseSlots[i].fuse = f && all.has(f) ? f : null; this.island2.setFuse(i, this.fuseSlots[i].fuse); });
         this.fuses = new Set([...all].filter((f) => !this.fuseSlots.some((s) => s.fuse === f)));
-        const ok = this.fuseSlots.every((s) => s.fuse === FUSE_SOLUTION[s.key]);
+        const ok = this.fuseSlots.every((s) => s.fuse === (this.secrets?.fuses || FUSE_SOLUTION)[s.key]);
         if (ok && !this.flags.power) {
           this.flags.power = true;
           this.island2.setPower(true);
@@ -172,9 +172,9 @@ export const WorldMixin = {
         return true;
       }
       case 'valve': {
-        this.valves[d.k] = d.v;
-        this.island2.setValve(d.k, d.v);
-        if (!me) { this.audio.ratchet(); }
+        this.valves[d.k] = Math.min(1, Math.max(0, +d.v || 0));
+        this.island2.setValve(d.k, this.valves[d.k]);
+        if (!me && Math.random() < 0.3) this.audio.ratchet();
         this.afterChange(false);
         return true;
       }
@@ -327,7 +327,7 @@ export const WorldMixin = {
       setTimeout(() => this.ui.toast('Talkie-walkie', 'B : parler à tout l\'équipage.', 'good', 3500), 2500);
     }
     if (k === 'radioDone' && !me) {
-      this.ui.radio(`Enfin une liaison claire ! Tempête ce soir : il vous faudra la piste, donc les roues amphibies du hangar 2. Le code : ${CFG.island2.hangarCode}. Ma sœur était contrôleuse ici, c'était son code.`, () => this.audio.radio());
+      this.ui.radio(`Enfin une liaison claire ! Tempête ce soir : il vous faudra la piste, donc les roues amphibies du hangar 2. Le code : ${this.secrets.hangarCode}. Ma sœur était contrôleuse ici, c'était son code.`, () => this.audio.radio());
     } else if (k === 'ended') this.showEnd();
     else if (k === 'refueled') { this.audio.success(); this.ui.toast('Plein fait !', 'Réservoir à 100 %.', 'good'); }
     this.onFlag3?.(k, me, by);
@@ -348,7 +348,7 @@ export const WorldMixin = {
     return {
       seed: this.seed, hour: +this.hour.toFixed(4), installed: [...this.installed], crate: this.crateLoaded ? 1 : 0, flags, items,
       ducks: [...this.ducks], fuses: [...this.fuses], fslots: this.fuseSlots.map((s) => s.fuse), valves: this.valves,
-      sym: [...this.symbols], music: this.music ? 1 : 0, siege: [this.siege.active ? 1 : 0, Math.round(this.siege.genHp), this.siege.wave],
+      sym: [...this.symbols], music: this.music ? 1 : 0, siege: [this.siege.active ? 1 : 0, Math.round(this.siege.genHp), this.siege.wave, this.siege.left == null ? -1 : +this.siege.left.toFixed(3), this.island2.power ? 1 : 0],
       stats: [this.stats.crabs, this.stats.voiles, this.stats.days], live: this.planeLive ? 1 : 0, pilot: this.pilotId || 0,
       nozzle: this.nozzle || 0, iron: this.iron || 0, wr: this.wreck, wi: this.winch, scrap: this.scrap, ...this.invWorldState(), sp: (this.scrapPiles || []).filter((q) => q.taken && !q.dyn).map((q) => q.id), ups: [...this.upgrades], pz: this.puzzles, intro: this.mode === 'intro' ? 1 : 0, vh: this.vehicleState(), c3: this.chapter3State?.(), c4: this.c4State?.(), jet: this.jetState?.(),
     };
@@ -412,14 +412,15 @@ export const WorldMixin = {
     // île 2
     this.fuses = new Set(w.fuses || []);
     (w.fslots || []).forEach((f, i) => { this.fuseSlots[i].fuse = f; this.island2.setFuse(i, f); });
-    if (this.flags.power !== this.island2.power) this.island2.setPower(this.flags.power);
-    for (const [k, v] of Object.entries(w.valves || {})) if (this.valves[k] !== v) { this.valves[k] = v; this.island2.setValve(k, v); }
+    const pw = this.flags.power && (!w.siege || (w.siege[4] ?? 1) === 1);   // générateur à terre : courant coupé
+    if (pw !== this.island2.power) this.island2.setPower(pw);
+    for (const [k, v] of Object.entries(w.valves || {})) if (this.valves[k] !== +v) { this.valves[k] = +v || 0; this.island2.setValve(k, this.valves[k]); }
     if (this.flags.hangarOpen && !was.hangarOpen) { if (full) this.island2.setHangarOpen(); else this.island2.openHangar(); }
     if (full && this.flags.hangarOpen) this.island2.setHangarOpen();
     this.flight.wheels = this.flags.wheels;
     this.plane.parts.wheels.visible = this.flags.wheels;
     this.jerrycan.visible = !this.flags.reserveUsed;
-    if (w.siege) { this.siege.active = !!w.siege[0]; this.siege.genHp = w.siege[1]; this.siege.wave = w.siege[2]; }
+    if (w.siege) { this.siege.active = !!w.siege[0]; this.siege.genHp = w.siege[1]; this.siege.wave = w.siege[2]; this.siege.left = w.siege[3] >= 0 ? w.siege[3] : undefined; this.siege.lastH = undefined; }
     if (w.stats) { this.stats.crabs = w.stats[0]; this.stats.voiles = w.stats[1]; this.stats.days = w.stats[2]; }
     this.pilotId = w.pilot || null;
     this.nozzle = w.nozzle || null;

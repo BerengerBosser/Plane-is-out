@@ -212,12 +212,9 @@ export const JetMixin = {
     }
     // piloté par un coéquipier : on suit sa présence
     if (!this.jetting && J.pilot && J.mirror) {
-      const f = J.f, [x, y, z, yaw, pitch, roll, speed, thr] = J.mirror;
-      const k = Math.min(1, dt * 10), p = new THREE.Vector3(x, y, z);
-      if (f.pos.distanceTo(p) > 60) f.pos.copy(p); else f.pos.lerp(p, k);
-      const ang = (q, t) => q + Math.atan2(Math.sin(t - q), Math.cos(t - q)) * k;
-      f.yaw = ang(f.yaw, yaw); f.pitch = ang(f.pitch, pitch); f.roll = ang(f.roll, roll);
-      f.speed = speed; f.throttle = Math.min(1, thr);
+      const f = J.f, thr = J.mirror[7];
+      this.mirrorFlight(f, J.mirror, dt, 60, J.mirror[1] > heightAt(J.mirror[0], J.mirror[2]) + 1.2);
+      f.throttle = Math.min(1, thr);
       f.apply();
       this.jetFlame(thr > 1 ? thr / 2 : thr, thr > 1);
     }

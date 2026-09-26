@@ -4,6 +4,21 @@ import { heightAt, LAYOUT, prep, flatMat } from './terrain.js';
 
 function m(geo, col) { const o = new THREE.Mesh(prep(geo, col), flatMat); o.castShadow = true; return o; }
 
+// symbole peint : numéro en haut, glyphe dessous (redessiné à chaque partie : les symboles sont tirés au sort)
+export function symbolTex(txt, bg) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 128;
+  const g2 = cv.getContext('2d');
+  g2.fillStyle = bg; g2.beginPath(); g2.arc(64, 64, 60, 0, Math.PI * 2); g2.fill();
+  g2.fillStyle = '#fff4e0'; g2.textAlign = 'center'; g2.textBaseline = 'middle';
+  g2.font = 'bold 30px "Bricolage Grotesque", sans-serif';
+  g2.fillText(txt.split(' ')[0], 64, 30);
+  g2.font = 'bold 62px "Segoe UI Symbol", "Noto Sans Symbols", sans-serif';
+  g2.fillText(txt.split(' ')[1], 64, 80);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 export function buildDuck() {
   const g = new THREE.Group();
   g.add(m(new THREE.SphereGeometry(0.22, 8, 6).scale(1.2, 0.85, 1), '#ffd166'));
@@ -153,19 +168,7 @@ export function createFun(scene) {
   scene.add(sg);
 
   // ── énigme du canot : trois symboles peints + coffre de survie sur le ponton ──
-  const glyph = (txt, bg = '#d23c3c') => {
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = 128;
-    const g2 = cv.getContext('2d');
-    g2.fillStyle = bg; g2.beginPath(); g2.arc(64, 64, 60, 0, Math.PI * 2); g2.fill();
-    g2.fillStyle = '#fff4e0'; g2.textAlign = 'center'; g2.textBaseline = 'middle';
-    g2.font = 'bold 30px "Bricolage Grotesque", sans-serif';
-    g2.fillText(txt.split(' ')[0], 64, 30);
-    g2.font = 'bold 62px "Segoe UI Symbol", "Noto Sans Symbols", sans-serif';
-    g2.fillText(txt.split(' ')[1], 64, 80);
-    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
-    return new THREE.Mesh(new THREE.CircleGeometry(0.32, 20), new THREE.MeshLambertMaterial({ map: t, transparent: true, side: THREE.DoubleSide }));
-  };
+  const glyph = (txt, bg = '#d23c3c') => new THREE.Mesh(new THREE.CircleGeometry(0.32, 20), new THREE.MeshLambertMaterial({ map: symbolTex(txt, bg), transparent: true, side: THREE.DoubleSide }));
   out.symbols = [];
   // 1 · ⚓ sur le phare, près de la porte
   {
@@ -173,21 +176,21 @@ export function createFun(scene) {
     const toC = Math.atan2(-lh.x, -lh.z);
     const p = new THREE.Vector3(-0.95, 1.7, 2.42).applyAxisAngle(new THREE.Vector3(0, 1, 0), toC).add(new THREE.Vector3(lh.x, lhh, lh.z));
     const g2 = glyph('1 ⚓'); g2.position.copy(p); g2.rotation.y = toC + 0.2; scene.add(g2);
-    out.symbols.push({ n: 1, sym: '⚓', pos: p, where: 'sur le phare' });
+    out.symbols.push({ n: 1, sym: '⚓', pos: p, where: 'sur le phare', mesh: g2, bg: '#d23c3c' });
   }
   // 2 · ★ sur l'arche des ruines de la colline
   {
     const R0 = LAYOUT.ruins, rh = heightAt(R0.x, R0.z);
     const p = new THREE.Vector3(0, 3.6, -0.47).applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.4).add(new THREE.Vector3(R0.x, rh - 0.2, R0.z));
     const g2 = glyph('2 ★', '#1f8a8a'); g2.position.copy(p); g2.rotation.y = 0.4 + Math.PI; scene.add(g2);
-    out.symbols.push({ n: 2, sym: '★', pos: p, where: 'sur l\'arche des ruines' });
+    out.symbols.push({ n: 2, sym: '★', pos: p, where: 'sur l\'arche des ruines', mesh: g2, bg: '#1f8a8a' });
   }
   // 3 · ♥ à l'intérieur du cabanon, mur du fond
   {
     const cb = LAYOUT.cabane, ch = heightAt(cb.x, cb.z);
     const p = new THREE.Vector3(cb.x + 1.2, ch + 1.5, cb.z - 2.0);
     const g2 = glyph('3 ♥', '#7a4dff'); g2.position.copy(p); scene.add(g2);
-    out.symbols.push({ n: 3, sym: '♥', pos: p, where: 'dans le cabanon' });
+    out.symbols.push({ n: 3, sym: '♥', pos: p, where: 'dans le cabanon', mesh: g2, bg: '#7a4dff' });
   }
   // coffre de survie au bout du ponton
   {

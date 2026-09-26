@@ -92,7 +92,8 @@ export class Flight {
       // tient le cap et l'altitude
       const dAlt = this.ap.alt - this.pos.y;
       const wantPitch = clamp(dAlt * 0.02, -0.25, 0.25);
-      sy = clamp((wantPitch - this.pitch) * 3, -1, 1);
+      // manche doux : un pilote automatique qui pique sec ferait flotter les passagers debout
+      sy = clamp((wantPitch - this.pitch) * 3, -0.15, 0.15);
       let dy = this.ap.yaw - this.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
       const wantRoll = clamp(-dy * 1.5, -0.4, 0.4);
       sx = clamp((this.roll - wantRoll) * 2, -1, 1);

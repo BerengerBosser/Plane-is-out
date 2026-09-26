@@ -124,8 +124,10 @@ function face(head, skin, o = {}) {
     rz(head, box(0.12, 0.03, 0.03, o.brow || '#3a2a1e', sx, y + 0.085, fz - 0.005), sx > 0 ? -(o.browTilt ?? 0.12) : (o.browTilt ?? 0.12));
   }
   head.add(box(0.07, 0.09, 0.08, o.nose || skin, 0, y - 0.07, fz - 0.03));
-  head.add(box(0.12, 0.025, 0.02, '#7a3a2a', 0, y - 0.16, fz));
+  const mouth = box(0.12, 0.025, 0.02, '#7a3a2a', 0, y - 0.16, fz);
+  head.add(mouth);
   if (o.cheeks) for (const sx of [-0.15, 0.15]) head.add(box(0.06, 0.04, 0.02, '#ff9a8a', sx, y - 0.09, fz + 0.003));
+  return mouth;
 }
 
 // wear : clés d'objets portés { hat, top, vest, back, bottom } (voir gear.js) ; looks : leur apparence
@@ -134,6 +136,7 @@ function buildLook(ci, color, parts, wear = {}, looks = {}) {
   const { torso, head, legs, arms } = parts;
   const skin = C.skin;
   const anim = {};
+  let mouth = null;
   // couvre-chef du personnage : masqué si l'on porte un casque ou une casquette
   const hw = new THREE.Group(); head.add(hw);
   const hatOn = !!wear.hat;
@@ -148,7 +151,7 @@ function buildLook(ci, color, parts, wear = {}, looks = {}) {
   const bare = (col) => arms.forEach((a) => a.add(box(0.12, 0.3, 0.13, col, 0, -0.34, 0)));
   // ── visage et couvre-chef signature ──
   if (C.id === 'gaston') {
-    face(head, skin, { brow: '#4a3322' });
+    mouth = face(head, skin, { brow: '#4a3322' });
     head.add(box(0.36, 0.07, 0.06, '#4a3322', 0, 0.075, -0.245));                 // grosse moustache
     for (const sx of [-0.2, 0.2]) rz(head, box(0.08, 0.05, 0.05, '#4a3322', sx, 0.1, -0.24), sx > 0 ? 0.5 : -0.5);
     head.add(box(0.46, 0.1, 0.44, '#6a4a2c', 0, 0.39, 0.02));                    // cheveux
@@ -166,7 +169,7 @@ function buildLook(ci, color, parts, wear = {}, looks = {}) {
     tail.add(box(0.13, 0.07, 0.06, '#ffffff', 0, 0, 0.55));
     anim.scarf = tail;
   } else if (C.id === 'nina') {
-    face(head, skin, { brow: '#6a2a14', cheeks: true, browTilt: -0.1 });
+    mouth = face(head, skin, { brow: '#6a2a14', cheeks: true, browTilt: -0.1 });
     head.add(box(0.07, 0.04, 0.02, '#3a3030', -0.14, 0.09, -0.218));              // trace de cambouis
     head.add(box(0.46, 0.1, 0.44, '#8a3a1e', 0, 0.37, 0.02));                     // cheveux
     hw.add(box(0.48, 0.14, 0.46, '#ffcf3a', 0, 0.39, 0));                        // bandana
@@ -179,7 +182,7 @@ function buildLook(ci, color, parts, wear = {}, looks = {}) {
     for (let i = 0; i < 4; i++) braid.add(box(0.1 - i * 0.012, 0.1, 0.1, '#8a3a1e', 0, -i * 0.1, 0.04 + i * 0.03));
     anim.braid = braid;
   } else if (C.id === 'lou') {
-    face(head, skin, { brow: '#b9b9b9', cheeks: true, eyeY: 0.19 });
+    mouth = face(head, skin, { brow: '#b9b9b9', cheeks: true, eyeY: 0.19 });
     for (const sx of [-0.1, 0.1]) {                                                // lunettes rondes
       const r = new THREE.Mesh(prep(new THREE.TorusGeometry(0.068, 0.014, 4, 12), '#6a4a8a'), flatMat);
       r.position.set(sx, 0.19, -0.24); head.add(r);
@@ -196,7 +199,7 @@ function buildLook(ci, color, parts, wear = {}, looks = {}) {
     face(head, skin, { brow: '#2a1a10', browTilt: 0.2 });
     head.add(box(0.46, 0.2, 0.2, '#2a1a10', 0, 0.02, -0.14));                     // grosse barbe
     head.add(box(0.36, 0.12, 0.14, '#2a1a10', 0, -0.08, -0.16));
-    head.add(box(0.14, 0.04, 0.03, '#7a3a2a', 0, 0.06, -0.245));
+    mouth = box(0.14, 0.04, 0.03, '#7a3a2a', 0, 0.06, -0.245); head.add(mouth);   // bouche dans la barbe
     head.add(box(0.45, 0.08, 0.43, '#2a1a10', 0, 0.39, 0.02));                    // cheveux ras
     const helm = new THREE.Mesh(prep(new THREE.SphereGeometry(0.3, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), '#e8dcb0'), flatMat);
     helm.position.y = 0.36; helm.castShadow = true; hw.add(helm);                 // casque colonial
@@ -269,6 +272,11 @@ function buildLook(ci, color, parts, wear = {}, looks = {}) {
       if (hat.kind === 'fire') head.add(box(0.1, 0.12, 0.03, '#ffd166', 0, 0.52, -0.27));
     }
   }
+  // bouche : s'ouvre vers le bas quand le personnage parle (voir animate)
+  anim.mouth = mouth;
+  anim.mouthY = mouth.position.y;
+  mouth.geometry.computeBoundingBox();
+  anim.mouthH = mouth.geometry.boundingBox.max.y - mouth.geometry.boundingBox.min.y;
   return anim;
 }
 
@@ -316,7 +324,7 @@ export function buildAvatar(name, color, idx = 0, ci = 0, sig = '') {
   const bub = bubbleSprite();
   bub.sprite.position.y = 2.8;
   root.add(bub.sprite);
-  let walk = 0, bubbleT = 0, t = 0;
+  let walk = 0, bubbleT = 0, t = 0, jaw = 0;
 
   return {
     root,
@@ -332,7 +340,7 @@ export function buildAvatar(name, color, idx = 0, ci = 0, sig = '') {
     },
     say(text) { bub.draw(text); bub.sprite.visible = true; bubbleT = 5; },
     hp(v, n) { tag.draw(n, v); },
-    // s : { moving, sprint, seat, lying, down, carry, slot, crouch }
+    // s : { moving, sprint, seat, lying, down, carry, slot, crouch, mouth (niveau de la voix) }
     animate(dt, s) {
       t += dt;
       walk += dt * (s.moving ? (s.sprint ? 11 : 7.5) : 0);
@@ -347,7 +355,7 @@ export function buildAvatar(name, color, idx = 0, ci = 0, sig = '') {
       if (s.crouch) { body.position.y -= 0.32; legs[0].rotation.x += 0.9; legs[1].rotation.x += 0.9; hips.rotation.x = 0; torso.rotation.x = -0.35; }
       else torso.rotation.x = s.sprint && s.moving ? -0.18 : 0;
       const key = SLOT_KEYS[s.slot] || 'fists';
-      for (const [k, o] of Object.entries(held)) o.visible = !s.carry && (!s.seat || s.armed) && !s.lying && !s.down && k === key && !s.hideHeld;
+      for (const [k, o] of Object.entries(held)) o.visible = !s.carry && (!s.seat || s.armed) && !s.lying && !s.down && !s.rag && k === key && !s.hideHeld;
       const gunLike = ['pistol', 'shotgun', 'rifle', 'flare', 'harpoon', 'revolver', 'smg', 'sniper', 'launcher'].includes(key);
       const melee = ['wrench', 'machete', 'bat', 'axe', 'katana', 'sledge'].includes(key);
       if (s.carry) { arms[0].rotation.x = 1.2; arms[1].rotation.x = 1.2; }
@@ -377,11 +385,35 @@ export function buildAvatar(name, color, idx = 0, ci = 0, sig = '') {
         legs[0].rotation.x = legs[1].rotation.x = 0;
         if (s.down) { arms[0].rotation.x = 2.6; arms[1].rotation.x = 0.4; }
       }
+      // apesanteur (piqué de l'avion) : le corps tourne lentement, bras et jambes écartés
+      if (s.float) {
+        body.rotation.set(Math.sin(t * 0.7) * 0.7, Math.sin(t * 0.4) * 0.5, Math.sin(t * 0.9) * 0.6);
+        body.position.set(0, 0.15 + Math.sin(t * 1.3) * 0.05, 0);
+        arms[0].rotation.set(0.4 + Math.sin(t * 2.1) * 0.3, 0, -1.9 - Math.sin(t * 1.7) * 0.3);
+        arms[1].rotation.set(0.3 - Math.sin(t * 1.9) * 0.3, 0, 1.9 + Math.sin(t * 1.5) * 0.3);
+        legs[0].rotation.set(Math.sin(t * 1.5) * 0.5, 0, -0.3); legs[1].rotation.set(-Math.sin(t * 1.5) * 0.5, 0, 0.3);
+      }
+      // étalé sur le plancher (poupée de chiffon) : face contre terre, membres en vrac
+      if (s.rag) {
+        body.rotation.set(-Math.PI / 2, 0, 0.25);
+        body.position.set(0, 0.2, 0.75);
+        arms[0].rotation.set(0.5, 0, -1.35); arms[1].rotation.set(-0.3, 0, 1.2);
+        legs[0].rotation.set(0.15, 0, -0.35); legs[1].rotation.set(-0.2, 0, 0.3);
+        head.rotation.set(0, 0.7, 0.2);
+        torso.rotation.x = 0;
+      } else if (legs[0].rotation.z || legs[1].rotation.z) { legs[0].rotation.z = legs[1].rotation.z = 0; }
       if (s.wave) { arms[1].rotation.x = 2.8; arms[1].rotation.z = Math.sin(t * 9) * 0.35; }
       // pièces qui bougent : écharpe au vent, natte, poêle
       if (extra.scarf) extra.scarf.rotation.set(-0.35 - (s.moving ? 0.5 : 0) + Math.sin(t * 7) * 0.12, Math.sin(t * 4.3) * 0.25, 0);
       if (extra.braid) extra.braid.rotation.x = 0.2 + (s.moving ? Math.abs(Math.sin(walk)) * 0.3 : Math.sin(t * 1.5) * 0.05);
       if (extra.pan) extra.pan.rotation.x = s.moving ? Math.sin(walk * 2) * 0.4 : 0;
+      // bouche : suit le volume de la voix, avec un battement de syllabes pour qu'elle vive même sur une voix régulière
+      const v = Math.min(1, (s.mouth || 0) * 5);
+      const want = v > 0.05 ? v * (0.55 + 0.45 * Math.abs(Math.sin(t * 13) * Math.sin(t * 7.3 + 1))) : 0;
+      jaw += (want - jaw) * Math.min(1, dt * (want > jaw ? 30 : 14));
+      const sy = 1 + jaw * 1.8;
+      extra.mouth.scale.set(1 - jaw * 0.25, sy, 1);
+      extra.mouth.position.y = extra.mouthY - (sy - 1) * extra.mouthH * 0.2;
       if (bubbleT > 0) { bubbleT -= dt; if (bubbleT <= 0) bub.sprite.visible = false; }
     },
   };

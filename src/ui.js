@@ -195,7 +195,7 @@ export function createUI() {
     }
   };
 
-  // ── fenêtres (cadenas, fusibles, radio, notes) ──
+  // ── fenêtres (notes, pompe, comptoir, séquenceurs) ──
   let onClose = null;
   api.modalOpen = () => !el.modal.classList.contains('hidden');
   api.openModal = (title, hint, cb) => {
@@ -212,133 +212,7 @@ export function createUI() {
 
   const btn = (label, cls = '') => { const b = document.createElement('button'); b.type = 'button'; b.className = `dbtn ${cls}`; b.textContent = label; return b; };
 
-  // pavé numérique générique
-  api.keypad = (title, len, onSubmit, closeCb) => {
-    const body = api.openModal(title, 'Chiffres au clavier · Entrée pour valider · Échap pour fermer', closeCb);
-    let code = '';
-    const lcd = document.createElement('div');
-    lcd.className = 'lcd';
-    const render = () => { lcd.textContent = (code + '_'.repeat(len)).slice(0, len).split('').join(' '); };
-    render();
-    body.appendChild(lcd);
-    const grid = document.createElement('div');
-    grid.className = 'keysGrid';
-    const press = (k) => {
-      if (k === '⌫') code = code.slice(0, -1);
-      else if (k === 'OK') {
-        if (!onSubmit(code)) { lcd.classList.remove('err'); void lcd.offsetWidth; lcd.classList.add('err'); code = ''; }
-        else { lcd.classList.add('ok'); }
-      } else if (code.length < len) code += k;
-      render();
-      if (code.length === len && k !== 'OK' && k !== '⌫') setTimeout(() => press('OK'), 160);
-    };
-    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', 'OK'].forEach((k) => {
-      const b = btn(k, k === 'OK' ? 'go' : k === '⌫' ? 'alt' : '');
-      b.addEventListener('click', () => press(k));
-      grid.appendChild(b);
-    });
-    body.appendChild(grid);
-    api.modalKey = (e) => {
-      if (/^(Digit|Numpad)\d$/.test(e.code)) press(e.code.slice(-1));
-      else if (e.code === 'Backspace') press('⌫');
-      else if (e.code === 'Enter' || e.code === 'NumpadEnter') press('OK');
-    };
-  };
-
-  // tableau à fusibles : 3 emplacements, fusibles possédés
-  api.fusePanel = (slots, owned, onChange, closeCb) => {
-    const body = api.openModal('Tableau électrique', 'Cliquez un emplacement pour y placer (ou retirer) un fusible', closeCb);
-    const colors = { red: '#ff4d4d', blue: '#3d7bff', yellow: '#ffd166' };
-    const names = { red: 'rouge', blue: 'bleu', yellow: 'jaune' };
-    const row = document.createElement('div');
-    row.className = 'fuseRow';
-    const inv = document.createElement('p');
-    inv.className = 'inv';
-    const draw = () => {
-      row.innerHTML = '';
-      slots.forEach((s, i) => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'fuseSlot';
-        b.innerHTML = `<span class="ic">${s.icon}</span><span class="fz" style="background:${s.fuse ? colors[s.fuse] : '#2a2f45'}"></span><span>${s.label}</span>`;
-        b.addEventListener('click', () => {
-          const free = owned.filter((f) => !slots.some((o) => o.fuse === f));
-          const order = [null, ...free];
-          if (s.fuse) s.fuse = null; else s.fuse = order[1] || null;
-          onChange(slots);
-          draw();
-        });
-        row.appendChild(b);
-      });
-      const free = owned.filter((f) => !slots.some((o) => o.fuse === f));
-      inv.textContent = owned.length ? `Fusibles en poche : ${free.length ? free.map((f) => names[f]).join(', ') : 'aucun (tous placés)'}` : 'Aucun fusible en poche. Cherchez-en sur l\'île.';
-    };
-    draw();
-    body.appendChild(row);
-    body.appendChild(inv);
-    api.modalKey = null;
-  };
-
-  // radio de la tour : réglage de fréquence
-  api.radioTuner = (onTune, closeCb) => {
-    const body = api.openModal('Radio de la tour', 'Réglez la fréquence puis appuyez sur Émettre', closeCb);
-    let f = 118.0;
-    const lcd = document.createElement('div');
-    lcd.className = 'lcd';
-    const render = () => { lcd.textContent = `${f.toFixed(2)} MHz`; };
-    render();
-    body.appendChild(lcd);
-    const dial = document.createElement('div');
-    dial.className = 'dial';
-    [['−1', -1], ['−0.05', -0.05], ['+0.05', 0.05], ['+1', 1]].forEach(([l, d]) => {
-      const b = btn(l);
-      b.addEventListener('click', () => { f = Math.min(136, Math.max(108, Math.round((f + d) * 100) / 100)); render(); });
-      dial.appendChild(b);
-    });
-    body.appendChild(dial);
-    const go = btn('Émettre', 'go');
-    go.addEventListener('click', () => { if (!onTune(f.toFixed(2))) { lcd.classList.remove('err'); void lcd.offsetWidth; lcd.classList.add('err'); } else lcd.classList.add('ok'); });
-    body.appendChild(go);
-    api.modalKey = (e) => {
-      if (e.code === 'ArrowUp') { f = Math.min(136, Math.round((f + 0.05) * 100) / 100); render(); }
-      if (e.code === 'ArrowDown') { f = Math.max(108, Math.round((f - 0.05) * 100) / 100); render(); }
-      if (e.code === 'ArrowRight') { f = Math.min(136, f + 1); render(); }
-      if (e.code === 'ArrowLeft') { f = Math.max(108, f - 1); render(); }
-      if (e.code === 'Enter') go.click();
-    };
-  };
-
-  // cadenas à symboles (coffre du canot)
-  api.symbolLock = (symbols, onTry, closeCb) => {
-    const body = api.openModal('Coffre de survie', 'Cliquez sur chaque molette pour changer le symbole', closeCb);
-    const vals = [0, 0, 0];
-    const row = document.createElement('div');
-    row.className = 'symRow';
-    const draw = () => {
-      row.innerHTML = '';
-      vals.forEach((v, i) => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.innerHTML = `${symbols[v]}<small>molette ${i + 1}</small>`;
-        b.addEventListener('click', () => { vals[i] = (vals[i] + 1) % symbols.length; draw(); });
-        row.appendChild(b);
-      });
-    };
-    draw();
-    body.appendChild(row);
-    const lcd = document.createElement('div');
-    lcd.className = 'lcd';
-    lcd.style.fontSize = '18px';
-    lcd.textContent = 'VERROUILLÉ';
-    body.appendChild(lcd);
-    const go = btn('Ouvrir', 'go');
-    go.addEventListener('click', () => {
-      if (!onTry(vals.map((v) => symbols[v]))) { lcd.classList.remove('err'); void lcd.offsetWidth; lcd.classList.add('err'); lcd.textContent = 'ÇA NE BOUGE PAS'; }
-      else { lcd.classList.add('ok'); lcd.textContent = 'CLAC !'; }
-    });
-    body.appendChild(go);
-    api.modalKey = (e) => { if (e.code === 'Enter') go.click(); };
-  };
+  // (cadenas, claviers, tableau à fusibles et radio se manipulent désormais dans le monde : voir devices.js)
 
   // lecture d'une note
   api.note = (title, text, closeCb) => {

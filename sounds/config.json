@@ -1,0 +1,823 @@
+{
+ "v": 1,
+ "master": 0,
+ "reverb": {
+  "preset": "beach",
+  "decay": 1.1,
+  "pre": 25,
+  "tone": 5200,
+  "wet": 0.5,
+  "early": 0.2
+ },
+ "cats": {
+  "weapons": {
+   "vol": 0,
+   "mute": false
+  },
+  "zombies": {
+   "vol": 0,
+   "mute": false
+  },
+  "player": {
+   "vol": 0,
+   "mute": false
+  },
+  "world": {
+   "vol": 0,
+   "mute": false
+  },
+  "ui": {
+   "vol": 0,
+   "mute": false
+  },
+  "amb": {
+   "vol": 0,
+   "mute": false
+  },
+  "vehicles": {
+   "vol": 0,
+   "mute": false
+  },
+  "music": {
+   "vol": 0,
+   "mute": false
+  }
+ },
+ "sounds": {
+  "gun.pistol": {
+   "src": "file",
+   "files": [
+    {
+     "name": "573978__buckine__9mm-shot-002.wav",
+     "start": 0,
+     "end": 0,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.22,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "gun.revolver": {
+   "src": "file",
+   "files": [
+    {
+     "name": "573978__buckine__9mm-shot-002.wav",
+     "start": 0,
+     "end": 0,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.22,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "gun.smg": {
+   "src": "file",
+   "files": [
+    {
+     "name": "520934__ninebilly__ak-47-single-shot.mp3",
+     "start": 1.1202,
+     "end": 1.9451,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.22,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 12
+  },
+  "gun.rifle": {
+   "src": "file",
+   "files": [
+    {
+     "name": "520934__ninebilly__ak-47-single-shot.mp3",
+     "start": 1.113,
+     "end": 0,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.22,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "gun.shotgun": {
+   "src": "file",
+   "files": [
+    {
+     "name": "544676__clueless79__shotgun-02.wav",
+     "start": 0,
+     "end": 0,
+     "gain": 0
+    }
+   ],
+   "vol": -4,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.22,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "gun.sniper": {
+   "src": "file",
+   "files": [
+    {
+     "name": "520934__ninebilly__ak-47-single-shot.mp3",
+     "start": 1.1238,
+     "end": 0,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.22,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "gun.launcher": {
+   "src": "file",
+   "files": [
+    {
+     "name": "31327__mchladil__blast2.wav",
+     "start": 0.2577,
+     "end": 0,
+     "gain": 0
+    }
+   ],
+   "vol": -6,
+   "pitch": -11.5,
+   "rand": 0,
+   "send": 0.22,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "whoosh": {
+   "src": "file",
+   "files": [
+    {
+     "name": "232358__richerlandtv__heavy-impacts.mp3",
+     "start": 1.1881,
+     "end": 2.0032,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.22,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "hitFlesh": {
+   "src": "file",
+   "files": [
+    {
+     "name": "264062__paul368__melee-weapon-hit-with-male-moan-body-fall.wav",
+     "start": 0.4772,
+     "end": 1.51,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.22,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "hitShell": {
+   "src": "file",
+   "files": [
+    {
+     "name": "232358__richerlandtv__heavy-impacts.mp3",
+     "start": 7.3351,
+     "end": 8.2679,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.22,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "groan": {
+   "src": "file",
+   "files": [
+    {
+     "name": "144003__arrigd__zombie-roar-7.wav",
+     "start": 0,
+     "end": 0,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.3,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "scream": {
+   "src": "file",
+   "files": [
+    {
+     "name": "144003__arrigd__zombie-roar-7.wav",
+     "start": 0,
+     "end": 0,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": -16,
+   "rand": 0,
+   "send": 0.3,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "bloat": {
+   "src": "file",
+   "files": [
+    {
+     "name": "31327__mchladil__blast2.wav",
+     "start": 0.029,
+     "end": 0,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.3,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "splat": {
+   "src": "synth",
+   "files": [],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.3,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "hiss": {
+   "src": "synth",
+   "files": [],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.3,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "step": {
+   "src": "synth",
+   "files": [],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.1,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 4
+  },
+  "stepWater": {
+   "src": "file",
+   "files": [
+    {
+     "name": "398344__johonbravo__dunk_water_009.wav",
+     "start": 5.5349,
+     "end": 6.0035,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.1,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 4
+  },
+  "hurt": {
+   "src": "file",
+   "files": [
+    {
+     "name": "264062__paul368__melee-weapon-hit-with-male-moan-body-fall.wav",
+     "start": 0.8892,
+     "end": 1.3824,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.1,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "dig": {
+   "src": "synth",
+   "files": [],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.1,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "pour": {
+   "src": "file",
+   "files": [
+    {
+     "name": "209608__nebyoolae__gas-station-pump-filling.wav",
+     "start": 1.6107,
+     "end": 7.5241,
+     "gain": 0
+    }
+   ],
+   "vol": -7,
+   "pitch": 0,
+   "rand": 0.6,
+   "send": 0.55,
+   "fadeIn": 0.39,
+   "fadeOut": 0.21,
+   "voices": 8
+  },
+  "clank": {
+   "src": "file",
+   "files": [
+    {
+     "name": "224010__pthj412__slapshot-metal-hit4a1.wav",
+     "start": 1.0732,
+     "end": 2.0333,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.2,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 6
+  },
+  "thud": {
+   "src": "file",
+   "files": [
+    {
+     "name": "232358__richerlandtv__heavy-impacts.mp3",
+     "start": 4.5955,
+     "end": 5.0472,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": -12,
+   "rand": 0,
+   "send": 0.37,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "explosion": {
+   "src": "file",
+   "files": [
+    {
+     "name": "110115__ryansnook__small-explosion.wav",
+     "start": 0,
+     "end": 0,
+     "gain": 0
+    }
+   ],
+   "vol": -14,
+   "pitch": -8.5,
+   "rand": 0,
+   "send": 0.58,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "splash": {
+   "src": "synth",
+   "files": [],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.2,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "door": {
+   "src": "synth",
+   "files": [],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.2,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "spark": {
+   "src": "file",
+   "files": [
+    {
+     "name": "224010__pthj412__slapshot-metal-hit4a1.wav",
+     "start": 0.711,
+     "end": 1.0189,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.2,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "powerUp": {
+   "src": "file",
+   "files": [
+    {
+     "name": "209608__nebyoolae__gas-station-pump-filling.wav",
+     "start": 1.2136,
+     "end": 3.6186,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": -16,
+   "rand": 0,
+   "send": 0.2,
+   "fadeIn": 0.325,
+   "fadeOut": 0.435,
+   "voices": 8
+  },
+  "squeak": {
+   "src": "synth",
+   "files": [],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.2,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "ratchet": {
+   "src": "file",
+   "files": [
+    {
+     "name": "224010__pthj412__slapshot-metal-hit4a1.wav",
+     "start": 0.7155,
+     "end": 1.0461,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 12,
+   "rand": 0,
+   "send": 0.81,
+   "fadeIn": 0.04,
+   "fadeOut": 0,
+   "voices": 4
+  },
+  "drop": {
+   "src": "synth",
+   "files": [],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0.2,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "siren": {
+   "src": "file",
+   "files": [
+    {
+     "name": "174021__sonidor__sirene.wav",
+     "start": 0,
+     "end": 0,
+     "gain": 0
+    }
+   ],
+   "vol": -9.5,
+   "pitch": -9.5,
+   "rand": 0,
+   "send": 0.48,
+   "fadeIn": 0.24,
+   "fadeOut": 0.285,
+   "voices": 8
+  },
+  "radio": {
+   "src": "file",
+   "files": [
+    {
+     "name": "27512__drni__old-radio-noise-switchon-ukw.wav",
+     "start": 2.1325,
+     "end": 6.0203,
+     "gain": 0
+    }
+   ],
+   "vol": -10,
+   "pitch": 3,
+   "rand": 0,
+   "send": 0.2,
+   "fadeIn": 0.35,
+   "fadeOut": 0.53,
+   "voices": 8
+  },
+  "pickup": {
+   "src": "file",
+   "files": [
+    {
+     "name": "232358__richerlandtv__heavy-impacts.mp3",
+     "start": 3.0371,
+     "end": 3.1632,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 16,
+   "rand": 0,
+   "send": 0,
+   "fadeIn": 0.025,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "beep": {
+   "src": "file",
+   "files": [
+    {
+     "name": "153127__victoriarey91__bip.wav",
+     "start": 1.1904,
+     "end": 2.8086,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "error": {
+   "src": "file",
+   "files": [
+    {
+     "name": "153127__victoriarey91__bip.wav",
+     "start": 1.2002,
+     "end": 2.7524,
+     "gain": 0
+    }
+   ],
+   "vol": 6.5,
+   "pitch": -17,
+   "rand": 0,
+   "send": 0,
+   "fadeIn": 0.115,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "success": {
+   "src": "file",
+   "files": [
+    {
+     "name": "540998__univ_lyon3__pimenta_kevin_2020_spacevalidated.wav",
+     "start": 0.0613,
+     "end": 1.4115,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "note": {
+   "src": "synth",
+   "files": [],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "wind": {
+   "src": "file",
+   "files": [
+    {
+     "name": "726319__zipcreates__wind-8.wav",
+     "start": 0.5108,
+     "end": 10.6738,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "rain": {
+   "src": "file",
+   "files": [
+    {
+     "name": "575465__trashcan_studios__003-rain-on-driveway.wav",
+     "start": 0,
+     "end": 8.765,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "gust": {
+   "src": "file",
+   "files": [
+    {
+     "name": "726319__zipcreates__wind-8.wav",
+     "start": 0.7662,
+     "end": 2.4476,
+     "gain": 0
+    }
+   ],
+   "vol": 9.5,
+   "pitch": -5.5,
+   "rand": 0,
+   "send": 0,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "thunder": {
+   "src": "file",
+   "files": [
+    {
+     "name": "251635__bmlake__nyc-rain-4-g-lightening-crack.wav",
+     "start": 3.1293,
+     "end": 7.873,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0,
+   "fadeIn": 0.165,
+   "fadeOut": 0.265,
+   "voices": 8
+  },
+  "thunderCrack": {
+   "src": "file",
+   "files": [
+    {
+     "name": "251635__bmlake__nyc-rain-4-g-lightening-crack.wav",
+     "start": 0.3229,
+     "end": 7.7488,
+     "gain": 0
+    }
+   ],
+   "vol": 0,
+   "pitch": 0,
+   "rand": 0,
+   "send": 0,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8
+  },
+  "engine": {
+   "src": "file",
+   "files": [
+    {
+     "name": "freesound_community-turbine-plane-sfx-26791.mp3",
+     "start": 0,
+     "end": 0,
+     "gain": 0
+    }
+   ],
+   "vol": -7.5,
+   "pitch": -0.5,
+   "rand": 0,
+   "send": 0.28,
+   "fadeIn": 0,
+   "fadeOut": 0,
+   "voices": 8,
+   "lo": 0.71,
+   "hi": 2.47
+  }
+ },
+ "music": {
+  "xfade": 4,
+  "gap": 3,
+  "send": 0.08,
+  "moods": {
+   "menu": {
+    "vol": 0,
+    "files": [
+     {
+      "name": "music/fronbondi_skegs-pad-creepy-detuned-lofi-piano-ambient-background-track-258929.mp3",
+      "start": 0,
+      "end": 0,
+      "gain": 0
+     }
+    ]
+   },
+   "calm": {
+    "vol": 0,
+    "files": [
+     {
+      "name": "music/freesound_community-ambient-wave-48-tribute-17243.mp3",
+      "start": 0,
+      "end": 0,
+      "gain": 0
+     }
+    ]
+   },
+   "drama": {
+    "vol": 0,
+    "files": [
+     {
+      "name": "music/ame_atmos-dark-horror-cinematic-music-obscure-guardian-514608.mp3",
+      "start": 0,
+      "end": 0,
+      "gain": 0
+     }
+    ]
+   },
+   "flight": {
+    "vol": 0,
+    "files": [
+     {
+      "name": "music/samuelfjohanns-lofi-ambient-pianoline-03-116136.mp3",
+      "start": 0,
+      "end": 0,
+      "gain": 0
+     }
+    ]
+   },
+   "radio": {
+    "vol": 0,
+    "files": [
+     {
+      "name": "music/fronbondi_skegs-pad-creepy-detuned-lofi-piano-ambient-background-track-258929.mp3",
+      "start": 0,
+      "end": 0,
+      "gain": 0
+     }
+    ]
+   }
+  }
+ }
+}
