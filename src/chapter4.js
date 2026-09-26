@@ -4,7 +4,8 @@
 //  2. baisser le pont-levis du canal : deux manivelles à tourner ensemble (en solo : l'une après l'autre, par petits bouts) ;
 //  3. ouvrir le barrage sanitaire : le clavier affiche des symboles, le code est sur le panneau de la gare routière ;
 //  4. amener la caisse au chariot élévateur jusqu'au sas de l'Institut, puis tenir pendant la décontamination (la sirène réveille la ville) ;
-//  5. régler les trois consoles du synthétiseur dans le temps imparti (une chacun, à plusieurs).
+//  5. régler les trois postes du synthétiseur dans le temps imparti (un chacun, à plusieurs ; voir synth3d.js),
+//     puis envoyer la dose à Marthe par le passe-plat de la salle blanche.
 import * as THREE from 'three';
 import { Flight } from './flight.js';
 import { createIsland4, I4, FLAT4 } from './island4.js';
@@ -12,7 +13,6 @@ import { setIsland4, heightAt } from './terrain.js';
 import { BOEING, BSEATS, SLIDE, FLOOR_B, FLOOR_C, animateBoeing, boeingColliders, boeingPlatform } from './boeing.js';
 import { buildDuck } from './fun.js';
 import { FLAT3, I3 } from './island3.js';
-import { makePipes } from './interact.js';
 import { buildAvatar } from './avatars.js';
 import { CFG } from './config.js';
 import { clamp } from './noise.js';
@@ -84,6 +84,7 @@ export const Chapter4Mixin = {
         this.addNote(`Barrage sanitaire : code = quais des lignes ${I.puzzle.syms.join(' ')} (panneau de la gare routière)`);
       },
     });
+    this.buildSynth3D();
     this.c4 = this.defaultC4();
     this.jetSetup?.();
   },
@@ -107,7 +108,7 @@ export const Chapter4Mixin = {
     this.bseat = null;
     const I = this.island4; if (!I) return;
     I.setBridge(0, true); I.setGate(false, true); I.setLabDoor(false, true); I.setDecon(0); I.setSynth(0, false); I.setCrateIn(false);
-    ['A', 'B', 'C'].forEach((k) => I.setConsole(k, false));
+    this.layoutSynth3D(true);
     this.platforms = this.platforms.filter((p) => p !== I.bridgePlat);
   },
   island4Interiors() {
@@ -195,14 +196,16 @@ export const Chapter4Mixin = {
         if (!c.synthLeft) c.synthLeft = this.playerCount() > 1 ? 100 : 170;
         this.audio.powerUp();
         const n = ['A', 'B', 'C'].filter((q) => f[`synth${q}`]).length;
-        this.ui.toast(`Console ${d.k} réglée`, `${n}/3${me ? '' : ` · par ${this.nameOf(by)}`}${n < 3 ? ` · il reste ${Math.round(c.synthLeft)} s` : ''}`, 'good');
-        if (auth && n === 3) setTimeout(() => this.act('flag', { cured: true, ended: true }), 0);
+        this.ui.toast(`Poste ${d.k} réglé`, `${n}/3${me ? '' : ` · par ${this.nameOf(by)}`}${n < 3 ? ` · il reste ${Math.round(c.synthLeft)} s` : ''}`, 'good');
+        // les trois postes réglés : le chrono s'arrête, la dose part vers le passe-plat
+        if (n === 3) c.synthLeft = 0;
+        if (auth && n === 3) setTimeout(() => this.act('flag', { doseReady: true }), 0);
         this.afterChange();
         return true;
       }
       case 'synthReset': {
         f.synthA = false; f.synthB = false; f.synthC = false; c.synthLeft = 0;
-        this.synthTries = (this.synthTries || 0) + 1;
+        this.resetSynthPuzzles();
         this.audio.error();
         this.ui.toast('Synthèse ratée', 'Les trois réglages doivent être faits dans le temps imparti. On recommence !', 'bad', 5000);
         this.afterChange();
@@ -569,8 +572,8 @@ export const Chapter4Mixin = {
     I.setDecon(c.deconOn ? 1 : 0);
     const n = ['A', 'B', 'C'].filter((k) => f[`synth${k}`]).length;
     I.setSynth(n, !!f.cured);
-    ['A', 'B', 'C'].forEach((k) => I.setConsole(k, !!f[`synth${k}`]));
     I.setCrateIn(!!f.labCrate);
+    this.updateSynth3D(dt);
     // Marthe
     const md = this.marthe.root.position.distanceTo(this.camera.position);
     if (md < 90) { this.marthe.near(md); this.marthe.animate(dt, { wave: md < 25 && !f.cured ? Math.sin(this.t * 0.5) > 0.3 : !!f.cured, moving: false }); }
@@ -627,7 +630,7 @@ export const Chapter4Mixin = {
         this.dirtyWorld = true;
       }
     }
-    if (c.synthLeft > 0 && !f.cured) {
+    if (c.synthLeft > 0 && !f.cured && !f.doseReady) {
       c.synthLeft -= dt;
       this._synthSend = (this._synthSend || 0) + dt;
       if (this._synthSend > 1) { this._synthSend = 0; this.dirtyWorld = true; }
@@ -638,7 +641,7 @@ export const Chapter4Mixin = {
   c4Retry() {
     const c = this.c4; if (!c) return;
     if (c.deconOn) { c.deconOn = 0; c.decon = 0; this._deconWave = 0; }
-    if (c.synthLeft) { c.synthLeft = 0; this.flags.synthA = this.flags.synthB = this.flags.synthC = false; }
+    if (c.synthLeft) { c.synthLeft = 0; this.flags.synthA = this.flags.synthB = this.flags.synthC = false; this.resetSynthPuzzles(); }
     this.dirtyWorld = true;
   },
   makeNoise(p, r) {
@@ -712,11 +715,8 @@ export const Chapter4Mixin = {
       add(P.padConsole, 2.6, c.deconOn ? { prompt: `Décontamination : ${Math.round(c.decon / DECON_TIME * 100)} %` } : f.crateAtLab ? { prio: 3, prompt: '<kbd>E</kbd> lancer le cycle de décontamination', press: () => this.act('decon', { on: 1 }) } : { prompt: '<span class="warn">Déposez d\'abord la caisse sur le sas (chariot élévateur)</span>' });
       add(P.labDoor, 3.2, { prompt: '<span class="warn">Sas verrouillé : cycle de décontamination requis</span>' });
     }
-    // synthétiseur : trois consoles
-    if (f.decon4 && !f.cured) for (const cs of P.consoles) {
-      const done = f[`synth${cs.k}`];
-      add(cs.p, 2.2, done ? { prompt: `Console ${cs.k} · ${cs.name} : réglée ✔` } : { prio: 3, prompt: `<kbd>E</kbd> console ${cs.k} · ${cs.name}`, press: () => this.openSynth(cs.k) });
-    }
+    // synthétiseur : trois postes à manipuler dans le monde, protocole, passe-plat (synth3d.js)
+    this.synthInteractions(add);
     if (f.decon4) add(P.glass, 3.5, { prompt: '<kbd>E</kbd> parler à Marthe', press: () => this.talkMarthe() });
   },
   readBusBoard() {
@@ -724,32 +724,12 @@ export const Chapter4Mixin = {
     const L = [['⚓', 'PORT'], ['☀', 'SOLEIL'], ['★', 'ÉTOILE'], ['♣', 'TRÈFLE'], ['♥', 'CŒUR'], ['✈', 'AÉROPORT']];
     this.openNote('Gare routière · derniers départs', L.map(([s, n], i) => `<span style="font-size:22px">${s}</span> ligne ${n} · <b>quai ${Z.quais[i]}</b>`).join('<br>'), `Gare routière : ${L.map(([s], i) => `${s}=${Z.quais[i]}`).join(' ')}`);
   },
-  openSynth(k) {
-    const done = () => { this.act('synth', { k }); this.closeModal(); };
-    this.openModalCommon();
-    if (k === 'A') {
-      const notes = [392, 523, 659, 784];
-      this.ui.simon({ title: 'Console A · séquenceur ARN', rounds: [3, 4, 5], onPad: (i) => this.audio.note(notes[i]), onFail: () => this.audio.error(), onSolve: done }, () => this.input.lock());
-    } else if (k === 'B') {
-      const pz = makePipes((this.seed ^ 0x5171) + (this.synthTries || 0) * 7919);
-      this.ui.onTick = () => this.audio.ratchet();
-      this.ui.pipePuzzle(pz, done, () => this.input.lock(), { title: 'Console B · circuit de refroidissement', src: 'AZOTE<b>❄</b>', dst: 'CUVE<b>⚗</b>' });
-    } else {
-      let prog = 0, fin = false;
-      this.ui.pumpPanel({
-        title: 'Console C · centrifugeuse', label: 'Séparation', unit: '%', fullText: 'SÉPARATION TERMINÉE',
-        getFuel: () => prog, max: 100,
-        onFlow: (dt) => { prog = Math.min(100, prog + 11 * dt); if (Math.random() < dt * 3) this.audio.ratchet(); },
-        onBurst: () => this.audio.spark(),
-        onFull: () => { if (!fin) { fin = true; setTimeout(done, 600); } },
-      }, () => this.input.lock());
-    }
-  },
   talkMarthe() {
     const f = this.flags;
     const lines = f.cured
       ? ['La fièvre tombe déjà… Je sens mes mains. Merci. Vraiment.', 'Demain, le Boeing repart avec les premières doses. Vous pilotez ?', 'Allez voir le coucher de soleil depuis la Tour Hélios. Vous l\'avez mérité.']
-      : ['Les trois consoles ! A, B et C. Vite, avant que le mélange ne tourne.', 'Ne vous inquiétez pas pour moi. Enfin… un peu, quand même.', 'La console B, c\'est de la tuyauterie. La C, c\'est une question de doigté. La A… de mémoire.'];
+      : f.doseReady ? ['La dose est dans le passe-plat ! Envoyez-la-moi, vite.', 'Je tiens encore… Le passe-plat, juste à côté de la vitre.']
+      : ['Les trois postes ! A, B et C. Vite, avant que le mélange ne tourne.', 'Ne vous inquiétez pas pour moi. Enfin… un peu, quand même.', 'Le poste B, c\'est de la tuyauterie. Le C, c\'est une question d\'équilibre. Le A… de mémoire.'];
     const t = lines[(this._martheLine = ((this._martheLine ?? -1) + 1) % lines.length)];
     this.marthe.say(t);
     this.ui.radio(t, () => this.audio.radio());
@@ -782,7 +762,11 @@ export const Chapter4Mixin = {
     } else if (k === 'decon4') {
       this.audio.success(); this.audio.door();
       ui.toast('Sas ouvert !', 'La caisse est entrée dans l\'Institut. Rejoignez Marthe.', 'good', 6000);
-      this.radioOnce('c4open', 'Entrez… Ne vous approchez pas de la vitre. J\'ai été mordue hier soir, en fermant le sas. Je tiens encore. Le synthétiseur a trois consoles : A, B, C. Réglez-les vite, une chacun si vous êtes plusieurs : le mélange ne tient pas longtemps.');
+      this.radioOnce('c4open', 'Entrez… Ne vous approchez pas de la vitre. J\'ai été mordue hier soir, en fermant le sas. Je tiens encore. Le synthétiseur a trois postes : A, B, C. Le protocole est affiché au tableau. Réglez-les vite, un chacun si vous êtes plusieurs : le mélange ne tient pas longtemps.');
+    } else if (k === 'doseReady') {
+      this.audio.success(); this.audio.whoosh();
+      ui.toast('Synthèse réussie !', 'La dose file vers le passe-plat de la salle blanche : envoyez-la à Marthe.', 'good', 6000);
+      this.radioOnce('c4dose', 'Le synthétiseur s\'arrête… c\'est prêt ! La dose arrive au passe-plat, à côté de la vitre. Envoyez-la-moi.');
     } else if (k === 'cured') {
       this.audio.success();
       this.radioOnce('c4cured', 'La première dose… elle est pour moi. … … Ça marche. Ça marche ! La fièvre tombe. Demain, les doses partent pour tout l\'archipel. Vous avez sauvé Hélios. Vous nous avez tous sauvés.');
@@ -806,7 +790,7 @@ export const Chapter4Mixin = {
       { id: 'gate4', text: 'Ouvrir le barrage sanitaire', hint: 'Clavier de la guérite · les quais des lignes de bus (panneau de la gare routière)', done: f.gate4 },
       { id: 'pad4', text: 'Amener la caisse au sas de l\'Institut', hint: 'Chariot élévateur (hangar de fret) · déposez la caisse sur le sas, place du Soleil', done: f.crateAtLab },
       { id: 'decon4', text: `Tenir pendant la décontamination${c.deconOn ? ` (${Math.round(c.decon / DECON_TIME * 100)} %)` : ''}`, hint: 'Pupitre à droite du sas · restez près du sas', done: f.decon4 },
-      { id: 'synth4', text: `Régler le synthétiseur (${synthN}/3)`, hint: c.synthLeft ? `Il reste ${Math.round(c.synthLeft)} s` : 'Trois consoles, dans le temps imparti', done: f.cured },
+      { id: 'synth4', text: f.doseReady ? 'Envoyer la dose à Marthe' : `Régler le synthétiseur (${synthN}/3)`, hint: f.doseReady ? 'Passe-plat de la salle blanche, E maintenu' : c.synthLeft ? `Il reste ${Math.round(c.synthLeft)} s` : 'Trois postes, dans le temps imparti · protocole au tableau', done: f.cured },
       { id: 'duck4', optional: true, text: 'Bonus · les canards d\'Hélios', hint: 'Fontaine, gare routière', done: this.ducks.has('d9') && this.ducks.has('d10') },
     ];
   },
@@ -820,7 +804,7 @@ export const Chapter4Mixin = {
       case 'gate4': return P.booth;
       case 'pad4': return this.items.crate.state === 'ground' && !f.crateAtLab && !this.items.crate.onVehicle && Math.hypot(this.items.crate.pos.x - P.pad.x, this.items.crate.pos.z - P.pad.z) > 30 ? (Object.values(this.vehicles).some((v) => v.cargo === 'crate') ? P.pad : this.items.crate.pos) : P.pad;
       case 'decon4': return P.padConsole;
-      case 'synth4': return P.synth;
+      case 'synth4': return this.synthTarget() || P.synth;
       default: return null;
     }
   },
@@ -842,7 +826,8 @@ export const Chapter4Mixin = {
     it.state = 'installed'; it.carrier = null; it.onVehicle = null; it.mesh.visible = false;
     // progression du chapitre 4 remise à zéro (utile si l'on y était déjà)
     this.c4 = this.defaultC4();
-    this.act('flag', { slide: false, crateOut: false, bridge4: false, gate4: false, crateAtLab: false, decon4: false, labCrate: false, synthA: false, synthB: false, synthC: false, cured: false, ended: false });
+    this.act('flag', { slide: false, crateOut: false, bridge4: false, gate4: false, crateAtLab: false, decon4: false, labCrate: false, synthA: false, synthB: false, synthC: false, doseReady: false, cured: false, ended: false });
+    this.resetSynthPuzzles();
     this.act('flag', { boeingCrate: true, bAir: true, landed4: true });
     const I = this.island4;
     this.c3.bp = { x: I.cx - 120, z: I.cz + I4.runway.z, yaw: -Math.PI / 2, y: FLAT4 };

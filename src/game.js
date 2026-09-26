@@ -56,6 +56,7 @@ import { JetMixin } from './jet.js';
 import { DevicesMixin } from './devices.js';
 import { LocksMixin } from './locks.js';
 import { ZeroGMixin } from './zerog.js';
+import { Synth3DMixin } from './synth3d.js';
 
 // ── Fumées (repères visuels) ────────────────────────────────
 class Smoke {
@@ -381,7 +382,7 @@ export class Game {
       reserveUsed: false, compass: false, bottle: false, treasure: false, radioDone: false, hangarOpen: false, refueled: false,
       wheels: false, power: false, chest: false, kingDead: false, wardenDead: false, storm: false, stormOver: false, hangarCode: false, doorJam: false, jamStorm: false, wrecked: false,
       tookOff2: false, fire3: false, landed3: false, fireOut: false, baysOpen: false, boeingBattery: false, boeingFuel: false, boeingCrate: false, boeingOut: false, boeingGo: false,
-      bAir: false, landed4: false, slide: false, crateOut: false, bridge4: false, gate4: false, crateAtLab: false, decon4: false, labCrate: false, synthA: false, synthB: false, synthC: false, cured: false,
+      bAir: false, landed4: false, slide: false, crateOut: false, bridge4: false, gate4: false, crateAtLab: false, decon4: false, labCrate: false, synthA: false, synthB: false, synthC: false, doseReady: false, cured: false,
     };
     this.bseat = null;
     this.jetting = false;
@@ -471,7 +472,7 @@ export class Game {
     this.resetVehicles();
     if (this.island3) { this.c3 = this.defaultC3(); this.poseBoeing(); this.island3.resetBays?.(); this.cinematic = false; this.c3Smokes(); }
     this.resetC4?.();
-    this.crateSafe = null; this.synthTries = 0;
+    this.crateSafe = null;
     if (this.island2) { this.island2.setPower(false); FUSE_SLOTS.forEach((_, i) => this.island2.setFuse(i, null)); ['A', 'B', 'C', 'D'].forEach((k) => this.island2.setValve(k, false)); }
   }
 
@@ -2325,4 +2326,4 @@ export class Game {
   }
 }
 
-Object.assign(Game.prototype, WorldMixin, InteractMixin, MPMixin, CombatMixin, NightMixin, WeatherMixin, CamClipMixin,WreckMixin, FishingMixin, SavesMixin, PhysPuzzleMixin, VehicleMixin, Chapter3Mixin, Chapter4Mixin, ArmsMixin, InventoryMixin, LootMixin, PlanePushMixin, AdminMixin, VoicePanelMixin, JetMixin, VWeldMixin, DevicesMixin, LocksMixin, ZeroGMixin);
+Object.assign(Game.prototype, WorldMixin, InteractMixin, MPMixin, CombatMixin, NightMixin, WeatherMixin, CamClipMixin,WreckMixin, FishingMixin, SavesMixin, PhysPuzzleMixin, VehicleMixin, Chapter3Mixin, Chapter4Mixin, ArmsMixin, InventoryMixin, LootMixin, PlanePushMixin, AdminMixin, VoicePanelMixin, JetMixin, VWeldMixin, DevicesMixin, LocksMixin, ZeroGMixin, Synth3DMixin);

@@ -235,7 +235,7 @@ export const AdminMixin = {
     this.act('flag', { slide: true, crateOut: true, bridge4: true, gate4: true, crateAtLab: true, decon4: true });
     this.act('labCrate', {});
     this.enemies.dismiss(P.pad, 120, (e) => e.siege);
-    this.fx('admWarp', { p: [P.labIn.x, P.labIn.z - 2, 0, P.labIn.y] });   // face aux consoles
+    this.fx('admWarp', { p: [P.labIn.x, P.labIn.z - 2, 0, P.labIn.y] });   // face aux postes du synthétiseur
   },
   // saut de chapitre : l'avion réparé est posé à l'arrivée, l'équipage à côté
   adminChapter(n) {
